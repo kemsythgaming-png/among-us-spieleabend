@@ -72,17 +72,34 @@ Zusätzlich hat jede Rolle ihre eigene **Anzahl** und **Wahrscheinlichkeit**, je
 - **Mit Mod:** Verknüpfung `D:\Programmierung\Among Us\Among Us Spieleabend.lnk`. Sie startet die Kopie `steamapps\common\Among Us Spieleabend`, eine Kopie der aktuellen Steam-Version (64-Bit) mit BepInEx 6 be.788. Steam muss laufen.
 - **Ohne Mod:** ganz normal über Steam. Der Steam-Ordner wird nicht verändert.
 
-## An Freunde weitergeben
+## An Freunde weitergeben (Launcher)
 
-```
-powershell -ExecutionPolicy Bypass -File Verteilung\Paket-bauen.ps1
-```
+Freunde laden `Among.Us.Spieleabend.exe` von der [Release-Seite](https://github.com/kemsythgaming-png/among-us-spieleabend/releases/latest) (oder aus dem Discord) und starten sie. Der Launcher:
 
-Das erzeugt `dist\AmongUsSpieleabend-<Version>.zip` (ca. 33 MB), das ihr im Discord teilen könnt. Es enthält **keine Spieldateien**, das verbietet die Among Us Mod Policy. Drin sind nur BepInEx, der Mod und ein Installer.
+1. findet Among Us in Steam und kopiert es nach `steamapps\common\Among Us Spieleabend` (nach Steam-Updates nur die geänderten Dateien),
+2. spielt BepInEx und den Mod ein,
+3. holt die neueste Mod-Version vom neuesten GitHub-Release,
+4. legt eine Desktop-Verknüpfung an, startet Steam falls nötig und dann das Spiel.
 
-Beim Freund kopiert `Installieren.bat` seine eigene Steam-Installation nach `Among Us Spieleabend`, legt den Mod hinein und erstellt eine Desktop-Verknüpfung. Die Anleitung für Freunde steht in `Verteilung/LIESMICH.txt`.
+Die EXE enthält **keine Spieldateien**, das verbietet die Among Us Mod Policy. Drin sind nur BepInEx und der Mod.
 
-Alle Spieler brauchen dieselbe Mod-Version. Nach einem Among-Us-Update führt jeder `Installieren.bat` noch einmal aus. Falls das Update den Mod kaputt macht, muss erst eine neue Mod-Version gebaut werden.
+### Ein Update veröffentlichen
+
+1. Version in `AmongUsSpieleabend.csproj` und `Plugin.cs` erhöhen (z. B. 4.5.1).
+2. Paket bauen:
+   ```
+   powershell -ExecutionPolicy Bypass -File Verteilung\Paket-bauen.ps1
+   ```
+3. Release anlegen:
+   ```
+   gh release create v4.5.1 dist/AmongUsSpieleabend.dll "dist/Among Us Spieleabend.exe" --title "Among Us Spieleabend 4.5.1" --notes "Was neu ist"
+   ```
+
+Beim nächsten Start holt sich jeder Launcher die neue `AmongUsSpieleabend.dll` automatisch. Alle Spieler brauchen dieselbe Mod-Version, also vor dem Spieleabend einmal über die Verknüpfung starten.
+
+Nur wenn sich BepInEx oder der Launcher selbst ändert, braucht jeder die neue EXE einmal neu.
+
+Ohne Launcher geht es weiterhin mit `dist\AmongUsSpieleabend-<Version>.zip` und `Installieren.bat` (Anleitung in `Verteilung/LIESMICH.txt`).
 
 ## Server
 
