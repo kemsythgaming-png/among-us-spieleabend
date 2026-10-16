@@ -94,6 +94,12 @@ public abstract class CustomRole
     /// <summary>Nur Geisterrollen: darf dieser gerade gestorbene Spieler den Geist bekommen?</summary>
     public virtual bool CanHaunt(PlayerControl dead) => false;
 
+    /// <summary>
+    /// Geheime Rolle: wird nirgends angezeigt (auch nicht dem Spieler selbst), solange holder lebt -
+    /// z. B. der Verraeter, bis er zum Impostor wird.
+    /// </summary>
+    public virtual bool IsSecret(PlayerControl holder) => false;
+
     /// <summary>Kommt zusaetzlich zur Hauptrolle dazu (Anpassung oder Geisterrolle).</summary>
     public bool IsExtra => IsModifier || IsGhostRole;
 

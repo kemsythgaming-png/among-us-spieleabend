@@ -47,11 +47,11 @@ public static class RoleRegistry
     /// <summary>Geisterrolle des Spielers (nach dem Tod), oder null.</summary>
     public static CustomRole GetGhostRole(PlayerControl player) => GetModifiers(player).FirstOrDefault(r => r.IsGhostRole);
 
-    /// <summary>Was angezeigt wird: als Geist nur die Geisterrolle, sonst Hauptrolle + Anpassungen.</summary>
+    /// <summary>Was angezeigt wird: als Geist nur die Geisterrolle, sonst Hauptrolle + Anpassungen (ohne geheime).</summary>
     public static IEnumerable<CustomRole> GetDisplayed(PlayerControl player)
     {
         var ghost = GetGhostRole(player);
-        return ghost != null ? new[] { ghost } : GetAll(player);
+        return ghost != null ? new[] { ghost } : GetAll(player).Where(r => !r.IsSecret(player));
     }
 
     /// <summary>Hauptrolle + Anpassungen.</summary>
@@ -124,7 +124,7 @@ public static class RoleRegistry
 
         // Rollen-Ansage zusaetzlich zum Intro (falls das Intro nicht greift oder schon vorbei ist)
         var local = PlayerControl.LocalPlayer;
-        var mine = GetAll(local).ToList();
+        var mine = GetDisplayed(local).ToList();
         if (mine.Count > 0)
             Notifier.Show(Lang.T("Deine Rolle: ", "Your role: ") + string.Join(" + ", mine.Select(r => r.ColoredName)), 8f);
     }

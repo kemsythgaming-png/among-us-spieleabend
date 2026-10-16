@@ -52,7 +52,7 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | Spürnase | Anpassung | Meldet er eine Leiche, sieht er die Rolle des Toten. |
 | Radar | Crew | Ein Pfeil zeigt immer zum nächsten Spieler. |
 | Paranoid | Crew | Warnung, wenn ganz in der Nähe jemand getötet wird. |
-| Verräter | Anpassung (Crew) | Sterben alle Impostor, wird er (Chance einstellbar) zum neuen Impostor mit Kill-Button und das Spiel geht weiter. Eine Crew-Rolle (Sheriff, Medic ...) verliert er dabei. Neutrale bekommen ihn nicht. |
+| Verräter | Anpassung (Crew) | Sterben alle Impostor, wird er (Chance einstellbar) zum neuen Impostor mit Kill-Button und das Spiel geht weiter. Eine Crew-Rolle (Sheriff, Medic ...) verliert er dabei. Neutrale bekommen ihn nicht. Geheim: Nicht einmal er selbst sieht die Anpassung, bis sie greift oder er stirbt. |
 
 ### Geisterrollen
 
@@ -62,7 +62,7 @@ Geisterrollen werden nicht zu Spielbeginn verteilt, sondern **beim Tod**: Anzahl
 |---|---|---|
 | Rachegeist | tote Impostor | **F**: Alle lebenden Crewmates und Neutralen im selben Raum erstarren kurz vor Kälte (im Gang: alle in der Nähe). |
 | Wächtergeist | tote Crewmates | **F** an einem Vent: Es ist eine Weile unsichtbar zu - niemand kommt hinein, heraus oder durch die Gänge dorthin. |
-| Spukgestalt (Neutral) | tote Crewmates | Die Lebenden sehen sie halb durchsichtig. Schafft sie alle Aufgaben, gewinnt sie allein. Klickt ein Lebender sie an, ist sie erlöst. |
+| Spukgestalt (Neutral) | tote Crewmates | Läuft wie eine normale Figur, ist für Lebende aber fast unsichtbar (12 %, einstellbar). Bekommt neue Aufgaben (zählen nicht für die Crew). Schafft sie alle, gewinnt sie allein. Klickt ein Lebender sie an, ist sie erlöst. |
 
 **Anpassungen** (Lover, Flash, Giant) kommen zusätzlich zu jeder Rolle dazu, auch zu Spiel-Rollen wie Engineer oder zum normalen Impostor.
 

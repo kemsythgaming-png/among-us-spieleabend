@@ -197,7 +197,7 @@ internal static class RoleUI
         }
         else text = "";
 
-        foreach (var mod in RoleRegistry.GetModifiers(player)) text += " " + mod.ColoredName;
+        foreach (var mod in RoleRegistry.GetModifiers(player).Where(m => !m.IsSecret(player))) text += " " + mod.ColoredName;
         return text.Trim();
     }
 

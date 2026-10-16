@@ -172,7 +172,7 @@ internal static class TaskCountPatch
         foreach (var info in __instance.AllPlayers)
         {
             if (info == null || info.Disconnected || info.Tasks == null || info.Role == null || info.Role.IsImpostor) continue;
-            var role = RoleRegistry.GetRole(info.Object);
+            var role = RoleRegistry.GetGhostRole(info.Object) ?? RoleRegistry.GetRole(info.Object); // Spukgestalt zaehlt nicht mit
             if (role == null || role.TasksCount) continue;
 
             foreach (var task in info.Tasks)

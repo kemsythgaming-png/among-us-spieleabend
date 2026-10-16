@@ -37,7 +37,7 @@ internal static class RoleGuide
 
     private static void SelectOwnRole()
     {
-        var own = RoleRegistry.GetAll(PlayerControl.LocalPlayer).FirstOrDefault();
+        var own = RoleRegistry.GetDisplayed(PlayerControl.LocalPlayer).FirstOrDefault();
         selected = own != null ? RoleRegistry.Roles.IndexOf(own) : Mathf.Max(selected, 0);
     }
 

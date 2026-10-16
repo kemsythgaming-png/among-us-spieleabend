@@ -24,10 +24,13 @@ public sealed class Traitor : CustomRole
     public override string IntroText => Lang.T("Dein Moment kommt noch ...", "Your time will come ...");
     public override string Description => Lang.T("Sterben alle Impostor,\nwirst du der neue Impostor.", "If all impostors die,\nyou become the new impostor.");
     public override string LongDescription => Lang.T(
-        "Anpassung (nur Crew): Du spielst erst ganz normal in der Crew. Sterben aber alle Impostor, wirst du (mit einstellbarer Chance) zum neuen Impostor - mit Kill-Button - und das Spiel geht weiter.\n\nBis dahin hilfst du der Crew ganz normal. Nur du weißt, dass du ein Verräter bist.",
-        "Modifier (crew only): you start as a normal crewmate. But if all impostors die, you become the new impostor (configurable chance) - with a kill button - and the game goes on.\n\nUntil then you help the crew as usual. Only you know you are a traitor.");
+        "Anpassung (nur Crew): Du spielst erst ganz normal in der Crew. Sterben aber alle Impostor, wirst du (mit einstellbarer Chance) zum neuen Impostor - mit Kill-Button - und das Spiel geht weiter.\n\nBis dahin weißt nicht einmal du selbst, dass du ein Verräter bist - es zeigt sich erst, wenn es passiert oder wenn du stirbst.",
+        "Modifier (crew only): you start as a normal crewmate. But if all impostors die, you become the new impostor (configurable chance) - with a kill button - and the game goes on.\n\nUntil then not even you know that you are a traitor - it only shows when it happens or when you die.");
 
     internal static Traitor Instance { get; private set; }
+
+    /// <summary>Geheim, auch fuer ihn selbst: erst sichtbar, wenn er zum Impostor wird oder stirbt.</summary>
+    public override bool IsSecret(PlayerControl holder) => IsAlive(holder) && !IsImpostor(holder);
 
     private RoleOption turnChance;
     private bool decided;

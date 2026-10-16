@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using System.Linq;
+using AmongUs.GameOptions;
+using HarmonyLib;
 using Spieleabend.Core;
 using UnityEngine;
 
@@ -17,18 +20,60 @@ public sealed class Haunting : CustomRole
     public override bool IsGhostRole => true;
     public override bool CanHaunt(PlayerControl dead) => !IsImpostor(dead) && !IsNeutral(dead);
     public override string IntroText => Lang.T("Spuk dich zum Sieg", "Haunt your way to victory");
-    public override string Description => Lang.T("Geist: Alle sehen dich halb. Schaff deine\nAufgaben, ohne angeklickt zu werden!", "Ghost: everyone half-sees you. Finish your\ntasks without being clicked!");
+    public override string Description => Lang.T("Geist: fast unsichtbar. Schaff deine neuen\nAufgaben, ohne angeklickt zu werden!", "Ghost: almost invisible. Finish your new\ntasks without being clicked!");
     public override string LongDescription => Lang.T(
-        "Geisterrolle für tote Crewmates. Die Lebenden sehen dich als halb durchsichtigen Geist.\n\nSchaffst du alle deine Aufgaben, gewinnst du allein und das Spiel endet. Klickt dich aber ein Lebender an, bist du erlöst - dann bist du ein ganz normaler Geist und kannst nicht mehr gewinnen.",
-        "Ghost role for dead crewmates. The living see you as a half-transparent ghost.\n\nFinish all your tasks and you win alone - the game ends. But if a living player clicks you, you are released - then you are a normal ghost and can't win anymore.");
+        "Geisterrolle für tote Crewmates. Du läufst wie eine normale Figur herum, bist für die Lebenden aber fast unsichtbar - tarn dich gut!\n\nDu bekommst neue Aufgaben. Schaffst du sie alle, gewinnst du allein und das Spiel endet. Klickt dich aber ein Lebender an, bist du erlöst - dann bist du ein ganz normaler Geist und kannst nicht mehr gewinnen.",
+        "Ghost role for dead crewmates. You walk around like a normal figure, but the living can barely see you - blend in!\n\nYou get new tasks. Finish them all and you win alone - the game ends. But if a living player clicks you, you are released - then you are a normal ghost and can't win anymore.");
 
     private const byte ActionRelease = 0;
     private const float ClickRadius = 0.7f, ClickReach = 3f;
 
+    internal static Haunting Instance { get; private set; }
+
     private readonly HashSet<byte> released = new();
     private readonly HashSet<byte> shownToLiving = new();
 
-    protected override void Setup() { }
+    private RoleOption visibility;
+
+    protected override void Setup()
+    {
+        Instance = this;
+        visibility = AddOption("Visibility", "Sichtbarkeit für Lebende|Visibility for the living", 12f, 5f, 50f, 1f, "%");
+    }
+
+    /// <summary>Beim Werden: neue Aufgaben (nur der Host verteilt sie, an alle).</summary>
+    public override void OnAssigned(PlayerControl player)
+    {
+        if (AmHost && RoleRegistry.IsRoleChange) GiveNewTasks(player);
+    }
+
+    private static void GiveNewTasks(PlayerControl p)
+    {
+        var ship = ShipStatus.Instance;
+        if (!ship || p.Data == null) return;
+        var opts = GameOptionsManager.Instance.CurrentGameOptions;
+        var ids = new List<byte>();
+        var usedTypes = new HashSet<TaskTypes>();
+        void Pick(IEnumerable<NormalPlayerTask> pool, int count)
+        {
+            foreach (var t in pool.Where(t => t).OrderBy(_ => Random.value))
+            {
+                if (count <= 0) break;
+                if (!usedTypes.Add(t.TaskType)) continue;
+                ids.Add((byte)t.Index);
+                count--;
+            }
+        }
+        Pick(ship.CommonTasks, opts.GetInt(Int32OptionNames.NumCommonTasks));
+        Pick(ship.LongTasks, opts.GetInt(Int32OptionNames.NumLongTasks));
+        Pick(ship.ShortTasks, opts.GetInt(Int32OptionNames.NumShortTasks));
+        if (ids.Count == 0) return;
+        try { p.Data.RpcSetTasks(ids.ToArray()); }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"Spukgestalt-Aufgaben: {e.Message}"); }
+    }
+
+    /// <summary>Laeuft wie eine lebende Figur (statt als schwebender Geist).</summary>
+    internal bool WalksAsLiving(PlayerControl p) => Haunts(p);
 
     public override void ResetState()
     {
@@ -106,7 +151,7 @@ public sealed class Haunting : CustomRole
         if (!p.cosmetics) return;
         if (!p.Visible) p.Visible = true;
         SetLayer(p.cosmetics.gameObject, LayerMask.NameToLayer("Players"));
-        p.cosmetics.SetPhantomRoleAlpha(0.45f);
+        p.cosmetics.SetPhantomRoleAlpha(visibility.Value / 100f);
     }
 
     private void Hide(PlayerControl p)
@@ -135,4 +180,14 @@ public sealed class Haunting : CustomRole
 
     public override string GetNameMark(PlayerControl viewer, PlayerControl target) =>
         viewer == target && Haunts(target) ? $"<color={ColorHex}>[{Lang.T("Spuk", "Haunt")}]</color>" : null;
+}
+
+/// <summary>Die Spukgestalt laeuft mit den normalen Lauf-Animationen statt als schwebender Geist.</summary>
+[HarmonyPatch(typeof(PlayerPhysics), nameof(PlayerPhysics.HandleAnimation))]
+internal static class HauntingWalkPatch
+{
+    public static void Prefix(PlayerPhysics __instance, ref bool amDead)
+    {
+        if (amDead && Haunting.Instance != null && Haunting.Instance.WalksAsLiving(__instance.myPlayer)) amDead = false;
+    }
 }
