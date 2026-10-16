@@ -296,98 +296,6 @@ def icon_candy():
     return img
 
 
-def icon_claw():
-    """Werwolf: drei Krallenspuren vor einem Vollmond."""
-    img, d = canvas()
-    ellipse(d, (70, 70, S - 70, S - 70), (250, 225, 140, 255))
-    d.ellipse((150, 140, 210, 200), fill=(225, 195, 110, 255))
-    d.ellipse((300, 300, 380, 380), fill=(225, 195, 110, 255))
-    for i in range(3):
-        x = 165 + i * 85
-        pts = [(x - 10, 110), (x + 30, 110), (x + 5, 410), (x - 35, 300)]
-        poly(d, pts, (200, 30, 45, 255), 18)
-    return img
-
-
-def pumpkin(d, cx, cy, r, face=True):
-    orange = (245, 135, 30, 255)
-    dark = (205, 95, 15, 255)
-    d.rounded_rectangle((cx - 18, cy - r - 55, cx + 22, cy - r + 25), 12, fill=(90, 150, 60, 255), outline=OUTLINE, width=W)
-    for dx in (-0.55, 0.55):
-        ellipse(d, (cx + dx * r - r * 0.62, cy - r * 0.85, cx + dx * r + r * 0.62, cy + r * 0.85), dark)
-    ellipse(d, (cx - r * 0.75, cy - r * 0.9, cx + r * 0.75, cy + r * 0.9), orange)
-    if face:
-        eye = (255, 230, 90, 255)
-        poly(d, [(cx - 95, cy - 10), (cx - 40, cy - 10), (cx - 67, cy - 65)], eye, 14)
-        poly(d, [(cx + 40, cy - 10), (cx + 95, cy - 10), (cx + 67, cy - 65)], eye, 14)
-        mouth = [(cx - 110, cy + 35), (cx - 60, cy + 55), (cx - 30, cy + 35), (cx, cy + 60),
-                 (cx + 30, cy + 35), (cx + 60, cy + 55), (cx + 110, cy + 35), (cx, cy + 110)]
-        poly(d, mouth, eye, 14)
-
-
-def icon_pumpkin():
-    img, d = canvas()
-    pumpkin(d, S / 2, S / 2 + 35, 205)
-    return img
-
-
-def icon_fog():
-    """Nebelmacher: graue Nebelschwaden."""
-    img, d = canvas()
-    grey = (175, 180, 200, 255)
-    light = (215, 220, 235, 255)
-    for y, x0, x1, col in ((130, 80, 400, light), (250, 130, 450, grey), (370, 60, 380, light)):
-        d.rounded_rectangle((x0, y - 45, x1, y + 45), 45, fill=col, outline=OUTLINE, width=W)
-    return img
-
-
-def icon_scarecrow():
-    """Vogelscheuche: Hut, Sackgesicht, ausgebreitete Arme auf einem Pfahl."""
-    img, d = canvas()
-    c = S / 2
-    d.rectangle((c - 16, 230, c + 16, 490), fill=(130, 85, 45, 255), outline=OUTLINE, width=16)
-    d.rounded_rectangle((60, 250, S - 60, 300), 20, fill=(130, 85, 45, 255), outline=OUTLINE, width=W)
-    poly(d, [(c - 95, 230), (c + 95, 230), (c + 115, 400), (c - 115, 400)], (90, 130, 200, 255))
-    for x in (70, S - 70):
-        d.line((x, 300, x + (25 if x < c else -25), 345), fill=(240, 200, 80, 255), width=14)
-    ellipse(d, (c - 95, 80, c + 95, 250), (225, 190, 130, 255))
-    d.line((c - 50, 140, c - 20, 170), fill=OUTLINE, width=16)
-    d.line((c - 20, 140, c - 50, 170), fill=OUTLINE, width=16)
-    d.line((c + 20, 140, c + 50, 170), fill=OUTLINE, width=16)
-    d.line((c + 50, 140, c + 20, 170), fill=OUTLINE, width=16)
-    d.line((c - 45, 210, c + 45, 210), fill=OUTLINE, width=12)
-    poly(d, [(c - 150, 105), (c + 150, 105), (c + 70, 80), (c + 40, 20), (c - 40, 20), (c - 70, 80)], (120, 80, 40, 255))
-    return img
-
-
-def icon_seance():
-    """Medium: Kristallkugel mit kleinem Geist."""
-    img, d = canvas()
-    c = S / 2
-    poly(d, [(c - 150, 470), (c + 150, 470), (c + 100, 390), (c - 100, 390)], (120, 75, 45, 255))
-    ellipse(d, (c - 175, 60, c + 175, 410), (120, 170, 235, 255))
-    d.ellipse((c - 130, 100, c - 60, 170), fill=(200, 225, 255, 255))
-    ghost = [(c - 70, 320), (c - 70, 200)]
-    for i in range(0, 181, 15):
-        a = math.radians(180 + i)
-        ghost.append((c + math.cos(a) * 70, 200 + math.sin(a) * 75))
-    ghost += [(c + 70, 320), (c + 35, 295), (c, 320), (c - 35, 295)]
-    poly(d, ghost, (245, 245, 255, 255), 16)
-    d.ellipse((c - 35, 185, c - 12, 215), fill=OUTLINE)
-    d.ellipse((c + 12, 185, c + 35, 215), fill=OUTLINE)
-    return img
-
-
-def icon_lantern():
-    """Laternentraeger: leuchtende Kuerbislaterne mit Henkel."""
-    img, d = canvas()
-    c = S / 2
-    d.ellipse((30, 60, S - 30, S - 10), fill=(255, 220, 110, 90))
-    d.arc((c - 120, 40, c + 120, 260), 200, 340, fill=OUTLINE, width=24)
-    pumpkin(d, c, 320, 175)
-    return img
-
-
 ICONS = {
     "candy": icon_candy,
     "phase": icon_phase,
@@ -405,12 +313,6 @@ ICONS = {
     "stake": icon_stake,
     "douse": icon_douse,
     "ignite": icon_ignite,
-    "claw": icon_claw,
-    "pumpkin": icon_pumpkin,
-    "fog": icon_fog,
-    "scarecrow": icon_scarecrow,
-    "seance": icon_seance,
-    "lantern": icon_lantern,
 }
 
 if __name__ == "__main__":

@@ -30,13 +30,7 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | **Vampir** 🎃 | Impostor | Beißt (**F**): Das Opfer stirbt erst nach ein paar Sekunden, wo es gerade steht. Kommt vorher ein Meeting, stirbt es sofort ohne Leiche. Schild und Guardian Angel schützen. |
 | **Hexe** 🎃 | Impostor | Verflucht Spieler (**F**). Wird sie im nächsten Meeting nicht rausgevotet, sterben danach alle Verfluchten. Option: Alle sehen [Verflucht] im Meeting. |
 | **Zombie** 🎃 | Neutral | Infiziert andere (**F**). Sie werden selbst Zombies, auch Impostor (einstellbar; ein infizierter Impostor verliert seine Impostor-Rolle). Die Zombies gewinnen, wenn alle Lebenden Zombies sind. Solange noch Zombies leben, gewinnt die Crew nicht schon dadurch, dass keine Impostor mehr da sind. |
-| **Vampirjäger** 🎃 | Crew | Hat eine feste Anzahl Pflöcke (**F**), keine Abklingzeit. Gegen Vampir, Hexe, Zombie oder Werwolf stirbt das Monster, sonst ist nur der Pflock weg. |
-| **Werwolf** 🎃 | Impostor | Verwandelt sich (**F**) für ein paar Sekunden: schneller, weitere Sicht, kürzere Kill-Abklingzeit. Alle hören das Heulen (abschaltbar). |
-| **Kürbiskopf** 🎃 | Impostor | Stellt Kürbisfallen auf (**F**), die nur Impostor sehen (mehrere gleichzeitig, einstellbar). Wer hineintappt, steckt ein paar Sekunden fest, und der Kürbiskopf erfährt, wer es war. |
-| **Nebelmacher** 🎃 | Impostor | Lässt Nebel aufziehen (**F**): Alle außer den Impostorn sehen ein paar Sekunden kaum etwas. Muss nicht repariert werden. |
-| **Vogelscheuche** 🎃 | Crew | Stellt Vogelscheuchen auf (**F**), die nur sie sieht. Läuft jemand vorbei, bekommt sie eine Nachricht mit dem Namen (bei Tarnung nur „Jemand“). |
-| **Medium** 🎃 | Crew | Befragt eine Leiche (**F**) statt sie zu melden: erfährt, wie lange der Tod her ist und welche Rolle der Mörder hat (einstellbar: nur das Team). |
-| **Laternenträger** 🎃 | Crew | Stellt kurz eine Kürbislaterne auf (**F**), die alle sehen. In ihrem Schein sieht jeder normal (auch bei Nebel und Licht-Sabotage), und Impostor können dort niemanden töten (abschaltbar). |
+| **Vampirjäger** 🎃 | Crew | Hat eine feste Anzahl Pflöcke (**F**), keine Abklingzeit. Gegen Vampir, Hexe oder Zombie stirbt das Monster, sonst ist nur der Pflock weg. |
 | **Süßigkeiten-Kind** 🎃 | Crew | Nur es sieht Bonbons (Gummi-Crewmates), am Rand von Räumen fern von Aufgaben (garantiert innerhalb der Map) (Anzahl einstellbar, Standard 8). Hat es alle gesammelt: Zuckerrausch - schneller und ein Schild gegen einen Angriff. |
 | **Poltergeist** 🎃 | Impostor | Geht für ein paar Sekunden durch Wände (**F**). Steckt er am Ende in einer Wand oder außerhalb der Map, kommt er aus dem nächsten Vent wieder heraus. |
 | Lover | Anpassung | Zwei Verliebte (♥). Stirbt einer, stirbt der andere mit. Sind beide unter den letzten 3, gewinnen sie zusammen. Option: Impostor kann Lover sein. |

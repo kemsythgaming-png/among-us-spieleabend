@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Spieleabend.Roles.Halloween;
 
-/// <summary>Crew: jagt Monster mit Holzpfloecken. Trifft er Vampir, Hexe, Zombie oder Werwolf, stirbt das Monster - sonst ist nur der Pflock weg.</summary>
+/// <summary>Crew: jagt Monster mit Holzpfloecken. Trifft er Vampir, Hexe oder Zombie, stirbt das Monster - sonst ist nur der Pflock weg.</summary>
 public sealed class VampireHunter : CustomRole
 {
     public override string ConfigSection => "Vampirjäger"; // fest, damit Einstellungen erhalten bleiben
@@ -15,9 +15,9 @@ public sealed class VampireHunter : CustomRole
     public override string IntroText =>
         Lang.T("Jage die Monster der Nacht", "Hunt the monsters of the night");
     public override string Description =>
-        Lang.T("Pfähle Monster (F):\nVampir, Hexe, Zombie, Werwolf.", "Stake monsters (F):\nVampire, Witch, Zombie, Werewolf.");
+        Lang.T("Pfähle Monster (F):\nVampir, Hexe, Zombie.", "Stake monsters (F):\nVampire, Witch, Zombie.");
     public override string LongDescription =>
-        Lang.T("Halloween-Crew. Du hast nur wenige Pflöcke (Taste F).\n\nTriffst du Vampir, Hexe, Zombie oder Werwolf, stirbt das Monster. Bei allen anderen ist nur der Pflock weg - du stirbst nicht.", "Halloween crew. You only have a few stakes (key F).\n\nHit a Vampire, Witch, Zombie or Werewolf and the monster dies. Anyone else: only the stake is gone - you don't die.");
+        Lang.T("Halloween-Crew. Du hast nur wenige Pflöcke (Taste F).\n\nTriffst du Vampir, Hexe oder Zombie, stirbt das Monster. Bei allen anderen ist nur der Pflock weg - du stirbst nicht.", "Halloween crew. You only have a few stakes (key F).\n\nHit a Vampire, Witch or Zombie and the monster dies. Anyone else: only the stake is gone - you don't die.");
 
     private const byte ActionStake = 0, ActionResult = 1;
 
@@ -54,7 +54,7 @@ public sealed class VampireHunter : CustomRole
         if (player == PlayerControl.LocalPlayer) stakesLeft = stakes.Int;
     }
 
-    private static bool IsMonster(PlayerControl p) => RoleRegistry.GetRole(p) is Vampire or Witch or Zombie or Werewolf;
+    private static bool IsMonster(PlayerControl p) => RoleRegistry.GetRole(p) is Vampire or Witch or Zombie;
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
