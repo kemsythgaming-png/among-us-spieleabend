@@ -296,6 +296,94 @@ def icon_candy():
     return img
 
 
+def pumpkin(d, cx, cy, r, face=True):
+    orange = (245, 135, 30, 255)
+    dark = (205, 95, 15, 255)
+    d.rounded_rectangle((cx - 18, cy - r - 55, cx + 22, cy - r + 25), 12, fill=(90, 150, 60, 255), outline=OUTLINE, width=W)
+    for dx in (-0.55, 0.55):
+        ellipse(d, (cx + dx * r - r * 0.62, cy - r * 0.85, cx + dx * r + r * 0.62, cy + r * 0.85), dark)
+    ellipse(d, (cx - r * 0.75, cy - r * 0.9, cx + r * 0.75, cy + r * 0.9), orange)
+    if face:
+        eye = (255, 230, 90, 255)
+        poly(d, [(cx - 95, cy - 10), (cx - 40, cy - 10), (cx - 67, cy - 65)], eye, 14)
+        poly(d, [(cx + 40, cy - 10), (cx + 95, cy - 10), (cx + 67, cy - 65)], eye, 14)
+        mouth = [(cx - 110, cy + 35), (cx - 60, cy + 55), (cx - 30, cy + 35), (cx, cy + 60),
+                 (cx + 30, cy + 35), (cx + 60, cy + 55), (cx + 110, cy + 35), (cx, cy + 110)]
+        poly(d, mouth, eye, 14)
+
+
+def icon_pumpkin():
+    img, d = canvas()
+    pumpkin(d, S / 2, S / 2 + 35, 205)
+    return img
+
+
+def icon_scarecrow():
+    """Vogelscheuche: Hut, Sackgesicht, ausgebreitete Arme auf einem Pfahl."""
+    img, d = canvas()
+    c = S / 2
+    d.rectangle((c - 16, 230, c + 16, 490), fill=(130, 85, 45, 255), outline=OUTLINE, width=16)
+    d.rounded_rectangle((60, 250, S - 60, 300), 20, fill=(130, 85, 45, 255), outline=OUTLINE, width=W)
+    poly(d, [(c - 95, 230), (c + 95, 230), (c + 115, 400), (c - 115, 400)], (90, 130, 200, 255))
+    for x in (70, S - 70):
+        d.line((x, 300, x + (25 if x < c else -25), 345), fill=(240, 200, 80, 255), width=14)
+    ellipse(d, (c - 95, 80, c + 95, 250), (225, 190, 130, 255))
+    d.line((c - 50, 140, c - 20, 170), fill=OUTLINE, width=16)
+    d.line((c - 20, 140, c - 50, 170), fill=OUTLINE, width=16)
+    d.line((c + 20, 140, c + 50, 170), fill=OUTLINE, width=16)
+    d.line((c + 50, 140, c + 20, 170), fill=OUTLINE, width=16)
+    d.line((c - 45, 210, c + 45, 210), fill=OUTLINE, width=12)
+    poly(d, [(c - 150, 105), (c + 150, 105), (c + 70, 80), (c + 40, 20), (c - 40, 20), (c - 70, 80)], (120, 80, 40, 255))
+    return img
+
+
+def icon_cat():
+    """Schwarze Katze: Katzenkopf mit gelben Augen vor violettem Mond."""
+    img, d = canvas()
+    c = S / 2
+    ellipse(d, (60, 60, S - 60, S - 60), (120, 80, 170, 255))
+    black = (35, 32, 45, 255)
+    poly(d, [(c - 150, 230), (c - 135, 95), (c - 50, 170)], black)
+    poly(d, [(c + 150, 230), (c + 135, 95), (c + 50, 170)], black)
+    ellipse(d, (c - 160, 150, c + 160, 420), black)
+    for sx in (-1, 1):
+        ex = c + sx * 65
+        d.ellipse((ex - 40, 240, ex + 40, 300), fill=(250, 215, 60, 255), outline=OUTLINE, width=10)
+        d.ellipse((ex - 8, 244, ex + 8, 296), fill=OUTLINE)
+    poly(d, [(c - 18, 330), (c + 18, 330), (c, 350)], (240, 130, 160, 255), 8)
+    for sy in (340, 365):
+        d.line((c - 60, sy, c - 175, sy - 15 + (sy - 340)), fill=(200, 200, 210, 255), width=6)
+        d.line((c + 60, sy, c + 175, sy - 15 + (sy - 340)), fill=(200, 200, 210, 255), width=6)
+    return img
+
+
+def leaf(d, cx, cy, size, angle, fill):
+    """Spitzes Herbstblatt (Linsenform) mit Mittelrippe."""
+    pts = []
+    for i in range(0, 21):
+        t = -1 + i / 10
+        pts.append((t * size, (1 - t * t) * size * 0.5))
+    for i in range(20, -1, -1):
+        t = -1 + i / 10
+        pts.append((t * size, -(1 - t * t) * size * 0.5))
+    ca, sa = math.cos(angle), math.sin(angle)
+    pts = [(cx + x * ca - y * sa, cy + x * sa + y * ca) for x, y in pts]
+    poly(d, pts, fill, 12)
+    d.line((cx - ca * size * 0.8, cy - sa * size * 0.8, cx + ca * size * 0.8, cy + sa * size * 0.8), fill=OUTLINE, width=7)
+
+
+def icon_leaves():
+    """Laubhaufen: Erdhuegel mit vielen bunten Herbstblaettern."""
+    img, d = canvas()
+    d.chord((40, 250, S - 40, 560), 180, 360, fill=(150, 85, 40, 255), outline=OUTLINE, width=W)
+    cols = [(205, 60, 30, 255), (240, 150, 40, 255), (250, 205, 60, 255), (225, 105, 35, 255), (175, 50, 40, 255)]
+    spots = [(120, 380, 0.4), (390, 385, -0.5), (255, 360, 0.0), (175, 310, -0.9), (335, 305, 0.8),
+             (255, 255, 0.25), (210, 400, 1.3), (300, 400, -1.2), (90, 330, -0.3), (420, 330, 0.3), (255, 175, -0.6)]
+    for i, (x, y, a) in enumerate(spots):
+        leaf(d, x, y, 85, a, cols[i % len(cols)])
+    return img
+
+
 ICONS = {
     "candy": icon_candy,
     "phase": icon_phase,
@@ -313,6 +401,10 @@ ICONS = {
     "stake": icon_stake,
     "douse": icon_douse,
     "ignite": icon_ignite,
+    "pumpkin": icon_pumpkin,
+    "scarecrow": icon_scarecrow,
+    "cat": icon_cat,
+    "leaves": icon_leaves,
 }
 
 if __name__ == "__main__":

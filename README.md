@@ -33,6 +33,11 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | **Vampirjäger** 🎃 | Crew | Hat eine feste Anzahl Pflöcke (**F**), keine Abklingzeit. Gegen Vampir, Hexe oder Zombie stirbt das Monster, sonst ist nur der Pflock weg. |
 | **Süßigkeiten-Kind** 🎃 | Crew | Nur es sieht Bonbons (Gummi-Crewmates), am Rand von Räumen fern von Aufgaben (garantiert innerhalb der Map) (Anzahl einstellbar, Standard 8). Hat es alle gesammelt: Zuckerrausch - schneller und ein Schild gegen einen Angriff. |
 | **Poltergeist** 🎃 | Impostor | Geht für ein paar Sekunden durch Wände (**F**). Steckt er am Ende in einer Wand oder außerhalb der Map, kommt er aus dem nächsten Vent wieder heraus. |
+| **Schwarze Katze** 🎃 | Impostor | Normaler Kill. Im Meeting einmal das Katzen-Symbol an einer Spielerkarte antippen (auch der eigenen): Eine Stimme gegen diesen Spieler zählt nicht. In der Auswertung fehlt dafür der Kopf dieses Wählers - wer aufpasst, merkt es. |
+| **Vogelscheuche** 🎃 | Impostor | Normaler Kill. Stellt eine täuschend echte Kopie eines gewählten Spielers (mit Name) auf (**F**). Wer ihr nahe kommt, erstarrt kurz vor Angst (Impostor nicht). Verschwindet beim nächsten Meeting. |
+| **Laubstreuer** 🎃 | Impostor | Normaler Kill. Legt Laubhaufen aus (**F**, max. 3, der älteste verschwindet). Wer im Laub steht, ist unsichtbar - jeder, auch die Crew. Nach 5 s raschelt es (hören alle in der Nähe, Laub wackelt). Wer im Laub war, fehlt 10 s lang auf Admin-Karte und Kameras. |
+| **Kürbiskopf** 🎃 | Crew | Setzt kurz einen Kürbis auf (**F**): unverwundbar, aber Kürbis-Sicht (zwei Augenlöcher, kleine Sicht). Die anderen sehen ihn so lange als schwarze Silhouette ohne Namen. |
+| **Untoter** 🎃 | Neutral | Wird er getötet, ist er bis nach dem nächsten Meeting Geist (ohne Rollen-Infos) und steht dann wieder auf. Als Untoter läuft er sichtbar herum, gilt im Meeting aber als tot (keine Stimme). Steht er je 5 s an 2 fremden Leichen, lebt er wieder und gewinnt mit der Crew. Schafft er es nicht, verliert er. Zweiter Tod = endgültig. |
 | Lover | Anpassung | Zwei Verliebte (♥). Stirbt einer, stirbt der andere mit. Sind beide unter den letzten 3, gewinnen sie zusammen. Option: Impostor kann Lover sein. |
 | Flash | Anpassung | Läuft schneller (Tempo einstellbar). |
 | Giant | Anpassung | Ist für alle sichtbar größer und etwas langsamer. |
