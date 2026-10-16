@@ -39,6 +39,7 @@ public sealed class VampireHunter : CustomRole
             StartCooldown = 1f,
             Hotkey = KeyCode.F,
             CanUse = () => stakesLeft > 0,
+            UsesLeft = () => stakesLeft,
             OnClick = target =>
             {
                 stakesLeft--;

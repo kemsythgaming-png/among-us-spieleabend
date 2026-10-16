@@ -154,6 +154,9 @@ public abstract class CustomRole
     /// <summary>Symbol (Name aus Assets/Icons) auf der Meeting-Karte von target, das viewer sieht - z. B. Fluch. null = keins.</summary>
     public virtual string GetMeetingIcon(PlayerControl viewer, PlayerControl target) => null;
 
+    /// <summary>Symbol hinter dem Namen von target auf der Map (ausserhalb von Meetings), das viewer sieht. null = keins.</summary>
+    public virtual string GetNameIcon(PlayerControl viewer, PlayerControl target) => null;
+
     /// <summary>Eigenes Fenster zeichnen (IMGUI, Koordinaten fuer 1080p). Nur fuer den lokalen Spieler mit dieser Rolle.</summary>
     public virtual void DrawGUI() { }
 

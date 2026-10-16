@@ -79,15 +79,11 @@ public sealed class Witch : CustomRole
         curses.Clear();
     }
 
-    /// <summary>Im Meeting: Fluch-Symbol auf der Karte (Hexe immer, alle anderen je nach Einstellung).</summary>
+    /// <summary>Im Meeting: Totenkopf hinter dem Namen (Hexe immer, alle anderen je nach Einstellung).</summary>
     public override string GetMeetingIcon(PlayerControl viewer, PlayerControl target) =>
-        IsCursed(target) && (RoleRegistry.Has(viewer, this) || everyoneSeesCurse.Bool) ? "curse" : null;
+        IsCursed(target) && (RoleRegistry.Has(viewer, this) || everyoneSeesCurse.Bool) ? "cursed" : null;
 
-    public override string GetNameMark(PlayerControl viewer, PlayerControl target)
-    {
-        if (!IsCursed(target)) return null;
-        if (RoleRegistry.Has(viewer, this)) return $"<color={ColorHex}>{Lang.T("[Fluch]", "[Curse]")}</color>";
-        if (everyoneSeesCurse.Bool && MeetingHud.Instance) return $"<color={ColorHex}>{Lang.T("[Verflucht]", "[Cursed]")}</color>";
-        return null;
-    }
+    /// <summary>Auf der Map sieht nur die Hexe, wen sie verflucht hat.</summary>
+    public override string GetNameIcon(PlayerControl viewer, PlayerControl target) =>
+        IsCursed(target) && RoleRegistry.Has(viewer, this) ? "cursed" : null;
 }

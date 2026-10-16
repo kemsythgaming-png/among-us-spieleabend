@@ -56,6 +56,9 @@ public class RoleButton
     /// </summary>
     public Func<float> Duration;
 
+    /// <summary>Optional: wie oft der Knopf noch benutzt werden kann (Zahl am Knopf, wie beim Engineer).</summary>
+    public Func<int> UsesLeft;
+
     /// <summary>Optional: wird aufgerufen, wenn die Wirkungsdauer endet.</summary>
     public Action OnEffectEnd;
 
@@ -116,6 +119,7 @@ public class RoleButton
         if (!ui) CreateUi(hud);
         ui.gameObject.SetActive(true);
         if (ui.buttonLabelText && ui.buttonLabelText.text != ShownLabel) ui.OverrideText(ShownLabel); // falls das Spiel sie doch zuruecksetzt
+        UpdateUses();
 
         // Wirkungsdauer laeuft: Fuellbalken wie beim Shapeshifter, danach startet die Abklingzeit
         if (EffectActive)
@@ -141,6 +145,22 @@ public class RoleButton
         else ui.SetDisabled();
 
         if (Hotkey != KeyCode.None && Input.GetKeyDown(Hotkey)) Click();
+    }
+
+    private int shownUses = int.MinValue;
+
+    /// <summary>Zaehler am Knopf (oben rechts, wie beim Engineer) - nur wenn UsesLeft gesetzt ist.</summary>
+    private void UpdateUses()
+    {
+        int uses = UsesLeft != null ? Mathf.Max(0, UsesLeft()) : -1;
+        if (uses == shownUses) return;
+        shownUses = uses;
+        try
+        {
+            if (uses >= 0) ui.SetUsesRemaining(uses);
+            else ui.SetInfiniteUses();
+        }
+        catch (Exception e) { Plugin.Logger.LogWarning($"Zaehler am Knopf: {e.Message}"); }
     }
 
     private void CreateUi(HudManager hud)

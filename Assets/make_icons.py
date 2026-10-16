@@ -384,6 +384,22 @@ def icon_leaves():
     return img
 
 
+def icon_cursed():
+    """Fluch-Zeichen hinter dem Namen: violetter Kreis mit Totenkopf."""
+    img, d = canvas()
+    c = S / 2
+    ellipse(d, (40, 40, S - 40, S - 40), (140, 70, 190, 255), 30)
+    bone = (245, 240, 250, 255)
+    d.ellipse((c - 130, 105, c + 130, 345), fill=bone, outline=OUTLINE, width=18)
+    d.rounded_rectangle((c - 80, 290, c + 80, 410), 30, fill=bone, outline=OUTLINE, width=18)
+    d.ellipse((c - 95, 200, c - 25, 275), fill=(60, 20, 80, 255))
+    d.ellipse((c + 25, 200, c + 95, 275), fill=(60, 20, 80, 255))
+    poly(d, [(c - 18, 320), (c + 18, 320), (c, 285)], (60, 20, 80, 255), 8)
+    for x in (c - 40, c, c + 40):
+        d.line((x, 360, x, 405), fill=OUTLINE, width=12)
+    return img
+
+
 ICONS = {
     "candy": icon_candy,
     "phase": icon_phase,
@@ -405,6 +421,7 @@ ICONS = {
     "scarecrow": icon_scarecrow,
     "cat": icon_cat,
     "leaves": icon_leaves,
+    "cursed": icon_cursed,
 }
 
 if __name__ == "__main__":

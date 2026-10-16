@@ -50,6 +50,7 @@ internal static class RoleUI
         {
             if (!p || !p.cosmetics || p.Data == null) continue;
             UpdateWorldLabel(local, p);
+            UpdateWorldIcon(local, p);
         }
     }
 
@@ -88,22 +89,36 @@ internal static class RoleUI
         }
     }
 
-    /// <summary>Symbol auf der Meeting-Karte (z. B. Fluch der Hexe), links ueber dem Spielerbild.</summary>
+    /// <summary>Symbol hinter dem Namen auf der Meeting-Karte (z. B. Fluch der Hexe).</summary>
     private static void UpdateMeetingIcon(PlayerControl viewer, PlayerVoteArea state)
     {
         var target = CustomRole.FindPlayer((byte)state.PlayerId);
         string icon = null;
         if (target && RoleRegistry.HasAssignments)
-        {
             foreach (var role in RoleRegistry.Roles)
-            {
-                icon = role.GetMeetingIcon(viewer, target);
-                if (icon != null) break;
-            }
-        }
+                if ((icon = role.GetMeetingIcon(viewer, target)) != null) break;
+        SetNameIcon(state.NameText, icon);
+    }
 
-        var existing = state.transform.Find("Spieleabend_MeetingIcon");
-        if (icon == null)
+    /// <summary>Symbol hinter dem Namen eines Spielers auf der Map.</summary>
+    private static void UpdateWorldIcon(PlayerControl viewer, PlayerControl target)
+    {
+        string icon = null;
+        if (RoleRegistry.HasAssignments && !CustomRole.InMeeting)
+            foreach (var role in RoleRegistry.Roles)
+                if ((icon = role.GetNameIcon(viewer, target)) != null) break;
+        SetNameIcon(target.cosmetics.nameText, icon);
+    }
+
+    private static readonly Dictionary<System.IntPtr, string> iconKeys = new();
+
+    /// <summary>Kleines Symbol direkt hinter dem Namen (Hoehe wie die Schrift). icon = null blendet es aus.</summary>
+    private static void SetNameIcon(TextMeshPro nameText, string icon)
+    {
+        if (!nameText) return;
+        var existing = nameText.transform.Find("Spieleabend_NameIcon");
+        bool show = icon != null && nameText.gameObject.activeInHierarchy && !string.IsNullOrEmpty(nameText.text);
+        if (!show)
         {
             if (existing) existing.gameObject.SetActive(false);
             return;
@@ -113,20 +128,31 @@ internal static class RoleUI
         if (existing) sr = existing.GetComponent<SpriteRenderer>();
         else
         {
-            var go = new GameObject("Spieleabend_MeetingIcon");
-            go.layer = state.gameObject.layer;
-            go.transform.SetParent(state.transform, false);
-            go.transform.localPosition = new Vector3(-0.95f, -0.05f, -1.2f);
-            go.transform.localScale = new Vector3(0.45f, 0.45f, 1f);
+            var go = new GameObject("Spieleabend_NameIcon");
+            go.layer = nameText.gameObject.layer;
+            go.transform.SetParent(nameText.transform, false);
             sr = go.AddComponent<SpriteRenderer>();
-            if (state.Background) sr.sortingOrder = state.Background.sortingOrder + 10;
+            var textRenderer = nameText.GetComponent<Renderer>();
+            if (textRenderer)
+            {
+                sr.sortingLayerID = textRenderer.sortingLayerID;
+                sr.sortingOrder = textRenderer.sortingOrder + 1;
+            }
         }
         sr.gameObject.SetActive(true);
-        if (sr.name != icon)
+        if (!iconKeys.TryGetValue(sr.gameObject.Pointer, out var key) || key != icon)
         {
             sr.sprite = ButtonIcons.Get(icon, null);
-            sr.name = icon;
+            iconKeys[sr.gameObject.Pointer] = icon;
         }
+        if (!sr.sprite) return;
+
+        // Hinter das Textende setzen, so hoch wie die Schrift
+        var bounds = nameText.textBounds;
+        float h = Mathf.Max(bounds.size.y, 0.1f);
+        float scale = h * 1.15f / sr.sprite.bounds.size.y;
+        sr.transform.localScale = new Vector3(scale, scale, 1f);
+        sr.transform.localPosition = new Vector3(bounds.max.x + h * 0.7f, bounds.center.y, -0.01f);
     }
 
     /// <summary>Was der Betrachter ueber target sieht (Rolle + Markierungen), "" = nichts.</summary>
