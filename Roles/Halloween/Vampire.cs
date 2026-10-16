@@ -58,6 +58,9 @@ public sealed class Vampire : CustomRole
         myBites.Clear();
     }
 
+    /// <summary>Nach dem Meeting sind alle Bisse erledigt (gestorben oder vom Schild abgefangen).</summary>
+    public override void OnMeetingEnd(PlayerControl exiled) => myBites.Clear();
+
     /// <summary>Der Vampir hoert das Kill-Geraeusch genau dann, wenn sein Opfer tot umfaellt.</summary>
     public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
     {
