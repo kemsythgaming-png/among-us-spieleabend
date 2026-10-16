@@ -47,11 +47,11 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | Adlerauge | Anpassung | Sieht weiter. |
 | Fackel | Anpassung (Crew) | Licht-Sabotage stört nicht. |
 | Köder | Anpassung (Crew) | Wer ihn tötet, meldet die Leiche automatisch sofort selbst. |
-| Zweites Leben | Anpassung | Überlebt den ersten Angriff einmal. |
+| Zweites Leben | Crew | Überlebt den ersten Angriff einmal. |
 | Tiebreaker | Anpassung | Bei Stimmengleichstand entscheidet seine Stimme. |
 | Spürnase | Anpassung | Meldet er eine Leiche, sieht er die Rolle des Toten. |
-| Radar | Anpassung | Ein Pfeil zeigt immer zum nächsten Spieler. |
-| Paranoid | Anpassung | Warnung, wenn ganz in der Nähe jemand getötet wird. |
+| Radar | Crew | Ein Pfeil zeigt immer zum nächsten Spieler. |
+| Paranoid | Crew | Warnung, wenn ganz in der Nähe jemand getötet wird. |
 | Verräter | Anpassung (Crew) | Sterben alle Impostor, wird er (Chance einstellbar) zum neuen Impostor mit Kill-Button und das Spiel geht weiter. Eine Crew-Rolle (Sheriff, Medic ...) verliert er dabei. Neutrale bekommen ihn nicht. |
 
 **Anpassungen** (Lover, Flash, Giant) kommen zusätzlich zu jeder Rolle dazu, auch zu Spiel-Rollen wie Engineer oder zum normalen Impostor.

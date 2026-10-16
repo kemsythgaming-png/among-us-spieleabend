@@ -48,17 +48,17 @@ internal static class SleuthReportPatch
         Sleuth.Instance?.OnReported(__instance, target);
 }
 
-/// <summary>Anpassung: ein Pfeil zeigt immer zum naechsten Spieler.</summary>
+/// <summary>Crew: ein Pfeil zeigt immer zum naechsten Spieler.</summary>
 public sealed class Radar : CustomRole
 {
     public override string Name => "Radar";
     public override Color Color => new Color32(90, 220, 120, 255);
-    public override RoleTeam Team => RoleTeam.Modifier;
+    public override RoleTeam Team => RoleTeam.Crewmate; // eigene Crew-Rolle (war frueher eine Anpassung)
     public override string IntroText => Lang.T("Du spürst, wo die anderen sind", "You sense where the others are");
     public override string Description => Lang.T("Ein Pfeil zeigt zum nächsten Spieler.", "An arrow points to the nearest player.");
     public override string LongDescription => Lang.T(
-        "Anpassung: Ein Pfeil um dich herum zeigt immer zum nächsten lebenden Spieler. Deine Rolle bleibt.",
-        "Modifier: an arrow around you always points to the nearest living player. Your role stays.");
+        "Du bist Crew. Ein Pfeil um dich herum zeigt immer zum nächsten lebenden Spieler.",
+        "You are crew. An arrow around you always points to the nearest living player.");
 
     private GameObject arrow;
     private static Sprite arrowSprite;
@@ -131,17 +131,17 @@ public sealed class Radar : CustomRole
     }
 }
 
-/// <summary>Anpassung: bekommt eine Warnung, wenn ganz in der Naehe jemand getoetet wird.</summary>
+/// <summary>Crew: bekommt eine Warnung, wenn ganz in der Naehe jemand getoetet wird.</summary>
 public sealed class Paranoid : CustomRole
 {
     public override string Name => Lang.T("Paranoid", "Paranoid");
     public override Color Color => new Color32(200, 90, 90, 255);
-    public override RoleTeam Team => RoleTeam.Modifier;
+    public override RoleTeam Team => RoleTeam.Crewmate; // eigene Crew-Rolle (war frueher eine Anpassung)
     public override string IntroText => Lang.T("Hast du das gehört?", "Did you hear that?");
     public override string Description => Lang.T("Du merkst, wenn in der Nähe jemand stirbt.", "You notice when someone dies nearby.");
     public override string LongDescription => Lang.T(
-        "Anpassung: Wird ganz in deiner Nähe jemand getötet, bekommst du eine Warnung - aber nicht, wo genau. Deine Rolle bleibt.",
-        "Modifier: when someone is killed close to you, you get a warning - but not exactly where. Your role stays.");
+        "Du bist Crew. Wird ganz in deiner Nähe jemand getötet, bekommst du eine Warnung - aber nicht, wo genau.",
+        "You are crew. When someone is killed close to you, you get a warning - but not exactly where.");
 
     private RoleOption range;
 

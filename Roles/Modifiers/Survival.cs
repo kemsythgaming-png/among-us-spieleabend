@@ -57,12 +57,12 @@ public sealed class SecondLife : CustomRole
     public override string ConfigSection => "ZweitesLeben";
     public override string Name => Lang.T("Zweites Leben", "Second Life");
     public override Color Color => new Color32(255, 215, 90, 255);
-    public override RoleTeam Team => RoleTeam.Modifier;
+    public override RoleTeam Team => RoleTeam.Crewmate; // eigene Crew-Rolle (war frueher eine Anpassung)
     public override string IntroText => Lang.T("Katzen haben neun - du hast zwei", "Cats have nine - you have two");
     public override string Description => Lang.T("Du überlebst den ersten Angriff.", "You survive the first attack.");
     public override string LongDescription => Lang.T(
-        "Anpassung: Der erste Angriff auf dich scheitert (der Angreifer sieht nur einen fehlgeschlagenen Kill). Danach bist du normal sterblich. Deine Rolle bleibt.",
-        "Modifier: the first attack on you fails (the attacker only sees a failed kill). After that you are mortal as usual. Your role stays.");
+        "Du bist Crew. Der erste Angriff auf dich scheitert (der Angreifer sieht nur einen fehlgeschlagenen Kill). Danach bist du normal sterblich.",
+        "You are crew. The first attack on you fails (the attacker only sees a failed kill). After that you are mortal as usual.");
 
     private const byte ActionUsed = 0;
     private readonly HashSet<byte> used = new();
