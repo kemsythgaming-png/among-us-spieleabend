@@ -106,6 +106,10 @@ Nur wenn sich BepInEx oder der Launcher selbst ändert, braucht jeder die neue E
 
 Ohne Launcher geht es weiterhin mit `dist\AmongUsSpieleabend-<Version>.zip` und `Installieren.bat` (Anleitung in `Verteilung/LIESMICH.txt`).
 
+## Spieleabend-Graffiti (The Skeld)
+
+Auf The Skeld stehen Sprüche der Mitspieler an Wänden und Aufgaben: „Waybe isses“ (Cafeteria), „Ich bins der Imposter“ (Elektrik), „WoabWoabWoab“ (Oberer Motor), „Dennator is Save“ (Sicherheit), „Lord Toasti's 4ter Download“ (an einem Download), „Froschi das ist kein Bug.“ (am Karten-Durchzug), „ich hab Kem Venten sehen“ (am Vent bei der Cafeteria) und zwei Herzen mit „V + P“ (Medbay) und „I + M“ (Lager). Rein optisch, Code in `Core/MapGraffiti.cs`.
+
 ## Server
 
 Beim Start trägt der Mod die Modded-Server (**Modded EU**, NA, Asia) automatisch in die Serverliste ein (`Core/ServerSetup.cs`). Beim allerersten Start ist **Modded EU** gleich ausgewählt. Danach bleibt, was man selbst wählt (Weltkugel-Symbol unten rechts im Online-Menü).
