@@ -225,7 +225,7 @@ internal static class SettingsPanel
         }
 
         var role = roles[selected];
-        DrawDetailHeader(new Rect(area.x + 370, area.y, area.width - 370, 110), role.Name, role.Color, role.Description);
+        DrawDetailHeader(new Rect(area.x + 370, area.y, area.width - 370, 110), role.Name, role.NameColor, role.Description);
         y = area.y + 110;
         foreach (var option in role.Options)
         {

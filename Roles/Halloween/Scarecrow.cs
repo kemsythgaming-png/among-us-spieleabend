@@ -120,12 +120,13 @@ public sealed class Scarecrow : CustomRole
         var hud = HudManager.Instance;
         if (!hud || !hud.IntroPrefab || !hud.IntroPrefab.PlayerPrefab) return null;
 
+        var outfit = model.Data.DefaultOutfit;
         var poolable = Object.Instantiate(hud.IntroPrefab.PlayerPrefab, ShipStatus.Instance ? ShipStatus.Instance.transform : null);
         poolable.name = "Spieleabend_ScarecrowCopy";
         poolable.gameObject.SetActive(true);
-        poolable.UpdateFromPlayerOutfit(model.Data.DefaultOutfit, PlayerMaterial.MaskType.None, false, false, null, true);
-        poolable.SetName(model.Data.PlayerName);
-        poolable.ToggleName(true);
+        poolable.UpdateFromPlayerOutfit(outfit, PlayerMaterial.MaskType.None, false, false, null, true);
+        poolable.SetBodyColor(outfit.ColorId); // Farbe sicher setzen
+        poolable.ToggleName(false);           // eigener Name wie bei echten Spielern, siehe unten
         poolable.SetFlipX(model.cosmetics && model.cosmetics.FlipX);
 
         // So gross wie eine echte Spielfigur
@@ -139,12 +140,45 @@ public sealed class Scarecrow : CustomRole
         // Fuesse auf die Position, Tiefe wie bei Spielern
         var offset = model.transform.position - (Vector3)model.GetTruePosition();
         poolable.transform.position = new Vector3(pos.x + offset.x, pos.y + offset.y, (pos.y + offset.y) / 1000f);
+
+        // Name: Kopie des echten Namensschilds - gleiche Schrift, Groesse und Hoehe wie bei echten Spielern
+        var realName = model.cosmetics ? model.cosmetics.nameText : null;
+        if (realName)
+        {
+            var name = Object.Instantiate(realName.gameObject, poolable.transform);
+            name.name = "Spieleabend_CopyName";
+            name.SetActive(true);
+            var tmp = name.GetComponent<TMPro.TextMeshPro>();
+            tmp.enabled = true;
+            tmp.text = model.Data.PlayerName;
+            // Wie im echten Spiel: Impostor sehen andere Impostor rot, sonst weiss
+            var local = PlayerControl.LocalPlayer;
+            tmp.color = IsImpostor(local) && IsImpostor(model) ? CustomRole.ImpostorRed : Color.white;
+            name.transform.position = poolable.transform.position + (realName.transform.position - model.transform.position);
+            var parentScale = poolable.transform.lossyScale;
+            var want = realName.transform.lossyScale;
+            name.transform.localScale = new Vector3(want.x / parentScale.x, want.y / parentScale.y, 1f);
+        }
         return poolable.gameObject;
+    }
+
+    /// <summary>Wie echte Spieler: nur sichtbar, wenn sie im eigenen Lichtkreis und nicht hinter einer Wand steht.</summary>
+    private static bool InSight(PlayerControl local, Vector2 pos)
+    {
+        if (!IsAlive(local)) return true; // Geister sehen alles
+        Vector2 me = local.GetTruePosition();
+        float radius = ShipStatus.Instance ? ShipStatus.Instance.CalculateLightRadius(local.Data) : 5f;
+        if (Vector2.Distance(me, pos) > radius) return false;
+        return !PhysicsHelpers.AnythingBetween(me, pos, Constants.ShadowMask, false);
     }
 
     public override void Update()
     {
         var local = PlayerControl.LocalPlayer;
+        if (copies.Count > 0 && local)
+            foreach (var c in copies)
+                if (c.Visual) c.Visual.SetActive(!InMeeting && InSight(local, c.Pos));
+
         if (copies.Count == 0 || !IsAlive(local) || InMeeting || IsImpostor(local) || local.inVent) return;
 
         Vector2 me = local.GetTruePosition();

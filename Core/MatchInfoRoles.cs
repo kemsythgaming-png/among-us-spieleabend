@@ -80,7 +80,7 @@ internal static class MatchInfoRoles
         if (panel.roleName)
         {
             panel.roleName.text = $"{role.Name} <size=60%>({team})</size>";
-            panel.roleName.color = role.Color;
+            panel.roleName.color = role.NameColor;
         }
         if (panel.roleDescription) panel.roleDescription.text = role.Description;
         if (panel.roleCount) panel.roleCount.text = $"{role.Count.Int}x  {role.Chance.Int}%";

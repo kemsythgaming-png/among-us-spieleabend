@@ -41,7 +41,7 @@ internal static class RoleUI
         UpdateRoleTask(local, all);
         if (main != null)
         {
-            local.cosmetics.nameText.color = main.Color;
+            local.cosmetics.nameText.color = main.NameColor;
             UpdateIntro(main, all);
         }
 
@@ -70,7 +70,7 @@ internal static class RoleUI
             if (!state) continue;
             byte id = (byte)state.PlayerId;
             UpdateMeetingIcon(local, state);
-            if (id == local.PlayerId && main != null) state.NameText.color = main.Color;
+            if (id == local.PlayerId && main != null) state.NameText.color = main.NameColor;
 
             var player = CustomRole.FindPlayer(id);
             string info = player ? InfoFor(local, player) : "";
@@ -229,13 +229,13 @@ internal static class RoleUI
         var intro = IntroCutscene.Instance;
         if (!intro) return;
 
-        intro.YouAreText.color = main.Color;
+        intro.YouAreText.color = main.NameColor;
         intro.RoleText.text = main.Name;
-        intro.RoleText.color = main.Color;
+        intro.RoleText.color = main.NameColor;
 
         string blurb = main.IntroText;
         foreach (var mod in all.Where(r => r.IsModifier)) blurb += $"\n<size=70%>+ {mod.ColoredName}</size>";
         intro.RoleBlurbText.text = blurb;
-        intro.RoleBlurbText.color = main.Color;
+        intro.RoleBlurbText.color = main.NameColor;
     }
 }

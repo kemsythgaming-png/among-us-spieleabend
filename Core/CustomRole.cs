@@ -92,7 +92,22 @@ public abstract class CustomRole
     public List<RoleButton> Buttons { get; } = new();
 
     public string ColorHex => "#" + ColorUtility.ToHtmlStringRGB(Color);
-    public string ColoredName => $"<color={ColorHex}>{Name}</color>";
+    /// <summary>
+    /// Farbe des Rollennamens (Intro, eigener Name, Listen) wie im echten Spiel: Impostor-Rollen rot, Crew-Rollen tuerkis.
+    /// Neutrale und Anpassungen behalten ihre eigene Farbe. Effekte (Umrandung, Schutzblasen ...) nutzen weiter Color.
+    /// </summary>
+    public Color NameColor => Team switch
+    {
+        RoleTeam.Impostor => ImpostorRed,
+        RoleTeam.Crewmate => CrewBlue,
+        _ => Color,
+    };
+
+    public static readonly Color ImpostorRed = new Color32(255, 25, 25, 255);
+    public static readonly Color CrewBlue = new Color32(140, 255, 255, 255);
+
+    public string NameHex => "#" + ColorUtility.ToHtmlStringRGB(NameColor);
+    public string ColoredName => $"<color={NameHex}>{Name}</color>";
 
     /// <summary>Hat der lokale Spieler diese Rolle (oder diesen Modifier)?</summary>
     public bool IsLocalRole => RoleRegistry.Has(PlayerControl.LocalPlayer, this);

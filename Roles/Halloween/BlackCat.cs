@@ -93,24 +93,25 @@ public sealed class BlackCat : CustomRole
     private void Mark(byte targetId)
     {
         if (!CanUse(MeetingHud.Instance)) return;
-        var target = FindPlayer(targetId);
-        if (!IsAlive(target)) return;
+        if (!IsAlive(FindPlayer(targetId))) return;
 
+        // Ganz leise: keine Nachricht, kein Geraeusch - nur die Knoepfe verschwinden
         usedThisMeeting = true;
-        SendToHost(ActionMark, targetId);
-        Sfx.Play(Sfx.Vanish);
-        Notifier.Show($"<color={ColorHex}>{Lang.T("Eine Stimme gegen", "One vote against")} {target.Data.PlayerName} {Lang.T("zählt nicht.", "won't count.")}</color>");
+        SendToAll(ActionMark, targetId);
     }
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
-        if (action != ActionMark || data.Length < 1 || !AmHost) return;
+        // Alle Clients merken sich das Ziel (fuer die Anzeige), der Host zaehlt
+        if (action != ActionMark || data.Length < 1) return;
         if (!RoleRegistry.Has(sender, this) || !IsAlive(sender) || !MeetingHud.Instance) return;
         protectedThisMeeting.Add(data[0]);
     }
 
-    /// <summary>Host: wie viele Stimmen gegen diesen Spieler wegfallen.</summary>
+    /// <summary>Wie viele Stimmen gegen diesen Spieler wegfallen.</summary>
     internal int RemovedVotes(byte playerId) => protectedThisMeeting.Count(id => id == playerId);
+
+    internal IEnumerable<byte> ProtectedTargets => protectedThisMeeting.Distinct();
 }
 
 /// <summary>Host beim Auszaehlen: Stimmen gegen geschuetzte Spieler abziehen (nach dem Mayor, vor dem Tiebreaker).</summary>
@@ -132,35 +133,40 @@ internal static class BlackCatVotePatch
     }
 }
 
-/// <summary>Host: den Kopf der weggefallenen Stimme aus der Auswertung entfernen - so sieht es jeder.</summary>
-[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.RpcVotingComplete))]
+/// <summary>
+/// Auswertung (bei allen): Fuer jede weggefallene Stimme verschwindet beim Ziel ein Kopf. Alle Clients bauen die Koepfe
+/// in derselben Reihenfolge, darum wird ueberall derselbe (der letzte) ausgeblendet.
+/// </summary>
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Update))]
 internal static class BlackCatResultPatch
 {
-    public static void Prefix(ref Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<MeetingHud.VoterState> states)
+    public static void Postfix(MeetingHud __instance)
     {
         var cat = BlackCat.Instance;
-        if (cat == null || states == null || !CustomRole.AmHost) return;
+        if (cat == null || !__instance.PlayerVotePrefab) return;
+        if (__instance.state != MeetingHud.MeetingStates.Results && __instance.state != MeetingHud.MeetingStates.Proceeding) return;
 
-        var list = new List<MeetingHud.VoterState>();
-        foreach (var s in states) list.Add(s);
-
-        bool changed = false;
-        foreach (var targetId in list.Select(s => (byte)s.VotedForId).Distinct().ToList())
+        string chipName = __instance.PlayerVotePrefab.name;
+        foreach (var targetId in cat.ProtectedTargets)
         {
-            int remove = cat.RemovedVotes(targetId);
-            for (int i = 0; i < remove; i++)
+            var area = __instance.playerStates.FirstOrDefault(s => s && (byte)s.PlayerId == targetId);
+            if (!area) continue;
+
+            var chips = new List<SpriteRenderer>();
+            for (int i = 0; i < area.transform.childCount; i++)
             {
-                var votes = list.Where(s => (byte)s.VotedForId == targetId).ToList();
-                if (votes.Count == 0) break;
-                // Bevorzugt nicht die Stimme des Mayors entfernen (die zaehlt mehrfach)
-                var pick = votes.OrderBy(s => IsMayor((byte)s.VoterId) ? 1 : 0).ThenBy(_ => Random.value).First();
-                list.Remove(pick);
-                changed = true;
+                var child = area.transform.GetChild(i);
+                if (!child.name.StartsWith(chipName)) continue;
+                var sr = child.GetComponent<SpriteRenderer>();
+                if (sr) chips.Add(sr);
+            }
+
+            int hide = cat.RemovedVotes(targetId);
+            for (int i = chips.Count - 1; i >= 0 && hide > 0; i--, hide--)
+            {
+                chips[i].enabled = false;
+                foreach (var r in chips[i].GetComponentsInChildren<Renderer>(true)) r.enabled = false;
             }
         }
-        if (changed) states = list.ToArray();
     }
-
-    private static bool IsMayor(byte playerId) =>
-        Mayor.Instance != null && RoleRegistry.Has(CustomRole.FindPlayer(playerId), Mayor.Instance);
 }

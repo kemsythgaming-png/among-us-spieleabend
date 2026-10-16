@@ -35,6 +35,7 @@ public sealed class LeafSpreader : CustomRole
         public Vector2 Pos;
         public GameObject Visual;
         public float NextRustleSound;
+        public float Radius;
     }
 
     // bei allen Clients (jeder berechnet Sichtbarkeit selbst - alle kennen alle Positionen)
@@ -42,6 +43,9 @@ public sealed class LeafSpreader : CustomRole
     private readonly Dictionary<byte, float> enteredAt = new();
     private readonly Dictionary<byte, float> leftAt = new();
     private readonly HashSet<byte> hiddenByUs = new();
+    private bool localFaded;
+
+    private static AudioClip rustleClip;
 
     protected override void Setup()
     {
@@ -59,13 +63,15 @@ public sealed class LeafSpreader : CustomRole
             Cooldown = () => cooldown.Value,
             Hotkey = KeyCode.F,
             CanUse = () => !PlayerControl.LocalPlayer.inVent,
-            OnClick = _ => SendToAll(ActionPlace, WorldMarker.Encode(PlayerControl.LocalPlayer.GetTruePosition())),
+            // Jeder Haufen ist anders gross (40-85 %) - die Groesse geht mit, damit alle denselben Haufen sehen
+            OnClick = _ => SendToAll(ActionPlace, WorldMarker.Concat((byte)Random.Range(40, 86), WorldMarker.Encode(PlayerControl.LocalPlayer.GetTruePosition()))),
         });
     }
 
     public override void ResetState()
     {
         ShowAll();
+        FadeLocal(false);
         foreach (var p in piles)
             if (p.Visual) Object.Destroy(p.Visual);
         piles.Clear();
@@ -75,7 +81,7 @@ public sealed class LeafSpreader : CustomRole
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
-        if (action != ActionPlace || data.Length < 4 || !RoleRegistry.Has(sender, this)) return;
+        if (action != ActionPlace || data.Length < 5 || !RoleRegistry.Has(sender, this)) return;
 
         // Zu viele? Der aelteste Haufen dieses Laubstreuers verschwindet
         var mine = piles.Where(p => p.Owner == sender.PlayerId).ToList();
@@ -87,16 +93,18 @@ public sealed class LeafSpreader : CustomRole
             if (old.Visual) Object.Destroy(old.Visual);
         }
 
-        var pos = WorldMarker.Decode(data, 0);
-        piles.Add(new Pile { Owner = sender.PlayerId, Pos = pos, Visual = WorldMarker.Spawn("leaves", pos + new Vector2(0f, 0.1f), 0.55f, "LeafPile") });
-        if (sender == PlayerControl.LocalPlayer) Sfx.Play(Sfx.Splash, 0.5f);
+        float size = Mathf.Clamp(data[0], 30, 100) / 100f;
+        var pos = WorldMarker.Decode(data, 1);
+        var visual = WorldMarker.Spawn("leaves", pos + new Vector2(0f, 0.1f), size, "LeafPile");
+        piles.Add(new Pile { Owner = sender.PlayerId, Pos = pos, Visual = visual, Radius = PileRadius * size / 0.55f });
+        if (sender == PlayerControl.LocalPlayer) Sfx.Play(RustleClip(), 0.7f);
     }
 
     private Pile PileAt(PlayerControl p)
     {
         if (!IsAlive(p) || p.inVent) return null;
         Vector2 pos = p.GetTruePosition();
-        return piles.FirstOrDefault(pile => Vector2.Distance(pos, pile.Pos) <= PileRadius);
+        return piles.FirstOrDefault(pile => Vector2.Distance(pos, pile.Pos) <= pile.Radius);
     }
 
     /// <summary>Wird gerade auf Admin-Karte und Kameras versteckt (im Laub oder kurz danach)?</summary>
@@ -114,6 +122,7 @@ public sealed class LeafSpreader : CustomRole
         if (InMeeting)
         {
             ShowAll();
+            FadeLocal(false);
             return;
         }
 
@@ -135,8 +144,18 @@ public sealed class LeafSpreader : CustomRole
             }
             else if (enteredAt.Remove(p.PlayerId)) leftAt[p.PlayerId] = t;
 
+            // Selbst im Laub: man sieht sich durchsichtig (wie der Phantom) und bekommt einen Hinweis
+            if (p == local)
+            {
+                bool inside = pile != null;
+                if (inside && !localFaded)
+                    Notifier.Show($"<color={ColorHex}>{Lang.T("Du bist im Laub versteckt - niemand sieht dich.", "You are hidden in the leaves - nobody can see you.")}</color>", 2.5f);
+                FadeLocal(inside);
+                continue;
+            }
+
             // Sichtbarkeit: im Laub unsichtbar fuer andere; auf Kameras auch kurz danach
-            if (p == local || !IsAlive(p)) continue;
+            if (!IsAlive(p)) continue;
             bool hide = pile != null || (watchingCams && HiddenFromSurveillance(p));
             if (hide && !hiddenByUs.Contains(p.PlayerId) && !p.inVent)
             {
@@ -155,8 +174,47 @@ public sealed class LeafSpreader : CustomRole
             pile.Visual.transform.localRotation = Quaternion.Euler(0f, 0f, shakes ? Mathf.Sin(t * 25f) * 8f : 0f);
             if (!shakes || t < pile.NextRustleSound || Vector2.Distance(me, pile.Pos) > HearRange) continue;
             pile.NextRustleSound = t + 1.5f;
-            Sfx.Play(Sfx.Splash, 0.35f);
+            Sfx.Play(RustleClip(), 0.6f);
         }
+    }
+
+    /// <summary>Den eigenen Spieler halb durchsichtig zeichnen, solange er im Laub steckt.</summary>
+    private void FadeLocal(bool fade)
+    {
+        if (fade == localFaded) return;
+        localFaded = fade;
+        var local = PlayerControl.LocalPlayer;
+        if (local && local.cosmetics) local.cosmetics.SetPhantomRoleAlpha(fade ? 0.35f : 1f);
+    }
+
+    /// <summary>Rascheln: kurzes, knisterndes Rauschen aus mehreren kleinen Knacksern (selbst erzeugt, kein Spiel-Sound passt).</summary>
+    private static AudioClip RustleClip()
+    {
+        if (rustleClip) return rustleClip;
+        const int rate = 44100;
+        int length = (int)(rate * 0.7f);
+        var samples = new float[length];
+        var rng = new System.Random(4711);
+        float smooth = 0f;
+        // 14 kleine Knackser mit kurzem Abklingen, dazu leises Grundrauschen
+        var bursts = Enumerable.Range(0, 14).Select(_ => (Start: rng.Next(0, length - rate / 10), Strength: 0.4f + (float)rng.NextDouble() * 0.6f)).ToList();
+        for (int i = 0; i < length; i++)
+        {
+            float noise = (float)rng.NextDouble() * 2f - 1f;
+            smooth += (noise - smooth) * 0.35f; // etwas dumpfer, wie Blaetter statt Zischen
+            float env = 0.08f;
+            foreach (var b in bursts)
+            {
+                int d = i - b.Start;
+                if (d >= 0 && d < rate / 10) env += b.Strength * Mathf.Exp(-d / (rate * 0.012f));
+            }
+            float fade = Mathf.Min(1f, i / (rate * 0.03f)) * Mathf.Min(1f, (length - i) / (rate * 0.15f));
+            samples[i] = Mathf.Clamp(smooth * env * fade * 0.9f, -1f, 1f);
+        }
+        rustleClip = AudioClip.Create("Spieleabend_Rustle", length, 1, rate, false);
+        rustleClip.SetData(samples, 0);
+        rustleClip.hideFlags = HideFlags.HideAndDontSave;
+        return rustleClip;
     }
 
     private void ShowAll()

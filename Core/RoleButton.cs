@@ -279,5 +279,48 @@ internal static class ButtonManager
                 else button.Hide();
             }
         }
+
+        KeepGridTidy(hud);
+    }
+
+    private static int lastActiveButtons = -1;
+    private static float nextOverlapCheck;
+
+    /// <summary>
+    /// Das Spiel blendet eigene Knoepfe (Haustier, Benutzen, Sabotage ...) spaeter ein oder aus und sortiert dann ohne
+    /// unsere Knoepfe - die rutschen sonst darunter. Darum: bei jeder Aenderung und wenn zwei Knoepfe uebereinander liegen,
+    /// das Raster neu anordnen. Gilt fuer alle Rollen-Knoepfe.
+    /// </summary>
+    private static void KeepGridTidy(HudManager hud)
+    {
+        var parent = hud.KillButton ? hud.KillButton.transform.parent : null;
+        if (!parent) return;
+
+        int active = 0;
+        for (int i = 0; i < parent.childCount; i++)
+            if (parent.GetChild(i).gameObject.activeSelf) active++;
+
+        bool rearrange = active != lastActiveButtons;
+        lastActiveButtons = active;
+
+        if (!rearrange && Time.time >= nextOverlapCheck)
+        {
+            nextOverlapCheck = Time.time + 0.5f;
+            var positions = new System.Collections.Generic.List<Vector3>();
+            for (int i = 0; i < parent.childCount && !rearrange; i++)
+            {
+                var child = parent.GetChild(i);
+                if (!child.gameObject.activeSelf) continue;
+                foreach (var pos in positions)
+                    if ((pos - child.localPosition).sqrMagnitude < 0.01f) rearrange = true;
+                positions.Add(child.localPosition);
+            }
+        }
+
+        if (!rearrange) return;
+        var grid = parent.GetComponent<GridArrange>();
+        if (!grid) return;
+        grid.GetChildsActive();
+        grid.ArrangeChilds();
     }
 }

@@ -159,28 +159,32 @@ public sealed class PumpkinHead : CustomRole
         PlayerName = "",
     };
 
-    /// <summary>Bildschirmfuellender Kuerbis mit zwei Augenloechern, eine Kopie der Vollbild-Flaeche des HUD (liegt unter den Knoepfen).</summary>
+    /// <summary>
+    /// Bildschirmfuellender Kuerbis mit zwei Augenloechern. Liegt direkt vor der Dunkelheit (ShadowQuad) - also ueber
+    /// der Map, aber unter allen Knoepfen und der Aufgabenliste.
+    /// </summary>
     private static GameObject CreateOverlay()
     {
         var hud = HudManager.Instance;
         var cam = Camera.main;
-        if (!hud || !hud.FullScreen || !cam) return null;
+        if (!hud || !hud.ShadowQuad || !cam) return null;
 
-        var go = Object.Instantiate(hud.FullScreen.gameObject, hud.FullScreen.transform.parent);
-        go.name = "Spieleabend_PumpkinView";
-        foreach (var c in go.GetComponents<MonoBehaviour>()) Object.Destroy(c);
-        var sr = go.GetComponent<SpriteRenderer>();
+        var go = new GameObject("Spieleabend_PumpkinView");
+        go.transform.SetParent(cam.transform, false);
+        go.layer = hud.ShadowQuad.gameObject.layer;
+        var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = OverlaySprite();
-        sr.color = Color.white;
+        sr.sortingLayerID = hud.ShadowQuad.sortingLayerID;
+        sr.sortingOrder = hud.ShadowQuad.sortingOrder;
 
-        // Sprite ist 1 Einheit hoch -> auf Bildschirmgroesse skalieren
-        float height = cam.orthographicSize * 2f;
+        // Sprite ist 1 Einheit hoch -> auf Bildschirmgroesse skalieren (etwas groesser, damit kein Rand bleibt)
+        float height = cam.orthographicSize * 2f * 1.05f;
         float width = height * cam.aspect;
-        var parentScale = go.transform.parent ? go.transform.parent.lossyScale : Vector3.one;
         var size = sr.sprite.bounds.size;
-        go.transform.localPosition = new Vector3(0f, 0f, hud.FullScreen.transform.localPosition.z);
+        var parentScale = cam.transform.lossyScale;
+        float z = cam.transform.InverseTransformPoint(hud.ShadowQuad.transform.position).z - 0.05f;
+        go.transform.localPosition = new Vector3(0f, 0f, z);
         go.transform.localScale = new Vector3(width / size.x / parentScale.x, height / size.y / parentScale.y, 1f);
-        go.SetActive(true);
         return go;
     }
 

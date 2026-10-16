@@ -102,7 +102,7 @@ internal static class RoleGuide
 
     private static void DrawDetails(CustomRole role, Rect area)
     {
-        Ui.Header.normal.textColor = role.Color;
+        Ui.Header.normal.textColor = role.NameColor;
         GUI.Label(new Rect(area.x, area.y, area.width, 44), role.Name, Ui.Header);
         Ui.Header.normal.textColor = Color.white;
 
