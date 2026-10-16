@@ -68,6 +68,9 @@ public sealed class Undead : CustomRole
 
     private int SoulsOf(PlayerControl p) => p && collected.TryGetValue(p.PlayerId, out var c) ? c : 0;
 
+    /// <summary>Toter Untoter, der noch aufstehen wird (bekommt keine Geisterrolle).</summary>
+    internal bool WillRise(PlayerControl p) => RoleRegistry.Has(p, this) && Stage(p) == UndeadStage.Dead;
+
     /// <summary>Untoter, der im Meeting als tot gilt.</summary>
     internal bool CountsAsDeadInMeeting(PlayerControl p) => RoleRegistry.Has(p, this) && Stage(p) == UndeadStage.Risen && IsAlive(p);
 

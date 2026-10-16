@@ -26,6 +26,9 @@ internal enum RpcId : byte
 
     /// <summary>Host -> alle: Schutz fuer die ersten Toten der letzten Runde [count][playerIds]</summary>
     FirstDeathShield = 216,
+
+    /// <summary>Host -> alle: Zusatzrolle mitten in der Runde (Geisterrolle) [playerId][roleId]</summary>
+    AddRole = 217,
 }
 
 internal static class RoleRpc
@@ -46,6 +49,18 @@ internal static class RoleRpc
         }
         WriteOptions(writer);
         AmongUsClient.Instance.FinishRpcImmediately(writer);
+    }
+
+    public static void SendAddRole(byte playerId, byte roleId)
+    {
+        try
+        {
+            var writer = Start(RpcId.AddRole, -1);
+            writer.Write(playerId);
+            writer.Write(roleId);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"AddRole senden: {e.Message}"); }
     }
 
     public static void SendChangeRole(byte playerId, byte roleId)
@@ -140,6 +155,9 @@ internal static class RoleRpc
                 break;
             case RpcId.FirstDeathShield:
                 FirstDeathShield.Handle(reader);
+                break;
+            case RpcId.AddRole:
+                RoleRegistry.ApplyAddRole(reader.ReadByte(), reader.ReadByte());
                 break;
             case RpcId.KillNoBody:
                 KillSystem.ApplyKillNoBody(reader.ReadByte(), reader.ReadByte());

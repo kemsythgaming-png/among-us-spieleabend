@@ -85,6 +85,18 @@ public abstract class CustomRole
 
     public bool IsModifier => Team == RoleTeam.Modifier;
 
+    /// <summary>
+    /// Geisterrolle: wird nicht zu Spielbeginn verteilt, sondern beim Tod (Anzahl + Chance wie bei jeder Rolle).
+    /// Kommt zusaetzlich zur bisherigen Rolle dazu, wie eine Anpassung.
+    /// </summary>
+    public virtual bool IsGhostRole => false;
+
+    /// <summary>Nur Geisterrollen: darf dieser gerade gestorbene Spieler den Geist bekommen?</summary>
+    public virtual bool CanHaunt(PlayerControl dead) => false;
+
+    /// <summary>Kommt zusaetzlich zur Hauptrolle dazu (Anpassung oder Geisterrolle).</summary>
+    public bool IsExtra => IsModifier || IsGhostRole;
+
     public byte Id { get; internal set; }
     public RoleOption Count { get; private set; }
     public RoleOption Chance { get; private set; }

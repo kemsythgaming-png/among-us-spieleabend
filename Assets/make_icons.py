@@ -400,6 +400,52 @@ def icon_cursed():
     return img
 
 
+def icon_frost():
+    """Rachegeist: eisblaue Schneeflocke."""
+    img, d = canvas()
+    c = S / 2
+    ice = (150, 220, 255, 255)
+    for k in range(6):
+        a = math.radians(k * 60 + 90)
+        ex, ey = c + math.cos(a) * 200, c - math.sin(a) * 200
+        d.line((c, c, ex, ey), fill=OUTLINE, width=62)
+        for t, l in ((0.55, 70), (0.8, 50)):
+            bx, by = c + math.cos(a) * 200 * t, c - math.sin(a) * 200 * t
+            for side in (-1, 1):
+                b = a + side * math.radians(45)
+                d.line((bx, by, bx + math.cos(b) * l, by - math.sin(b) * l), fill=OUTLINE, width=44)
+    for k in range(6):
+        a = math.radians(k * 60 + 90)
+        ex, ey = c + math.cos(a) * 200, c - math.sin(a) * 200
+        d.line((c, c, ex, ey), fill=ice, width=26)
+        for t, l in ((0.55, 70), (0.8, 50)):
+            bx, by = c + math.cos(a) * 200 * t, c - math.sin(a) * 200 * t
+            for side in (-1, 1):
+                b = a + side * math.radians(45)
+                d.line((bx, by, bx + math.cos(b) * l, by - math.sin(b) * l), fill=ice, width=16)
+    ellipse(d, (c - 45, c - 45, c + 45, c + 45), (230, 248, 255, 255), 16)
+    return img
+
+
+def icon_boards():
+    """Waechtergeist: Vent-Gitter mit zwei gekreuzten Brettern."""
+    img, d = canvas()
+    c = S / 2
+    d.rounded_rectangle((70, 130, S - 70, S - 130), 30, fill=(120, 130, 140, 255), outline=OUTLINE, width=W)
+    for y in range(175, S - 160, 38):
+        d.line((110, y, S - 110, y), fill=(70, 75, 85, 255), width=16)
+    wood = (190, 135, 75, 255)
+    for ang in (-25, 25):
+        a = math.radians(ang)
+        dx, dy = math.cos(a) * 230, math.sin(a) * 230
+        nx, ny = -math.sin(a) * 38, math.cos(a) * 38
+        pts = [(c - dx - nx, c - dy - ny), (c + dx - nx, c + dy - ny), (c + dx + nx, c + dy + ny), (c - dx + nx, c - dy + ny)]
+        poly(d, pts, wood, 18)
+        for t in (-0.75, 0.75):
+            d.ellipse((c + dx * t - 10, c + dy * t - 10, c + dx * t + 10, c + dy * t + 10), fill=OUTLINE)
+    return img
+
+
 ICONS = {
     "candy": icon_candy,
     "phase": icon_phase,
@@ -422,6 +468,8 @@ ICONS = {
     "cat": icon_cat,
     "leaves": icon_leaves,
     "cursed": icon_cursed,
+    "frost": icon_frost,
+    "boards": icon_boards,
 }
 
 if __name__ == "__main__":

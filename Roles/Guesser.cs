@@ -288,7 +288,7 @@ public abstract class GuesserBase : CustomRole
 
     private IEnumerable<(string Label, byte Kind, byte Id)> Guessables()
     {
-        foreach (var role in RoleRegistry.Roles.Where(r => !r.IsModifier && r.Count.Int > 0))
+        foreach (var role in RoleRegistry.Roles.Where(r => !r.IsExtra && r.Count.Int > 0))
         {
             if (IsEvil && role.Team == RoleTeam.Impostor) continue;                         // keine eigenen Leute
             if (!IsEvil && role.Team == RoleTeam.Crewmate && !canGuessCrewRoles.Bool) continue;

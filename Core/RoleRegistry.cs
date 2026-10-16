@@ -53,7 +53,7 @@ public static class RoleRegistry
     }
 
     public static bool Has(PlayerControl player, CustomRole role) =>
-        role.IsModifier ? GetModifiers(player).Contains(role) : GetRole(player) == role;
+        role.IsExtra ? GetModifiers(player).Contains(role) : GetRole(player) == role;
 
     public static CustomRole LocalRole => GetRole(PlayerControl.LocalPlayer);
 
@@ -77,6 +77,7 @@ public static class RoleRegistry
         ProtectionVisuals.Reset();
         FireEffect.Reset();
         SpeedControl.Reset();
+        GhostRoles.Reset();
         foreach (var role in Roles) role.ResetState();
         ButtonManager.Reset();
         RoleUI.Reset();
@@ -96,6 +97,7 @@ public static class RoleRegistry
     {
         mainRoles.Clear();
         modifiers.Clear();
+        GhostRoles.Reset();
         foreach (var role in Roles) role.ResetState();
 
         foreach (var (playerId, roleId) in pairs) AddInternal(playerId, roleId);
@@ -121,12 +123,36 @@ public static class RoleRegistry
     {
         var role = Get(roleId);
         if (role == null) return;
-        if (role.IsModifier)
+        if (role.IsExtra)
         {
             if (!modifiers.TryGetValue(playerId, out var list)) modifiers[playerId] = list = new List<byte>();
             if (!list.Contains(roleId)) list.Add(roleId);
         }
         else mainRoles[playerId] = roleId;
+    }
+
+    /// <summary>Host: einem Spieler mitten in der Runde eine Zusatzrolle geben (Geisterrolle beim Tod).</summary>
+    public static void AddRole(PlayerControl player, CustomRole role)
+    {
+        if (!CustomRole.AmHost || !player || role == null) return;
+        RoleRpc.SendAddRole(player.PlayerId, role.Id);
+        ApplyAddRole(player.PlayerId, role.Id);
+    }
+
+    internal static void ApplyAddRole(byte playerId, byte roleId)
+    {
+        var role = Get(roleId);
+        var player = CustomRole.FindPlayer(playerId);
+        if (role == null || !player) return;
+        AddInternal(playerId, roleId);
+        foreach (var b in role.Buttons) b.ResetTimer(true);
+        Plugin.Logger.LogInfo($"{player.Data?.PlayerName} ist jetzt auch {role.Name}");
+        IsRoleChange = true;
+        try { role.OnAssigned(player); }
+        finally { IsRoleChange = false; }
+        if (player == PlayerControl.LocalPlayer)
+            Notifier.Show(Lang.T("Du bist jetzt ein Geist: ", "You are now a ghost: ") + role.ColoredName + "\n<size=70%>" + role.Description + "</size>", 8f);
+        RoleUI.Reset();
     }
 
     /// <summary>Host: Hauptrolle eines Spielers waehrend der Runde aendern (z. B. Executioner -> Jester). null = keine Mod-Rolle.</summary>
@@ -174,7 +200,7 @@ public static class RoleRegistry
             }
 
             var perTeam = new Dictionary<RoleTeam, int>();
-            foreach (var role in Roles.Where(r => !r.IsModifier).OrderBy(_ => Random.value))
+            foreach (var role in Roles.Where(r => !r.IsExtra).OrderBy(_ => Random.value))
             {
                 var pool = role.Team == RoleTeam.Impostor ? impostors : crew;
                 for (int i = 0; i < role.Count.Int; i++)

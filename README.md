@@ -54,6 +54,16 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | Paranoid | Crew | Warnung, wenn ganz in der Nähe jemand getötet wird. |
 | Verräter | Anpassung (Crew) | Sterben alle Impostor, wird er (Chance einstellbar) zum neuen Impostor mit Kill-Button und das Spiel geht weiter. Eine Crew-Rolle (Sheriff, Medic ...) verliert er dabei. Neutrale bekommen ihn nicht. |
 
+### Geisterrollen
+
+Geisterrollen werden nicht zu Spielbeginn verteilt, sondern **beim Tod**: Anzahl und Wahrscheinlichkeit stellt der Host wie bei jeder Rolle im F1-Fenster ein (Standard: aus). Jeder bekommt höchstens eine; die bisherige Rolle bleibt.
+
+| Geist | Für | Fähigkeit (Taste) |
+|---|---|---|
+| Rachegeist | tote Impostor | **F**: Alle lebenden Crewmates und Neutralen im selben Raum erstarren kurz vor Kälte (im Gang: alle in der Nähe). |
+| Wächtergeist | tote Crewmates | **F** an einem Vent: Es ist eine Weile unsichtbar zu - niemand kommt hinein, heraus oder durch die Gänge dorthin. |
+| Spukgestalt (Neutral) | tote Crewmates | Die Lebenden sehen sie halb durchsichtig. Schafft sie alle Aufgaben, gewinnt sie allein. Klickt ein Lebender sie an, ist sie erlöst. |
+
 **Anpassungen** (Lover, Flash, Giant) kommen zusätzlich zu jeder Rolle dazu, auch zu Spiel-Rollen wie Engineer oder zum normalen Impostor.
 
 Nur Sheriff und Jester sind standardmäßig an (Anzahl 1). Alle anderen stellt der Host im F1-Fenster ein.

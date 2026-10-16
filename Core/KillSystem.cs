@@ -91,12 +91,15 @@ public static class KillSystem
     {
         if (!victim) return;
         FirstDeathShield.OnDeath(victim, cause);
-        if (!RoleRegistry.HasAssignments) return;
-        foreach (var role in RoleRegistry.Roles)
+        if (RoleRegistry.HasAssignments)
         {
-            try { role.OnPlayerDied(victim, killer, cause); }
-            catch (System.Exception e) { Plugin.Logger.LogError($"{role.Name}.OnPlayerDied: {e}"); }
+            foreach (var role in RoleRegistry.Roles)
+            {
+                try { role.OnPlayerDied(victim, killer, cause); }
+                catch (System.Exception e) { Plugin.Logger.LogError($"{role.Name}.OnPlayerDied: {e}"); }
+            }
         }
+        GhostRoles.OnDeath(victim); // danach: z. B. der Untote weiss dann schon, dass er wieder aufsteht
     }
 
     internal static (bool isNoBody, PlayerControl killer) TakeNoBody(byte victimId)

@@ -102,7 +102,11 @@ public class RoleButton
     {
         var local = PlayerControl.LocalPlayer;
         bool alive = !local.Data.IsDead;
-        bool show = (alive || UsableWhenDead) && ShipStatus.Instance && !inMeeting && hud.ReportButton.gameObject.activeSelf
+        // Lebende: HUD sichtbar = Melden-Knopf da. Geister haben keinen Melden-Knopf - dort zaehlt, ob das Knopf-Raster sichtbar ist.
+        bool hudVisible = alive
+            ? hud.ReportButton.gameObject.activeSelf
+            : hud.KillButton && hud.KillButton.transform.parent && hud.KillButton.transform.parent.gameObject.activeInHierarchy;
+        bool show = (alive || UsableWhenDead) && ShipStatus.Instance && !inMeeting && hudVisible
                     && (Visible == null || Visible());
 
         if (!show)
