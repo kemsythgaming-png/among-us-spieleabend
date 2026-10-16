@@ -1,0 +1,57 @@
+﻿// VORLAGE FUER EINE NEUE ROLLE
+// 1. Diese Datei kopieren und umbenennen, z. B. "Medic.cs" (Endung .cs, nicht .cs.txt!)
+// 2. Klassennamen, Name, Farbe, Team und Texte anpassen
+// 3. Optionen und Buttons in Setup() anlegen, Logik in OnAction()
+// 4. dotnet build -c Release  -> Rolle erscheint automatisch im F1-Fenster
+//
+// Wichtig: Alle Spieler muessen dieselbe Mod-Version haben (gleiche Rollen in gleicher Reihenfolge).
+
+using Spieleabend.Core;
+using UnityEngine;
+
+namespace Spieleabend.Roles;
+
+public sealed class MeineRolle : CustomRole
+{
+    public override string Name => "Meine Rolle";                    // nicht mehr aendern, sobald Einstellungen gespeichert sind
+    public override Color Color => new Color32(80, 200, 120, 255);
+    public override RoleTeam Team => RoleTeam.Crewmate;              // oder Impostor, Neutral, Modifier
+    public override string IntroText => "Kurzer Satz fuers Intro";
+    public override string Description => "Erklaerung fuer die Aufgabenliste.";
+    public override string LongDescription => "Ausfuehrliche Erklaerung fuer die Rollen-Info (F2).\n\nZwei Zeilenumbrueche = neuer Absatz.";
+    public override int DefaultCount => 0;                           // 0 = standardmaessig aus
+
+    // Aktionen, die an den Host geschickt werden (0, 1, 2, ...)
+    private const byte ActionBenutzen = 0;
+
+    private RoleOption cooldown;
+
+    protected override void Setup()
+    {
+        // Anzahl und Wahrscheinlichkeit gibt es automatisch. Hier eigene Einstellungen:
+        cooldown = AddOption("Cooldown", "Abklingzeit", 25f, 5f, 60f, 2.5f, "s");
+        // var schalter = AddToggle("Schalter", "Irgendwas erlaubt", true);
+
+        AddButton(new RoleButton
+        {
+            Label = "Benutzen",
+            Cooldown = () => cooldown.Value,
+            Icon = "shield",                                        // Symbol aus Assets/Icons (optional)
+            Hotkey = KeyCode.F,
+            NeedsTarget = true,                                      // false = Button ohne Ziel
+            OnClick = target => SendToHost(ActionBenutzen, target.PlayerId),
+        });
+    }
+
+    // Mit SendToHost: laeuft nur beim Host. Mit SendToAll: laeuft bei allen.
+    public override void OnAction(PlayerControl sender, byte action, byte[] data)
+    {
+        if (action != ActionBenutzen || data.Length < 1 || !AmongUsClient.Instance.AmHost) return;
+        if (RoleRegistry.GetRole(sender) != this || !IsAlive(sender)) return;
+
+        var target = FindPlayer(data[0]);
+        if (!IsAlive(target)) return;
+
+        // Beispiel: sender.RpcMurderPlayer(target, true);
+    }
+}

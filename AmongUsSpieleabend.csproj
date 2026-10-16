@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>AmongUsSpieleabend</AssemblyName>
+    <RootNamespace>Spieleabend</RootNamespace>
+    <Version>4.5.0</Version>
+    <DebugType>embedded</DebugType>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- Among-Us-Kopie mit BepInEx 6 (IL2CPP), in die der Mod installiert wird.
+         Ueberschreibbar per: dotnet build -p:GameDir="..." -->
+    <GameDir Condition="'$(GameDir)' == ''">D:\Installiertes\Steam\steamapps\common\Among Us Spieleabend</GameDir>
+    <!-- Referenz-DLLs (BepInEx + interop) kommen aus derselben Kopie; interop entsteht beim ersten Spielstart -->
+    <RefDir Condition="'$(RefDir)' == ''">$(GameDir)</RefDir>
+  </PropertyGroup>
+
+  <!-- Der Launcher ist ein eigenes Projekt -->
+  <ItemGroup>
+    <Compile Remove="Launcher\**" />
+    <EmbeddedResource Remove="Launcher\**" />
+    <None Remove="Launcher\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="$(RefDir)\BepInEx\core\BepInEx.Core.dll" Private="false" />
+    <Reference Include="$(RefDir)\BepInEx\core\BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="$(RefDir)\BepInEx\core\0Harmony.dll" Private="false" />
+    <Reference Include="$(RefDir)\BepInEx\core\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(RefDir)\BepInEx\core\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(RefDir)\BepInEx\interop\*.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- Button-Symbole (erzeugt mit Assets/make_icons.py) -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Icons\*.png" />
+  </ItemGroup>
+
+  <!-- Schutz: niemals in das originale Steam-Spiel installieren -->
+  <Target Name="GuardVanilla" BeforeTargets="CopyToGame">
+    <Error Condition="$([System.String]::Copy('$(GameDir)').TrimEnd('\').EndsWith('common\Among Us'))"
+           Text="GameDir zeigt auf das originale Steam-Spiel ($(GameDir)). Bitte eine separate Kopie verwenden." />
+  </Target>
+
+  <!-- Nach dem Build automatisch in die Mod-Kopie kopieren (falls vorhanden) -->
+  <!-- Mit -p:SkipInstall=true nur bauen, nicht kopieren (z. B. wenn das Spiel laeuft) -->
+  <Target Name="CopyToGame" AfterTargets="Build" Condition="'$(SkipInstall)' != 'true' And Exists('$(GameDir)\BepInEx\plugins')">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)\BepInEx\plugins" />
+    <Message Importance="high" Text="$(TargetFileName) -> $(GameDir)\BepInEx\plugins" />
+  </Target>
+
+</Project>
