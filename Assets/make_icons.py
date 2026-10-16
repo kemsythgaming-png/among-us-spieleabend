@@ -241,34 +241,91 @@ def icon_guess():
     return img
 
 
-def hud_frame(d):
-    """Rahmen wie die runden Knoepfe oben rechts im Spiel (dunkler Rand, grauer Innenteil)."""
-    d.rounded_rectangle((16, 16, S - 16, S - 16), 70, fill=(48, 50, 56, 255), outline=(15, 15, 18, 255), width=26)
-    d.rounded_rectangle((60, 60, S - 60, S - 60), 46, fill=(205, 210, 218, 255), outline=(15, 15, 18, 255), width=16)
+# ---------- Knoepfe oben rechts: wie die Original-Knoepfe (Zahnrad, Karte ...) ----------
+# Farben aus einem Screenshot des Spiels abgemessen: grauer Rahmen mit Verlauf, dunkle Kante, hellgraues Feld,
+# Symbol zweifarbig grau (oben links heller) mit dunkler Kontur.
+HUD_RIM_TOP = (128, 133, 137)
+HUD_RIM_BOTTOM = (54, 57, 61)
+HUD_EDGE = (12, 12, 12)
+HUD_BEVEL = (32, 33, 34)
+HUD_PANEL = (174, 175, 181)
+HUD_GLYPH_LIGHT = (141, 142, 144)
+HUD_GLYPH_DARK = (114, 114, 117)
+HUD_GLYPH_LINE = (42, 41, 42)
+
+
+def hud_button():
+    """Leerer Knopf im Stil des Spiels."""
+    from PIL import ImageFilter  # noqa: F401
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    # Rahmen mit senkrechtem Verlauf (oben hell, unten dunkel)
+    grad = Image.new("RGBA", (S, S))
+    gd = ImageDraw.Draw(grad)
+    for y in range(S):
+        t = y / (S - 1)
+        c = tuple(int(HUD_RIM_TOP[i] + (HUD_RIM_BOTTOM[i] - HUD_RIM_TOP[i]) * t) for i in range(3)) + (255,)
+        gd.line((0, y, S, y), fill=c)
+    mask = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((8, 8, S - 8, S - 8), 70, fill=255)
+    img.paste(grad, (0, 0), mask)
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((8, 8, S - 8, S - 8), 70, outline=HUD_EDGE, width=12)
+    d.rounded_rectangle((60, 60, S - 60, S - 60), 14, fill=HUD_BEVEL, outline=HUD_EDGE, width=6)
+    d.rounded_rectangle((100, 100, S - 100, S - 100), 8, fill=HUD_PANEL)
+    return img
+
+
+def hud_glyph(img, draw_mask, details=None):
+    """Symbol zweifarbig (diagonal geteilt) mit dunkler Kontur auf den Knopf zeichnen."""
+    from PIL import ImageFilter
+    mask = Image.new("L", (S, S), 0)
+    draw_mask(ImageDraw.Draw(mask))
+    outline = mask.filter(ImageFilter.MaxFilter(23))
+    img.paste(Image.new("RGBA", (S, S), HUD_GLYPH_LINE + (255,)), (0, 0), outline)
+    two = Image.new("RGBA", (S, S), HUD_GLYPH_DARK + (255,))
+    light = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(light).polygon([(0, 0), (S, 0), (0, S)], fill=255)
+    two.paste(Image.new("RGBA", (S, S), HUD_GLYPH_LIGHT + (255,)), (0, 0), light)
+    img.paste(two, (0, 0), mask)
+    if details:
+        details(ImageDraw.Draw(img))
+    return img
 
 
 def icon_hud_roleinfo():
-    img, d = canvas()
-    hud_frame(d)
-    # Rollenkarte mit Crewmate und "i"
-    d.rounded_rectangle((120, 110, 330, 400), 22, fill=(250, 250, 250, 255), outline=OUTLINE, width=16)
-    crewmate(d, 225, 230, 0.85, (230, 70, 80, 255))
-    d.rectangle((150, 330, 300, 350), fill=(120, 120, 130, 255))
-    d.rectangle((150, 365, 260, 382), fill=(120, 120, 130, 255))
-    ellipse(d, (300, 260, 420, 380), (60, 150, 230, 255), 16)
-    d.rectangle((351, 300, 369, 355), fill=(255, 255, 255, 255))
-    d.ellipse((350, 275, 370, 295), fill=(255, 255, 255, 255))
-    return img
+    """Rollenkarte (Ausweis mit Crewmate) und ein kleines i."""
+    img = hud_button()
+    c = S / 2
+
+    def shape(m):
+        m.rounded_rectangle((150, 140, 330, 372), 18, fill=255)       # Karte
+        m.ellipse((292, 286, 372, 366), fill=255)                      # i-Kreis
+
+    def details(d):
+        # Crewmate auf der Karte
+        d.rounded_rectangle((190, 175, 290, 290), 40, fill=HUD_GLYPH_LINE)
+        d.rounded_rectangle((232, 200, 296, 232), 14, fill=HUD_PANEL)
+        d.rectangle((180, 312, 300, 324), fill=HUD_GLYPH_LINE)
+        d.rectangle((180, 340, 262, 350), fill=HUD_GLYPH_LINE)
+        # i im Kreis
+        d.ellipse((290, 284, 374, 368), outline=HUD_GLYPH_LINE, width=10)
+        d.rectangle((326, 318, 338, 350), fill=HUD_GLYPH_LINE)
+        d.ellipse((325, 297, 339, 311), fill=HUD_GLYPH_LINE)
+
+    return hud_glyph(img, shape, details)
 
 
 def icon_hud_settings():
-    img, d = canvas()
-    hud_frame(d)
-    # Regler (Schieberegler) - "Rollen-Einstellungen"
-    for k, (y, knob) in enumerate(((170, 300), (256, 200), (342, 340))):
-        d.rounded_rectangle((120, y - 14, 392, y + 14), 14, fill=(90, 95, 105, 255), outline=OUTLINE, width=10)
-        ellipse(d, (knob - 34, y - 34, knob + 34, y + 34), (255, 120, 200, 255) if k == 1 else (250, 250, 250, 255), 14)
-    return img
+    """Drei Schieberegler (Rollen-Einstellungen)."""
+    img = hud_button()
+    rows = ((180, 300), (256, 205), (332, 330))
+
+    def shape(m):
+        for y, knob in rows:
+            m.rounded_rectangle((150, y - 9, 362, y + 9), 9, fill=255)
+            m.ellipse((knob - 30, y - 30, knob + 30, y + 30), fill=255)
+
+    return hud_glyph(img, shape)
 
 
 def icon_candy():

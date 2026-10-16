@@ -108,6 +108,7 @@ public static class RoleRegistry
         mainRoles.Clear();
         modifiers.Clear();
         GhostRoles.Reset();
+        EndSummary.ResetKills();
         foreach (var role in Roles) role.ResetState();
 
         foreach (var (playerId, roleId) in pairs) AddInternal(playerId, roleId);

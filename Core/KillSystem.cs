@@ -91,6 +91,7 @@ public static class KillSystem
     {
         if (!victim) return;
         FirstDeathShield.OnDeath(victim, cause);
+        EndSummary.OnDeath(victim, killer, cause);
         if (RoleRegistry.HasAssignments)
         {
             foreach (var role in RoleRegistry.Roles)

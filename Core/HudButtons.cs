@@ -33,8 +33,8 @@ internal static class HudButtons
             infoButton.gameObject.SetActive(sourceShown && RoleRegistry.Roles.Count > 0);
             settingsButton.gameObject.SetActive(sourceShown && SettingsWindow.Available);
 
-            // Abstand zum Original-Knopf: eine Knopfbreite pro Platz
-            float spacing = ButtonWidth(source) + 0.08f;
+            // Abstand wie zwischen den Original-Knoepfen (Notizblock -> Zahnrad), sonst eine Knopfbreite
+            float spacing = Spacing(hud, sourcePos, source);
             Place(infoPos, sourcePos, spacing);
             Place(settingsPos, sourcePos, spacing * 2f);
         }
@@ -73,10 +73,24 @@ internal static class HudButtons
         return (button, go.GetComponent<AspectPosition>());
     }
 
+    private static float Spacing(HudManager hud, AspectPosition sourcePos, PassiveButton source)
+    {
+        var settingsPos = hud.SettingsButton ? hud.SettingsButton.GetComponent<AspectPosition>() : null;
+        if (sourcePos && settingsPos)
+        {
+            float d = Mathf.Abs(sourcePos.DistanceFromEdge.x - settingsPos.DistanceFromEdge.x);
+            if (d > 0.3f) return d;
+        }
+        return ButtonWidth(source) + 0.12f;
+    }
+
+    /// <summary>Breite des Knopfs = groesstes Bild darin (kleine Controller-Symbole zaehlen nicht).</summary>
     private static float ButtonWidth(PassiveButton source)
     {
-        var sr = source.GetComponentInChildren<SpriteRenderer>();
-        return sr ? sr.bounds.size.x : 0.75f;
+        float w = 0f;
+        foreach (var sr in source.GetComponentsInChildren<SpriteRenderer>())
+            if (sr && sr.sprite) w = Mathf.Max(w, sr.bounds.size.x);
+        return w > 0.1f ? w : 0.75f;
     }
 
     private static void Place(AspectPosition target, AspectPosition source, float offset)
