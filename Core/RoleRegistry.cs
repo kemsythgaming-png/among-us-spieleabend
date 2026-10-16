@@ -44,6 +44,16 @@ public static class RoleRegistry
     public static IEnumerable<CustomRole> GetModifiers(PlayerControl player) =>
         player && modifiers.TryGetValue(player.PlayerId, out var list) ? list.Select(Get).Where(r => r != null) : Enumerable.Empty<CustomRole>();
 
+    /// <summary>Geisterrolle des Spielers (nach dem Tod), oder null.</summary>
+    public static CustomRole GetGhostRole(PlayerControl player) => GetModifiers(player).FirstOrDefault(r => r.IsGhostRole);
+
+    /// <summary>Was angezeigt wird: als Geist nur die Geisterrolle, sonst Hauptrolle + Anpassungen.</summary>
+    public static IEnumerable<CustomRole> GetDisplayed(PlayerControl player)
+    {
+        var ghost = GetGhostRole(player);
+        return ghost != null ? new[] { ghost } : GetAll(player);
+    }
+
     /// <summary>Hauptrolle + Anpassungen.</summary>
     public static IEnumerable<CustomRole> GetAll(PlayerControl player)
     {

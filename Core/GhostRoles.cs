@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using AmongUs.GameOptions;
 using UnityEngine;
 
 namespace Spieleabend.Core;
@@ -13,6 +14,29 @@ internal static class GhostRoles
     private static readonly Dictionary<byte, int> used = new();
 
     public static void Reset() => used.Clear();
+
+    private static float nextCheck;
+
+    /// <summary>Host, jede Sekunde: Spieler mit unserer Geisterrolle behalten keine Spiel-Geisterrolle (falls das Spiel sie spaeter vergibt).</summary>
+    internal static void Update()
+    {
+        if (!CustomRole.AmHost || Time.time < nextCheck) return;
+        nextCheck = Time.time + 1f;
+        foreach (var p in PlayerControl.AllPlayerControls)
+            if (p && p.Data != null && p.Data.IsDead && RoleRegistry.GetGhostRole(p) != null) EnsurePlainGhost(p);
+    }
+
+    /// <summary>Keine Spiel-Geisterrolle (Guardian Angel ...) zusaetzlich - unsere ersetzt sie.</summary>
+    private static void EnsurePlainGhost(PlayerControl p)
+    {
+        try
+        {
+            if (!p.Data.Role) return;
+            var plain = p.Data.Role.IsImpostor ? RoleTypes.ImpostorGhost : RoleTypes.CrewmateGhost;
+            if (p.Data.Role.Role != plain) p.RpcSetRole(plain, true);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"Geisterrolle: {e.Message}"); }
+    }
 
     internal static void OnDeath(PlayerControl victim)
     {
@@ -28,6 +52,8 @@ internal static class GhostRoles
 
             used[role.Id] = n + 1;
             RoleRegistry.AddRole(victim, role);
+
+            EnsurePlainGhost(victim);
             return;
         }
     }

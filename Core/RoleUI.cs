@@ -35,8 +35,9 @@ internal static class RoleUI
 
         if (FreeplayTest.IsFreeplay) FreeplayTest.ColorFakeImpostors();
 
-        var main = RoleRegistry.LocalRole;
-        var all = RoleRegistry.GetAll(local).ToList();
+        // Als Geist zaehlt nur noch die Geisterrolle (nicht "Sheriff + Waechtergeist")
+        var all = RoleRegistry.GetDisplayed(local).ToList();
+        var main = RoleRegistry.GetGhostRole(local) ?? RoleRegistry.LocalRole;
 
         UpdateRoleTask(local, all);
         if (main != null)
@@ -182,6 +183,9 @@ internal static class RoleUI
     /// <summary>Rollenname (Mod-Rolle oder Spiel-Rolle) plus Anpassungen, eingefaerbt.</summary>
     public static string RoleLabel(PlayerControl player)
     {
+        var ghost = RoleRegistry.GetGhostRole(player);
+        if (ghost != null) return ghost.ColoredName; // Geist: nur noch die Geisterrolle
+
         var main = RoleRegistry.GetRole(player);
         string text;
         if (main != null) text = main.ColoredName;

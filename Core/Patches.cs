@@ -45,6 +45,7 @@ internal static class HudUpdatePatch
         {
             SpeedControl.Update();
             Camouflage.Update();
+            GhostRoles.Update();
             foreach (var role in RoleRegistry.Roles)
             {
                 try { role.Update(); }
