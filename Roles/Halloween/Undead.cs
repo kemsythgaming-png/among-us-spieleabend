@@ -18,17 +18,15 @@ public sealed class Undead : CustomRole
     public override string Name => Lang.T("Untoter", "Undead");
     public override Color Color => new Color32(120, 170, 110, 255);
     public override RoleTeam Team => RoleTeam.Neutral;
-    public override bool TasksCount => true;
     public override string IntroText => Lang.T("Der Tod ist erst der Anfang", "Death is only the beginning");
     public override string Description => Stage(PlayerControl.LocalPlayer) switch
     {
         UndeadStage.Risen => Lang.T($"Sammle Seelen: Steh an fremden Leichen.\n({SoulsOf(PlayerControl.LocalPlayer)}/{souls.Int})", $"Collect souls: stand at other bodies.\n({SoulsOf(PlayerControl.LocalPlayer)}/{souls.Int})"),
-        UndeadStage.Restored => Lang.T("Du lebst wieder - hilf der Crew.", "You live again - help the crew."),
-        _ => Lang.T("Wirst du getötet, stehst du\nnach dem Meeting wieder auf.", "If you are killed, you rise\nagain after the meeting."),
+        _ => Lang.T("Lass dich von einem Impostor töten -\nnach dem Meeting stehst du wieder auf.", "Get killed by an impostor -\nyou rise again after the meeting."),
     };
     public override string LongDescription => Lang.T(
-        "Halloween-Neutral. Wirst du getötet, bist du bis zum Ende des nächsten Meetings ein Geist - aber ohne Rollen-Infos. Danach stehst du als Untoter wieder auf.\n\nAls Untoter läufst du sichtbar herum, giltst im Meeting aber als tot (keine Stimme, du schweigst). Steh an fremden Leichen, um Seelen zu sammeln. Hast du genug, lebst du wieder und gewinnst mit der Crew. Schaffst du es nicht, verlierst du. Ein zweiter Tod ist endgültig.",
-        "Halloween neutral. If you are killed, you are a ghost until the end of the next meeting - but without role info. Then you rise again as undead.\n\nAs undead you walk around visibly, but count as dead in meetings (no vote, you stay silent). Stand at other bodies to collect souls. Once you have enough, you live again and win with the crew. If you fail, you lose. A second death is final.");
+        "Halloween-Neutral. Wirst du getötet, bist du bis zum Ende des nächsten Meetings ein Geist - aber ohne Rollen-Infos. Danach stehst du als Untoter wieder auf.\n\nAls Untoter läufst du sichtbar herum, giltst im Meeting aber als tot (keine Stimme, du schweigst). Steh an fremden Leichen, um Seelen zu sammeln. Hast du genug, gewinnst du allein und das Spiel endet. Sonst verlierst du.\n\nTöten können dich nur Impostor und Neutrale - Crew-Rollen wie der Sheriff nicht. Ein zweiter Tod ist endgültig.",
+        "Halloween neutral. If you are killed, you are a ghost until the end of the next meeting - but without role info. Then you rise again as undead.\n\nAs undead you walk around visibly, but count as dead in meetings (no vote, you stay silent). Stand at other bodies to collect souls. Once you have enough, you win alone and the game ends. Otherwise you lose.\n\nOnly impostors and neutrals can kill you - crew roles like the Sheriff can't. A second death is final.");
 
     private const byte ActionRise = 0, ActionSoul = 1, ActionRestore = 2;
 
@@ -125,14 +123,12 @@ public sealed class Undead : CustomRole
                 break;
 
             case ActionRestore:
+                // Genug Seelen: Der Untote gewinnt allein
                 if (Stage(p) != UndeadStage.Risen) return;
                 stages[p.PlayerId] = UndeadStage.Restored;
                 ProtectionVisuals.ShowBurst(p, Color);
-                if (p == PlayerControl.LocalPlayer)
-                {
-                    Sfx.Play(Sfx.TaskComplete);
-                    Notifier.Show($"<color={ColorHex}>{Lang.T("Genug Seelen - du lebst wieder! Du spielst jetzt für die Crew.", "Enough souls - you live again! You now play for the crew.")}</color>", 6f);
-                }
+                if (p == PlayerControl.LocalPlayer) Sfx.Play(Sfx.TaskComplete);
+                if (AmHost) CustomWin.Trigger(this, new[] { p });
                 break;
         }
     }
@@ -173,13 +169,24 @@ public sealed class Undead : CustomRole
         }
     }
 
-    /// <summary>Beim Spielende (bevor die Rollen geloescht werden): wer als Untoter nicht fertig wurde, verliert.</summary>
+    /// <summary>
+    /// Beim Spielende (bevor die Rollen geloescht werden): Der Untote gewinnt nur allein mit seinen Seelen -
+    /// bei jedem anderen Spielende verliert er (auch wenn die Crew gewinnt).
+    /// </summary>
     internal void CaptureLosers()
     {
         LosingNames.Clear();
+        if (CustomWin.WinningRole == this) return;
         foreach (var p in Players)
-            if (p && p.Data != null && Stage(p) is UndeadStage.Dead or UndeadStage.Risen or UndeadStage.Final)
-                LosingNames.Add(p.Data.PlayerName);
+            if (p && p.Data != null) LosingNames.Add(p.Data.PlayerName);
+    }
+
+    /// <summary>Nur Impostor und Neutrale koennen den Untoten toeten - Crew-Rollen (Sheriff ...) nicht.</summary>
+    public override KillIntercept InterceptKill(PlayerControl killer, PlayerControl target)
+    {
+        if (!RoleRegistry.Has(target, this) || killer == target || IsImpostor(killer) || IsNeutral(killer)) return KillIntercept.None;
+        killer.RpcMurderPlayer(target, false); // scheitert sichtbar
+        return KillIntercept.Handled;
     }
 
     public override string GetNameMark(PlayerControl viewer, PlayerControl target)
