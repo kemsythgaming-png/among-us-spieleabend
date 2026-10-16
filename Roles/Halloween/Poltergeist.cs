@@ -82,7 +82,9 @@ public sealed class Poltergeist : CustomRole
                 .Where(v => v).OrderBy(v => ((Vector2)v.transform.position - local.GetTruePosition()).sqrMagnitude).FirstOrDefault() : null;
             Vector2 target = vent ? (Vector2)(vent.transform.position + vent.Offset) : lastSafe;
             local.NetTransform.RpcSnapTo(target);
-            Sfx.Play(Sfx.Splash);
+            // Wie beim normalen Aussteigen: Vent geht auf, man springt heraus (fuer alle sichtbar, mit Geraeusch)
+            if (vent) local.MyPhysics.RpcExitVent(vent.Id);
+            else Sfx.Play(Sfx.Splash);
             Notifier.Show($"<color={ColorHex}>{Lang.T("Du steckst fest - raus aus dem nächsten Vent!", "You got stuck - out through the nearest vent!")}</color>", 2.5f);
         }
         Sfx.Play(Sfx.Appear);

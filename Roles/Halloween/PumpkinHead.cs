@@ -42,7 +42,7 @@ public sealed class PumpkinHead : CustomRole
         Instance = this;
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 30f, 10f, 90f, 2.5f, "s");
         duration = AddOption("Duration", "Dauer|Duration", 10f, 3f, 20f, 1f, "s");
-        vision = AddOption("Vision", "Sicht mit Kürbis|Vision with pumpkin", 0.4f, 0.1f, 1f, 0.05f, "x");
+        vision = AddOption("VisionDense", "Sicht mit Kürbis|Vision with pumpkin", 0.25f, 0.1f, 1f, 0.05f, "x");
 
         AddButton(new RoleButton
         {
@@ -193,8 +193,8 @@ public sealed class PumpkinHead : CustomRole
         if (overlaySprite) return overlaySprite;
         const int W = 320, H = 180;
         var tex = new Texture2D(W, H, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
-        var shell = new Color(0.55f, 0.25f, 0.03f, 0.96f);
-        var ridge = new Color(0.42f, 0.18f, 0.02f, 0.96f);
+        var shell = new Color(0.45f, 0.2f, 0.02f, 1f);
+        var ridge = new Color(0.33f, 0.14f, 0.01f, 1f);
         for (int y = 0; y < H; y++)
         for (int x = 0; x < W; x++)
         {
@@ -213,7 +213,7 @@ public sealed class PumpkinHead : CustomRole
     /// <summary>1 = im Loch, 0 = Schale, weicher Rand dazwischen.</summary>
     private static float EyeHole(int x, int y, float cx, float baseY)
     {
-        const float halfWidth = 46f, height = 70f, soft = 4f;
+        const float halfWidth = 34f, height = 52f, soft = 3f;
         float dy = y - baseY;
         if (dy < -soft || dy > height + soft) return 0f;
         float w = halfWidth * (1f - Mathf.Clamp01(dy / height)); // oben spitz

@@ -51,7 +51,7 @@ public sealed class LeafSpreader : CustomRole
     {
         Instance = this;
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 20f, 5f, 60f, 2.5f, "s");
-        maxPiles = AddOption("MaxPiles", "Laubhaufen gleichzeitig|Piles at once", 3f, 1f, 6f, 1f);
+        maxPiles = AddOption("MaxPilesTotal", "Laubhaufen auf der Map|Piles on the map", 5f, 1f, 10f, 1f);
         rustleAfter = AddOption("RustleAfter", "Raschelt nach|Rustles after", 5f, 2f, 15f, 1f, "s");
         hiddenAfter = AddOption("HiddenAfter", "Unsichtbar auf Admin/Kameras danach|Hidden on admin/cameras after", 10f, 0f, 30f, 1f, "s");
 
@@ -63,8 +63,8 @@ public sealed class LeafSpreader : CustomRole
             Cooldown = () => cooldown.Value,
             Hotkey = KeyCode.F,
             CanUse = () => !PlayerControl.LocalPlayer.inVent,
-            // Jeder Haufen ist anders gross (40-85 %) - die Groesse geht mit, damit alle denselben Haufen sehen
-            OnClick = _ => SendToAll(ActionPlace, WorldMarker.Concat((byte)Random.Range(40, 86), WorldMarker.Encode(PlayerControl.LocalPlayer.GetTruePosition()))),
+            // Jeder Haufen ist anders gross - die Groesse geht mit, damit alle denselben Haufen sehen
+            OnClick = _ => SendToAll(ActionPlace, WorldMarker.Concat(RandomSize(), WorldMarker.Encode(PlayerControl.LocalPlayer.GetTruePosition()))),
         });
     }
 
@@ -83,17 +83,15 @@ public sealed class LeafSpreader : CustomRole
     {
         if (action != ActionPlace || data.Length < 5 || !RoleRegistry.Has(sender, this)) return;
 
-        // Zu viele? Der aelteste Haufen dieses Laubstreuers verschwindet
-        var mine = piles.Where(p => p.Owner == sender.PlayerId).ToList();
-        while (mine.Count >= maxPiles.Int)
+        // Hoechstens so viele Haufen auf der ganzen Map - beim naechsten verschwindet der aelteste
+        while (piles.Count >= maxPiles.Int)
         {
-            var old = mine[0];
-            mine.RemoveAt(0);
-            piles.Remove(old);
+            var old = piles[0];
+            piles.RemoveAt(0);
             if (old.Visual) Object.Destroy(old.Visual);
         }
 
-        float size = Mathf.Clamp(data[0], 30, 100) / 100f;
+        float size = Mathf.Clamp(data[0], 30, 200) / 100f;
         var pos = WorldMarker.Decode(data, 1);
         var visual = WorldMarker.Spawn("leaves", pos + new Vector2(0f, 0.1f), size, "LeafPile");
         piles.Add(new Pile { Owner = sender.PlayerId, Pos = pos, Visual = visual, Radius = PileRadius * size / 0.55f });
@@ -119,6 +117,7 @@ public sealed class LeafSpreader : CustomRole
     {
         var local = PlayerControl.LocalPlayer;
         if (piles.Count == 0 && hiddenByUs.Count == 0) return;
+        var localPile = PileAt(local);
         if (InMeeting)
         {
             ShowAll();
@@ -147,16 +146,14 @@ public sealed class LeafSpreader : CustomRole
             // Selbst im Laub: man sieht sich durchsichtig (wie der Phantom) und bekommt einen Hinweis
             if (p == local)
             {
-                bool inside = pile != null;
-                if (inside && !localFaded)
-                    Notifier.Show($"<color={ColorHex}>{Lang.T("Du bist im Laub versteckt - niemand sieht dich.", "You are hidden in the leaves - nobody can see you.")}</color>", 2.5f);
-                FadeLocal(inside);
+                FadeLocal(pile != null);
                 continue;
             }
 
             // Sichtbarkeit: im Laub unsichtbar fuer andere; auf Kameras auch kurz danach
             if (!IsAlive(p)) continue;
-            bool hide = pile != null || (watchingCams && HiddenFromSurveillance(p));
+            // Wer im selben Haufen steckt, sieht die anderen darin
+            bool hide = (pile != null && pile != localPile) || (watchingCams && HiddenFromSurveillance(p));
             if (hide && !hiddenByUs.Contains(p.PlayerId) && !p.inVent)
             {
                 hiddenByUs.Add(p.PlayerId);
@@ -187,31 +184,44 @@ public sealed class LeafSpreader : CustomRole
         if (local && local.cosmetics) local.cosmetics.SetPhantomRoleAlpha(fade ? 0.35f : 1f);
     }
 
-    /// <summary>Rascheln: kurzes, knisterndes Rauschen aus mehreren kleinen Knacksern (selbst erzeugt, kein Spiel-Sound passt).</summary>
+    /// <summary>Meist normal (40-85 %), manchmal ein riesiger Haufen (130-170 %).</summary>
+    private static byte RandomSize() =>
+        (byte)(Random.value < 0.12f ? Random.Range(130, 171) : Random.Range(40, 86));
+
+    /// <summary>
+    /// Rascheln (selbst erzeugt, kein Spiel-Sound passt): helles Rauschen ohne Bass, dessen Lautstaerke schnell und
+    /// unregelmaessig schwankt - wie Blaetter, die aneinander reiben. Weiche Uebergaenge, keine harten Knackser.
+    /// </summary>
     private static AudioClip RustleClip()
     {
         if (rustleClip) return rustleClip;
         const int rate = 44100;
-        int length = (int)(rate * 0.7f);
+        int length = (int)(rate * 0.9f);
         var samples = new float[length];
         var rng = new System.Random(4711);
-        float smooth = 0f;
-        // 14 kleine Knackser mit kurzem Abklingen, dazu leises Grundrauschen
-        var bursts = Enumerable.Range(0, 14).Select(_ => (Start: rng.Next(0, length - rate / 10), Strength: 0.4f + (float)rng.NextDouble() * 0.6f)).ToList();
+
+        float low = 0f, high = 0f, env = 0f, target = 0f;
+        int nextTarget = 0;
         for (int i = 0; i < length; i++)
         {
+            // Rauschen: Bass raus (minus Tiefpass), ganz oben etwas weicher (zweiter Tiefpass)
             float noise = (float)rng.NextDouble() * 2f - 1f;
-            smooth += (noise - smooth) * 0.35f; // etwas dumpfer, wie Blaetter statt Zischen
-            float env = 0.08f;
-            foreach (var b in bursts)
+            low += (noise - low) * 0.02f;
+            high += ((noise - low) - high) * 0.5f;
+
+            // Alle 10-35 ms ein neues Lautstaerke-Ziel, weich angefahren
+            if (i >= nextTarget)
             {
-                int d = i - b.Start;
-                if (d >= 0 && d < rate / 10) env += b.Strength * Mathf.Exp(-d / (rate * 0.012f));
+                nextTarget = i + rng.Next(rate / 100, rate * 35 / 1000);
+                double r = rng.NextDouble();
+                target = (float)(r * r);
             }
-            float fade = Mathf.Min(1f, i / (rate * 0.03f)) * Mathf.Min(1f, (length - i) / (rate * 0.15f));
-            samples[i] = Mathf.Clamp(smooth * env * fade * 0.9f, -1f, 1f);
+            env += (target - env) * 0.004f;
+
+            float fade = Mathf.Min(1f, i / (rate * 0.08f)) * Mathf.Min(1f, (length - i) / (rate * 0.25f));
+            samples[i] = Mathf.Clamp(high * env * fade * 1.6f, -1f, 1f);
         }
-        rustleClip = AudioClip.Create("Spieleabend_Rustle", length, 1, rate, false);
+        rustleClip = AudioClip.Create("Spieleabend_Rustle2", length, 1, rate, false);
         rustleClip.SetData(samples, 0);
         rustleClip.hideFlags = HideFlags.HideAndDontSave;
         return rustleClip;

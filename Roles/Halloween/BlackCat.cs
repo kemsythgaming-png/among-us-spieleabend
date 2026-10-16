@@ -106,6 +106,7 @@ public sealed class BlackCat : CustomRole
         if (action != ActionMark || data.Length < 1) return;
         if (!RoleRegistry.Has(sender, this) || !IsAlive(sender) || !MeetingHud.Instance) return;
         protectedThisMeeting.Add(data[0]);
+        Plugin.Logger.LogInfo($"Schwarze Katze: eine Stimme gegen {data[0]} zählt nicht.");
     }
 
     /// <summary>Wie viele Stimmen gegen diesen Spieler wegfallen.</summary>
@@ -134,39 +135,36 @@ internal static class BlackCatVotePatch
 }
 
 /// <summary>
-/// Auswertung (bei allen): Fuer jede weggefallene Stimme verschwindet beim Ziel ein Kopf. Alle Clients bauen die Koepfe
-/// in derselben Reihenfolge, darum wird ueberall derselbe (der letzte) ausgeblendet.
+/// Auswertung (bei allen): Fuer jede weggefallene Stimme wird beim Ziel der erste Kopf gar nicht erst angezeigt.
+/// Alle Clients bekommen die Stimmen in derselben Reihenfolge, darum fehlt ueberall derselbe Kopf.
 /// </summary>
-[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Update))]
-internal static class BlackCatResultPatch
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.PopulateResults))]
+internal static class BlackCatResultStartPatch
 {
-    public static void Postfix(MeetingHud __instance)
+    /// <summary>Wie viele Koepfe pro Ziel noch weggelassen werden muessen.</summary>
+    internal static readonly Dictionary<byte, int> ToSkip = new();
+
+    public static void Prefix()
     {
+        ToSkip.Clear();
         var cat = BlackCat.Instance;
-        if (cat == null || !__instance.PlayerVotePrefab) return;
-        if (__instance.state != MeetingHud.MeetingStates.Results && __instance.state != MeetingHud.MeetingStates.Proceeding) return;
+        if (cat == null) return;
+        foreach (var id in cat.ProtectedTargets) ToSkip[id] = cat.RemovedVotes(id);
+    }
+}
 
-        string chipName = __instance.PlayerVotePrefab.name;
-        foreach (var targetId in cat.ProtectedTargets)
-        {
-            var area = __instance.playerStates.FirstOrDefault(s => s && (byte)s.PlayerId == targetId);
-            if (!area) continue;
-
-            var chips = new List<SpriteRenderer>();
-            for (int i = 0; i < area.transform.childCount; i++)
-            {
-                var child = area.transform.GetChild(i);
-                if (!child.name.StartsWith(chipName)) continue;
-                var sr = child.GetComponent<SpriteRenderer>();
-                if (sr) chips.Add(sr);
-            }
-
-            int hide = cat.RemovedVotes(targetId);
-            for (int i = chips.Count - 1; i >= 0 && hide > 0; i--, hide--)
-            {
-                chips[i].enabled = false;
-                foreach (var r in chips[i].GetComponentsInChildren<Renderer>(true)) r.enabled = false;
-            }
-        }
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.BloopAVoteIcon))]
+internal static class BlackCatVoteIconPatch
+{
+    public static bool Prefix(MeetingHud __instance, Transform parent)
+    {
+        if (BlackCatResultStartPatch.ToSkip.Count == 0 || !parent) return true;
+        var area = parent.GetComponentInParent<PlayerVoteArea>();
+        if (!area) return true;
+        byte target = (byte)area.PlayerId;
+        if (!BlackCatResultStartPatch.ToSkip.TryGetValue(target, out int left) || left <= 0) return true;
+        BlackCatResultStartPatch.ToSkip[target] = left - 1;
+        Plugin.Logger.LogInfo($"Schwarze Katze: eine Stimme gegen {target} wird nicht angezeigt.");
+        return false; // diesen Kopf nicht anzeigen
     }
 }

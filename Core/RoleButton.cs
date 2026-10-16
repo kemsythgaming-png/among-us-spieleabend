@@ -78,17 +78,9 @@ public class RoleButton
     public CustomRole Owner { get; internal set; }
 
     private KillButton ui;
-    private bool wasShown;
 
-    /// <summary>Das Spiel ordnet die Buttons unten rechts in einem Raster an - nach jeder Sichtbarkeits-Aenderung neu einsortieren.</summary>
-    private void Rearrange()
-    {
-        if (!ui || !ui.transform.parent) return;
-        var grid = ui.transform.parent.GetComponent<GridArrange>();
-        if (!grid) return;
-        grid.GetChildsActive();
-        grid.ArrangeChilds();
-    }
+    /// <summary>Der sichtbare Knopf (fuer die Anordnung in ButtonManager), sonst null.</summary>
+    internal Transform ShownTransform => ui && ui.gameObject.activeSelf ? ui.transform : null;
 
     internal void ResetTimer(bool roundStart)
     {
@@ -101,11 +93,6 @@ public class RoleButton
         if (EffectActive && !CustomRole.IsAlive(PlayerControl.LocalPlayer)) EndEffect();
         SetTarget(null);
         if (ui) ui.gameObject.SetActive(false);
-        if (wasShown)
-        {
-            wasShown = false;
-            Rearrange();
-        }
     }
 
     internal void Update(HudManager hud, bool inMeeting)
@@ -128,11 +115,6 @@ public class RoleButton
 
         if (!ui) CreateUi(hud);
         ui.gameObject.SetActive(true);
-        if (!wasShown)
-        {
-            wasShown = true;
-            Rearrange();
-        }
         if (ui.buttonLabelText && ui.buttonLabelText.text != ShownLabel) ui.OverrideText(ShownLabel); // falls das Spiel sie doch zuruecksetzt
 
         // Wirkungsdauer laeuft: Fuellbalken wie beim Shapeshifter, danach startet die Abklingzeit
@@ -163,7 +145,8 @@ public class RoleButton
 
     private void CreateUi(HudManager hud)
     {
-        ui = Object.Instantiate(hud.KillButton, hud.KillButton.transform.parent);
+        // Nicht ins Raster des Spiels, sondern in unsere eigene Spalte daneben (siehe ButtonManager.Layout)
+        ui = Object.Instantiate(hud.KillButton, ButtonManager.Container(hud));
         ui.name = $"{Owner?.Name}_{Label}_Button";
 
         // Der Kill-Button uebersetzt seine Beschriftung selbst immer wieder zu "Kill" - den Uebersetzer entfernen
@@ -280,47 +263,62 @@ internal static class ButtonManager
             }
         }
 
-        KeepGridTidy(hud);
+        Layout(hud);
     }
 
-    private static int lastActiveButtons = -1;
-    private static float nextOverlapCheck;
+    private static Transform container;
 
     /// <summary>
-    /// Das Spiel blendet eigene Knoepfe (Haustier, Benutzen, Sabotage ...) spaeter ein oder aus und sortiert dann ohne
-    /// unsere Knoepfe - die rutschen sonst darunter. Darum: bei jeder Aenderung und wenn zwei Knoepfe uebereinander liegen,
-    /// das Raster neu anordnen. Gilt fuer alle Rollen-Knoepfe.
+    /// Eigener Behaelter fuer alle Rollen-Knoepfe, neben dem Knopf-Raster des Spiels. Das Spiel blendet seine Knoepfe
+    /// (Benutzen/Haustier, Melden, Sabotage ...) staendig um und sortiert dabei neu - unsere Knoepfe sind deshalb nicht
+    /// mehr in seinem Raster, sondern stehen in einer eigenen Spalte links daneben und koennen nie darunter rutschen.
     /// </summary>
-    private static void KeepGridTidy(HudManager hud)
+    internal static Transform Container(HudManager hud)
     {
-        var parent = hud.KillButton ? hud.KillButton.transform.parent : null;
-        if (!parent) return;
+        if (container) return container;
+        var grid = hud.KillButton.transform.parent;
+        var go = new GameObject("Spieleabend_RoleButtons");
+        go.layer = grid.gameObject.layer;
+        go.transform.SetParent(grid.parent, false);
+        container = go.transform;
+        return container;
+    }
 
-        int active = 0;
-        for (int i = 0; i < parent.childCount; i++)
-            if (parent.GetChild(i).gameObject.activeSelf) active++;
+    private const int Rows = 2;
 
-        bool rearrange = active != lastActiveButtons;
-        lastActiveButtons = active;
+    /// <summary>Jedes Frame: Behaelter deckungsgleich zum Raster halten und unsere Knoepfe links neben die Spiel-Knoepfe stellen.</summary>
+    private static void Layout(HudManager hud)
+    {
+        if (!container || !hud.KillButton) return;
+        var grid = hud.KillButton.transform.parent;
+        container.localPosition = grid.localPosition;
+        container.localRotation = grid.localRotation;
+        container.localScale = grid.localScale;
 
-        if (!rearrange && Time.time >= nextOverlapCheck)
+        var arrange = grid.GetComponent<GridArrange>();
+        var cell = arrange ? new Vector2(Mathf.Abs(arrange.CellSize.x), Mathf.Abs(arrange.CellSize.y)) : new Vector2(1.1f, 1.1f);
+        if (cell.x < 0.1f) cell.x = 1.1f;
+        if (cell.y < 0.1f) cell.y = 1.1f;
+
+        // Linker und unterer Rand der Spiel-Knoepfe
+        float minX = float.MaxValue, minY = float.MaxValue;
+        for (int i = 0; i < grid.childCount; i++)
         {
-            nextOverlapCheck = Time.time + 0.5f;
-            var positions = new System.Collections.Generic.List<Vector3>();
-            for (int i = 0; i < parent.childCount && !rearrange; i++)
-            {
-                var child = parent.GetChild(i);
-                if (!child.gameObject.activeSelf) continue;
-                foreach (var pos in positions)
-                    if ((pos - child.localPosition).sqrMagnitude < 0.01f) rearrange = true;
-                positions.Add(child.localPosition);
-            }
+            var child = grid.GetChild(i);
+            if (!child.gameObject.activeSelf) continue;
+            minX = Mathf.Min(minX, child.localPosition.x);
+            minY = Mathf.Min(minY, child.localPosition.y);
         }
+        if (minX == float.MaxValue) return;
 
-        if (!rearrange) return;
-        var grid = parent.GetComponent<GridArrange>();
-        if (!grid) return;
-        grid.GetChildsActive();
-        grid.ArrangeChilds();
+        int k = 0;
+        foreach (var role in RoleRegistry.Roles)
+            foreach (var button in role.Buttons)
+            {
+                var t = button.ShownTransform;
+                if (!t) continue;
+                t.localPosition = new Vector3(minX - cell.x * (1 + k / Rows), minY + cell.y * (k % Rows), t.localPosition.z);
+                k++;
+            }
     }
 }

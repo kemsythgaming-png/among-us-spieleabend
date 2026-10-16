@@ -43,13 +43,27 @@ public sealed class Vampire : CustomRole
             TargetFilter = p => !IsImpostor(p),
             OnClick = target =>
             {
-                Sfx.Play(Sfx.Kill, 0.5f); // leiser Biss
+                myBites.Add(target.PlayerId); // Kill-Geraeusch erst, wenn das Opfer wirklich stirbt
                 SendToHost(ActionBite, target.PlayerId);
             },
         });
     }
 
-    public override void ResetState() => bitten.Clear();
+    /// <summary>Lokal beim Vampir: wen er gebissen hat.</summary>
+    private readonly HashSet<byte> myBites = new();
+
+    public override void ResetState()
+    {
+        bitten.Clear();
+        myBites.Clear();
+    }
+
+    /// <summary>Der Vampir hoert das Kill-Geraeusch genau dann, wenn sein Opfer tot umfaellt.</summary>
+    public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
+    {
+        if (!myBites.Remove(victim.PlayerId)) return;
+        if (cause != DeathCause.Exile) Sfx.Play(Sfx.Kill);
+    }
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
