@@ -384,21 +384,6 @@ def icon_leaves():
     return img
 
 
-def icon_heart():
-    """Graffiti-Herz fuer die Skeld-Waende: gespruehter Rand, halb durchsichtige Fuellung."""
-    img, d = canvas()
-    c = S / 2
-    pts = []
-    for i in range(0, 361, 4):
-        t = math.radians(i)
-        x = 16 * math.sin(t) ** 3
-        y = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
-        pts.append((c + x * 14, c - y * 14 - 10))
-    d.polygon(pts, fill=(235, 60, 110, 110))
-    d.line(pts + [pts[0]], fill=(235, 60, 110, 255), width=26, joint="curve")
-    return img
-
-
 ICONS = {
     "candy": icon_candy,
     "phase": icon_phase,
@@ -420,7 +405,6 @@ ICONS = {
     "scarecrow": icon_scarecrow,
     "cat": icon_cat,
     "leaves": icon_leaves,
-    "heart": icon_heart,
 }
 
 if __name__ == "__main__":

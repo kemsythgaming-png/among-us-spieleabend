@@ -37,7 +37,6 @@ internal static class HudUpdatePatch
         ButtonManager.Update(__instance);
         RoleUI.Update();
         HalloweenTheme.Update();
-        MapGraffiti.Update();
         ProtectionVisuals.Update();
         FireEffect.Update();
         HudButtons.Update(__instance);
