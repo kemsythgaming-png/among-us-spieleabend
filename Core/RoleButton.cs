@@ -152,19 +152,81 @@ public class RoleButton
     }
 
     private int shownUses = int.MinValue;
+    private GameObject usesBadge;
+    private TMPro.TextMeshPro usesText;
+    private static Sprite badgeSprite;
 
-    /// <summary>Zaehler am Knopf (oben rechts, wie beim Engineer) - nur wenn UsesLeft gesetzt ist.</summary>
+    /// <summary>
+    /// Zaehler am Knopf (runde Plakette oben rechts, wie beim Engineer) - nur wenn UsesLeft gesetzt ist.
+    /// Der kopierte Kill-Knopf hat keinen eigenen Zaehler, darum bauen wir ihn selbst.
+    /// </summary>
     private void UpdateUses()
     {
-        int uses = UsesLeft != null ? Mathf.Max(0, UsesLeft()) : -1;
-        if (uses == shownUses) return;
+        if (UsesLeft == null) return;
+        int uses = Mathf.Max(0, UsesLeft());
+        if (!usesBadge) CreateBadge();
+        if (uses == shownUses || !usesText) return;
         shownUses = uses;
+        usesText.text = uses.ToString();
+    }
+
+    private void CreateBadge()
+    {
         try
         {
-            if (uses >= 0) ui.SetUsesRemaining(uses);
-            else ui.SetInfiniteUses();
+            usesBadge = new GameObject("Spieleabend_UsesBadge");
+            usesBadge.layer = ui.gameObject.layer;
+            usesBadge.transform.SetParent(ui.transform, false);
+            var sr = usesBadge.AddComponent<SpriteRenderer>();
+            sr.sprite = BadgeSprite();
+            if (ui.graphic)
+            {
+                sr.sortingLayerID = ui.graphic.sortingLayerID;
+                sr.sortingOrder = ui.graphic.sortingOrder + 2;
+                // Oben rechts auf das Knopfbild setzen
+                var b = ui.graphic.bounds;
+                var corner = ui.transform.InverseTransformPoint(new Vector3(b.max.x - b.size.x * 0.12f, b.max.y - b.size.y * 0.12f, ui.graphic.transform.position.z));
+                usesBadge.transform.localPosition = new Vector3(corner.x, corner.y, -0.1f);
+                float size = b.size.y * 0.38f / Mathf.Max(0.001f, ui.transform.lossyScale.y);
+                usesBadge.transform.localScale = new Vector3(size, size, 1f);
+            }
+
+            if (!ui.buttonLabelText) return;
+            var textGo = Object.Instantiate(ui.buttonLabelText.gameObject, usesBadge.transform);
+            textGo.name = "Spieleabend_UsesText";
+            foreach (var translator in textGo.GetComponents<TextTranslatorTMP>()) Object.Destroy(translator);
+            usesText = textGo.GetComponent<TMPro.TextMeshPro>();
+            usesText.enableAutoSizing = false;
+            usesText.alignment = TMPro.TextAlignmentOptions.Center;
+            usesText.rectTransform.sizeDelta = new Vector2(2f, 1f);
+            textGo.transform.localPosition = new Vector3(0f, 0.02f, -0.05f);
+            var want = ui.buttonLabelText.transform.lossyScale * 1.3f;
+            var parent = usesBadge.transform.lossyScale;
+            textGo.transform.localScale = new Vector3(want.x / parent.x, want.y / parent.y, 1f);
+            var textRenderer = textGo.GetComponent<Renderer>();
+            if (textRenderer) textRenderer.sortingOrder = sr.sortingOrder + 1;
         }
         catch (Exception e) { Plugin.Logger.LogWarning($"Zaehler am Knopf: {e.Message}"); }
+    }
+
+    /// <summary>Runde Plakette: dunkler Kreis mit heller Kante (1 Einheit gross).</summary>
+    private static Sprite BadgeSprite()
+    {
+        if (badgeSprite) return badgeSprite;
+        const int S = 64;
+        var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+        for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++)
+        {
+            float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(S / 2f, S / 2f));
+            float a = Mathf.Clamp01(S / 2f - d);
+            var c = d > S / 2f - 6f ? new Color(0.95f, 0.95f, 0.95f, a) : new Color(0.16f, 0.16f, 0.2f, a);
+            tex.SetPixel(x, y, c);
+        }
+        tex.Apply();
+        badgeSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), S);
+        badgeSprite.hideFlags = HideFlags.HideAndDontSave;
+        return badgeSprite;
     }
 
     private void CreateUi(HudManager hud)
