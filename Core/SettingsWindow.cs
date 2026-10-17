@@ -201,6 +201,7 @@ internal static class SettingsPanel
         y += Row;
         foreach (var option in GeneralOptions.Options)
         {
+            if (GeneralOptions.GameTab.Contains(option)) continue; // steht im Reiter "Spiel"
             DrawSetting(option, area.x + 10, y, 440);
             y += Row;
         }
@@ -221,8 +222,9 @@ internal static class SettingsPanel
 
     private static void DrawGame(Rect area)
     {
-        // Zwei Spalten
-        var settings = VanillaGameSettings.All;
+        // Zwei Spalten: Spiel-Einstellungen, danach die Mod-Hilfen fuer das Spiel (z. B. Karte durchziehen)
+        var settings = new List<ISetting>(VanillaGameSettings.All);
+        settings.AddRange(GeneralOptions.GameTab);
         int perColumn = (settings.Count + 1) / 2;
         float columnWidth = area.width / 2f;
         for (int i = 0; i < settings.Count; i++)

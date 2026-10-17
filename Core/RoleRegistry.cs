@@ -109,6 +109,7 @@ public static class RoleRegistry
         modifiers.Clear();
         GhostRoles.Reset();
         EndSummary.ResetKills();
+        CardSwipeHelpPatch.Reset();
         foreach (var role in Roles) role.ResetState();
 
         foreach (var (playerId, roleId) in pairs) AddInternal(playerId, roleId);

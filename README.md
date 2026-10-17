@@ -117,6 +117,10 @@ Nur wenn sich BepInEx oder der Launcher selbst ändert, braucht jeder die neue E
 
 Ohne Launcher geht es weiterhin mit `dist\AmongUsSpieleabend-<Version>.zip` und `Installieren.bat` (Anleitung in `Verteilung/LIESMICH.txt`).
 
+## Hilfe für „Karte durchziehen“
+
+Im Reiter **Spiel** steht „Karte gilt nach X Fehlversuchen“ (Standard 25, 0 = aus). Wer die Karte so oft nicht durchgezogen bekommt, bekommt die Aufgabe trotzdem abgehakt. Code in `Core/CardSwipeHelp.cs`.
+
 ## Spielende-Übersicht
 
 Auf dem Ergebnis-Bildschirm steht oben links jeder Spieler mit seiner Rolle (auch Anpassungen, der geheime Verräter und Geisterrollen), seinen Kills und ob er tot ist (†). Code in `Core/EndSummary.cs`.

@@ -28,6 +28,12 @@ public static class GeneralOptions
     /// <summary>Wer letzte Runde zuerst getoetet wurde, ist in der naechsten Runde bis zum ersten Meeting geschuetzt.</summary>
     public static RoleOption FirstDeathShield { get; private set; }
 
+    /// <summary>Karte durchziehen: nach so vielen Fehlversuchen gilt die Aufgabe als geschafft (0 = aus). Steht im Reiter "Spiel".</summary>
+    public static RoleOption CardSwipeHelp { get; private set; }
+
+    /// <summary>Mod-Einstellungen, die im Reiter "Spiel" (statt "Allgemein") stehen. Werden trotzdem mit allen synchronisiert.</summary>
+    internal static readonly System.Collections.Generic.List<RoleOption> GameTab = new();
+
     /// <summary>Chance, dass ein normaler Crewmate nach allen Aufgaben zum Sheriff wird (0 = aus).</summary>
     public static RoleOption TaskSheriffChance { get; private set; }
 
@@ -44,6 +50,9 @@ public static class GeneralOptions
         Halloween.ValueNames = new[] { "Standard|Default", "Halloween|Halloween" };
         FirstDeathShield = Add(config, "FirstDeathShield", "Schutz für die ersten Toten|Shield for first deaths", 0, 0, 1, 1, "", true);
         TaskSheriffChance = Add(config, "TaskSheriffChance", "Sheriff-Chance nach allen Aufgaben|Sheriff chance after all tasks", 0, 0, 100, 10, "%");
+        // Neue Optionen immer hinten anhaengen (Reihenfolge = Reihenfolge beim Synchronisieren)
+        CardSwipeHelp = Add(config, "CardSwipeHelp", "Karte gilt nach X Fehlversuchen (0 = aus)|Card counts after X failed swipes (0 = off)", 25, 0, 50, 5);
+        GameTab.Add(CardSwipeHelp);
     }
 
     public static int MaxFor(RoleTeam team)
