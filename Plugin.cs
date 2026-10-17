@@ -23,6 +23,7 @@ public class Plugin : BasePlugin
         Logger = Log;
 
         ConsoleHider.Apply();
+        ErrorLog.Init();
         DataIsolation.Init();
         Lang.Bind(Config);
         FreeplayTest.BindConfig(Config);

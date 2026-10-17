@@ -250,6 +250,7 @@ internal sealed class Installer
 
     private void StartGame(string target)
     {
+        Log.KeepLastGameLog(target); // altes Spiel-Protokoll sichern, bevor BepInEx es ueberschreibt
         if (!Process.GetProcessesByName("steam").Any())
         {
             status("Starte Steam ...");

@@ -69,6 +69,7 @@ internal sealed class LauncherForm : Form
                 return;
             }
             Log.Write("Zielordner: " + target);
+            Log.UseGameFolder(target);
 
             bool started = await Task.Run(() => installer.Run(steamGame, target));
             if (started)

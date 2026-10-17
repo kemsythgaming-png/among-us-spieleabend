@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -22,20 +23,72 @@ internal static class InstallLocation
     /// Standard-Vorschlag: C:\Spieleabend\Among Us Spieleabend. Gibt es kein C: (oder ist es kein normales Laufwerk),
     /// dann der oeffentliche Benutzerordner C:\Users\Public - der hat ebenfalls keinen Benutzernamen im Pfad.
     /// </summary>
-    public static string DefaultFolder
+    public static string DefaultFolder => defaultFolder ??= FindWritableDefault();
+    private static string defaultFolder;
+
+    /// <summary>
+    /// Erster Ort, an dem man wirklich schreiben darf (manche PCs sperren C:\ oder wollen nur auf D: speichern):
+    /// C:\Spieleabend, dann \Spieleabend auf den anderen festen Laufwerken (D:, E: ...), dann der oeffentliche Ordner.
+    /// Getestet wird ohne Spuren: angelegte Testordner werden wieder geloescht.
+    /// </summary>
+    private static string FindWritableDefault()
     {
-        get
+        var candidates = new System.Collections.Generic.List<string>();
+        try
         {
-            try
-            {
-                var c = new DriveInfo("C");
-                if (c.IsReady && c.DriveType == DriveType.Fixed) return Path.Combine(@"C:\Spieleabend", Config.GameFolderName);
-            }
-            catch { }
-            string pub = Environment.GetEnvironmentVariable("PUBLIC");
-            if (!string.IsNullOrEmpty(pub) && IsPlainPath(pub)) return Path.Combine(pub, "Spieleabend", Config.GameFolderName);
-            return Path.Combine(@"C:\Spieleabend", Config.GameFolderName);
+            foreach (var d in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
+                         .OrderBy(d => d.Name.StartsWith("C", StringComparison.OrdinalIgnoreCase) ? 0 : 1).ThenBy(d => d.Name))
+                if (d.AvailableFreeSpace >= NeededBytes) candidates.Add(Path.Combine(d.Name, "Spieleabend", Config.GameFolderName));
         }
+        catch { }
+        string pub = Environment.GetEnvironmentVariable("PUBLIC");
+        if (!string.IsNullOrEmpty(pub) && IsPlainPath(pub)) candidates.Add(Path.Combine(pub, "Spieleabend", Config.GameFolderName));
+
+        foreach (var c in candidates)
+            if (CanWriteWithoutTrace(c)) return c;
+        return candidates.FirstOrDefault() ?? Path.Combine(@"C:\Spieleabend", Config.GameFolderName);
+    }
+
+    /// <summary>Darf man hier Ordner anlegen, Dateien schreiben, umbenennen und loeschen? Hinterlaesst nichts.</summary>
+    private static bool CanWriteWithoutTrace(string folder)
+    {
+        string firstCreated = null;
+        try
+        {
+            // ersten noch nicht vorhandenen Ordner merken, um ihn danach wieder zu entfernen
+            string probe = folder;
+            while (!string.IsNullOrEmpty(probe) && !Directory.Exists(probe))
+            {
+                firstCreated = probe;
+                probe = Path.GetDirectoryName(probe);
+            }
+            return RightsError(folder) == null;
+        }
+        catch { return false; }
+        finally
+        {
+            try { if (firstCreated != null && Directory.Exists(firstCreated)) Directory.Delete(firstCreated, true); }
+            catch { }
+        }
+    }
+
+    /// <summary>Alle Rechte, die der Launcher spaeter braucht: Ordner anlegen, schreiben, umbenennen (Updates), loeschen.</summary>
+    private static string RightsError(string folder)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(folder, "Logs"));
+            string a = Path.Combine(folder, ".rechtetest");
+            string b = a + "2";
+            File.WriteAllText(a, "ok");
+            if (File.ReadAllText(a) != "ok") return "Dateien lassen sich dort nicht richtig lesen.";
+            if (File.Exists(b)) File.Delete(b);
+            File.Move(a, b);
+            File.Delete(b);
+            return null;
+        }
+        catch (UnauthorizedAccessException) { return "keine Schreibrechte"; }
+        catch (Exception e) { return e.Message; }
     }
 
     /// <summary>Nur einfache Zeichen (kein Umlaut, kein Sonderzeichen) - sonst startet BepInEx womoeglich nicht.</summary>
@@ -111,18 +164,11 @@ internal static class InstallLocation
                 return "Bitte nicht in den Ordner des normalen Among Us installieren - das bleibt unverändert.";
         }
 
-        // Darf man dort schreiben? (ohne Admin-Rechte)
-        try
-        {
-            Directory.CreateDirectory(full);
-            string probe = Path.Combine(full, ".schreibtest");
-            File.WriteAllText(probe, "ok");
-            File.Delete(probe);
-        }
-        catch
-        {
-            return "In diesen Ordner darf ohne Administrator-Rechte nicht geschrieben werden.\nBitte einen anderen Ordner wählen (z. B. den Vorschlag).";
-        }
+        // Alle Rechte, die spaeter gebraucht werden (anlegen, schreiben, umbenennen fuer Updates, loeschen) - ohne Admin
+        string rights = RightsError(full);
+        if (rights != null)
+            return "In diesem Ordner fehlen Rechte (" + rights + ").\nBitte einen anderen Ordner wählen - z. B. " + DefaultFolder +
+                   "\n(Auf manchen PCs ist C:\\ gesperrt, dann z. B. D:\\Spieleabend.)";
 
         try
         {
