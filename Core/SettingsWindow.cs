@@ -88,8 +88,12 @@ internal static class SettingsPanel
     /// <summary>Fenster auf/zu (Knopf oben rechts oder F1).</summary>
     public static void Toggle()
     {
-        if (SettingsWindow.Available) open = !open;
+        if (!SettingsWindow.Available) return;
+        open = !open;
+        if (open) RoleGuide.Close(); // nie zwei Fenster uebereinander
     }
+
+    public static void Close() => open = false;
 
     public static void UpdateInput()
     {
@@ -98,7 +102,7 @@ internal static class SettingsPanel
             open = false;
             return;
         }
-        if (Input.GetKeyDown(KeyCode.F1)) open = !open;
+        if (Input.GetKeyDown(KeyCode.F1)) Toggle();
     }
 
     public static void Draw()
@@ -112,7 +116,7 @@ internal static class SettingsPanel
             {
                 var openRect = new Rect(20, 1080 - 80, 300, 56);
                 Ui.Block(openRect);
-                if (Ui.Button(openRect, Lang.T("Rollen-Einstellungen (F1)", "Role settings (F1)"))) open = true;
+                if (Ui.Button(openRect, Lang.T("Rollen-Einstellungen (F1)", "Role settings (F1)"))) Toggle();
             }
             return;
         }
@@ -120,15 +124,15 @@ internal static class SettingsPanel
         var win = new Rect((Ui.ScreenWidth - W) / 2f, (1080 - H) / 2f, W, H);
         GUI.Box(win, new GUIContent(""), Ui.Panel);
         Ui.Block(win);
-        GUI.Label(new Rect(win.x + 30, win.y + 16, W - 120, 44), $"{Plugin.Name} - {Lang.T("Einstellungen", "Settings")}", Ui.Title);
-        if (Ui.Button(new Rect(win.xMax - 70, win.y + 16, 50, 50), "X")) open = false;
+        GUI.Label(new Rect(win.x + 30, win.y + 18, W - 120, 44), $"{Plugin.Name} - {Lang.T("Einstellungen", "Settings")}", Ui.Title);
+        if (GUI.Button(new Rect(win.xMax - 74, win.y + 18, 52, 52), new GUIContent("X"), Ui.CloseButton)) open = false;
         if (!SettingsWindow.CanEdit)
             GUI.Label(new Rect(win.x + 30, win.y + 58, W - 60, 30), Lang.T("Nur der Host kann die Einstellungen ändern.", "Only the host can change the settings."), Ui.Small);
 
         float tx = win.x + 30;
         for (int i = 0; i < Tabs.Length; i++)
         {
-            if (Ui.Button(new Rect(tx, win.y + 92, 150, 46), Lang.Pick(Tabs[i].Label), i == tab))
+            if (GUI.Button(new Rect(tx, win.y + 92, 150, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), i == tab ? Ui.TabSelected : Ui.Tab))
             {
                 tab = i;
                 selected = 0;
@@ -136,7 +140,8 @@ internal static class SettingsPanel
             tx += 157;
         }
 
-        var area = new Rect(win.x + 30, win.y + 160, W - 60, H - 180);
+        GUI.Box(new Rect(win.x + 20, win.y + 150, W - 40, H - 170), new GUIContent(""), Ui.Inner);
+        var area = new Rect(win.x + 30, win.y + 165, W - 60, H - 195);
         switch (Tabs[tab].Kind)
         {
             case TabKind.General: DrawGeneral(area); break;
@@ -159,11 +164,18 @@ internal static class SettingsPanel
             y += Row;
         }
 
-        GUI.Label(new Rect(area.x + 10, y + 10, area.width - 20, 60),
+        // Rechts daneben: Hinweis und (im Freeplay) der Test-Bereich - nie ueber den Einstellungen
+        var side = new Rect(area.x + 720, area.y, area.width - 730, area.height);
+        GUI.Label(new Rect(side.x, side.y, side.width, 90),
             Lang.T("Mod-Rollen gehen nur an normale Crewmates/Impostor - die Rollen aus dem Spiel (Reiter \"Spiel-Rollen\") bleiben unverändert.",
                    "Mod roles only go to plain crewmates/impostors - the game's own roles (tab \"Game roles\") stay unchanged."), Ui.Small);
 
-        if (FreeplayTest.IsFreeplay) DrawFreeplay(new Rect(area.x + 10, area.yMax - 120, 600, 120));
+        if (FreeplayTest.IsFreeplay)
+        {
+            var box = new Rect(side.x - 10, side.y + 110, side.width + 10, 150);
+            GUI.Box(box, new GUIContent(""), Ui.Panel);
+            DrawFreeplay(new Rect(box.x + 18, box.y + 12, box.width - 36, 130));
+        }
     }
 
     private static void DrawGame(Rect area)
@@ -268,13 +280,13 @@ internal static class SettingsPanel
 
         string roleName = string.IsNullOrEmpty(FreeplayTest.TestRoleName) ? Lang.T("(keine)", "(none)") : FreeplayTest.TestRoleDisplayName;
         if (Ui.Button(new Rect(area.x, y, 40, 38), "<")) FreeplayTest.CycleRole(-1);
-        GUI.Label(new Rect(area.x + 50, y + 4, 240, 36), Lang.T("Testrolle: ", "Test role: ") + roleName, Ui.Small);
-        if (Ui.Button(new Rect(area.x + 300, y, 40, 38), ">")) FreeplayTest.CycleRole(1);
+        GUI.Label(new Rect(area.x + 50, y + 4, area.width - 100, 36), Lang.T("Testrolle: ", "Test role: ") + roleName, Ui.Small);
+        if (Ui.Button(new Rect(area.xMax - 40, y, 40, 38), ">")) FreeplayTest.CycleRole(1);
         y += 44;
 
         if (Ui.Button(new Rect(area.x, y, 40, 38), "-")) FreeplayTest.ChangeDummyImpostors(-1);
-        GUI.Label(new Rect(area.x + 50, y + 4, 240, 36), $"{FreeplayTest.DummyImpostors} " + Lang.T("Dummy-Impostor", "dummy impostors"), Ui.Small);
-        if (Ui.Button(new Rect(area.x + 300, y, 40, 38), "+")) FreeplayTest.ChangeDummyImpostors(1);
+        GUI.Label(new Rect(area.x + 50, y + 4, area.width - 100, 36), $"{FreeplayTest.DummyImpostors} " + Lang.T("Dummy-Impostor", "dummy impostors"), Ui.Small);
+        if (Ui.Button(new Rect(area.xMax - 40, y, 40, 38), "+")) FreeplayTest.ChangeDummyImpostors(1);
     }
 }
 
@@ -325,48 +337,127 @@ public static class Ui
 
     public static bool Button(Rect rect, string label, bool selected) => GUI.Button(rect, new GUIContent(label), selected ? Selected : ButtonStyle);
 
+    /// <summary>Innenflaeche (z. B. Liste oder Detailbereich) im selben Stil, etwas heller.</summary>
+    public static GUIStyle Inner, Tab, TabSelected, CloseButton;
+    private static Font gameFont;
+
     private static void InitStyles()
     {
         if (Panel != null && panelTex) return;
 
-        panelTex = MakeTex(new Color(0.08f, 0.09f, 0.13f, 0.96f));
-        buttonTex = MakeTex(new Color(0.22f, 0.24f, 0.32f, 1f));
-        selectedTex = MakeTex(new Color(0.30f, 0.45f, 0.75f, 1f));
+        // Among-Us-Stil: dunkle Flaechen mit dicker, heller, runder Kontur; Auswahl leuchtet gruen
+        var white = new Color(0.93f, 0.95f, 0.97f, 1f);
+        var green = new Color(0.36f, 0.94f, 0.33f, 1f);
+        panelTex = MakeRounded(new Color(0.10f, 0.11f, 0.16f, 0.98f), white, 24, 5);
+        var innerTex = MakeRounded(new Color(0.15f, 0.16f, 0.22f, 1f), new Color(0.45f, 0.48f, 0.56f, 1f), 16, 3);
+        buttonTex = MakeRounded(new Color(0.20f, 0.22f, 0.29f, 1f), white, 12, 3);
+        var hoverTex = MakeRounded(new Color(0.27f, 0.30f, 0.38f, 1f), white, 12, 3);
+        selectedTex = MakeRounded(new Color(0.16f, 0.32f, 0.17f, 1f), green, 12, 4);
+        var closeTex = MakeRounded(new Color(0.75f, 0.15f, 0.15f, 1f), white, 24, 4);
+        var closeHoverTex = MakeRounded(new Color(0.9f, 0.25f, 0.25f, 1f), white, 24, 4);
 
-        Panel = new GUIStyle(GUI.skin.box);
+        gameFont = FindGameFont();
+
+        Panel = new GUIStyle(GUI.skin.box) { border = Offset(26), padding = Offset(0) };
         Panel.normal.background = panelTex;
+        Inner = new GUIStyle(GUI.skin.box) { border = Offset(18), padding = Offset(0) };
+        Inner.normal.background = innerTex;
 
-        Title = MakeLabel(32, FontStyle.Bold);
-        Header = MakeLabel(26, FontStyle.Bold);
+        Title = MakeLabel(34, FontStyle.Bold);
+        Header = MakeLabel(28, FontStyle.Bold);
         Text = MakeLabel(24, FontStyle.Normal);
         Small = MakeLabel(20, FontStyle.Normal);
         Small.wordWrap = true;
-        Small.normal.textColor = new Color(0.8f, 0.8f, 0.85f);
+        Small.normal.textColor = new Color(0.82f, 0.84f, 0.9f);
 
-        ButtonStyle = new GUIStyle(GUI.skin.button) { fontSize = 21, richText = true };
+        ButtonStyle = new GUIStyle(GUI.skin.button) { fontSize = 21, richText = true, border = Offset(14), padding = Offset(6) };
+        if (gameFont) ButtonStyle.font = gameFont;
         ButtonStyle.normal.background = buttonTex;
-        ButtonStyle.hover.background = selectedTex;
+        ButtonStyle.hover.background = hoverTex;
         ButtonStyle.active.background = selectedTex;
         ButtonStyle.normal.textColor = Color.white;
         ButtonStyle.hover.textColor = Color.white;
+        ButtonStyle.active.textColor = Color.white;
 
         Selected = new GUIStyle(ButtonStyle);
         Selected.normal.background = selectedTex;
+        Selected.hover.background = selectedTex;
+
+        Tab = new GUIStyle(ButtonStyle) { fontSize = 23, fontStyle = FontStyle.Bold };
+        TabSelected = new GUIStyle(Tab);
+        TabSelected.normal.background = selectedTex;
+        TabSelected.hover.background = selectedTex;
+
+        CloseButton = new GUIStyle(ButtonStyle) { fontSize = 26, fontStyle = FontStyle.Bold, border = Offset(24) };
+        CloseButton.normal.background = closeTex;
+        CloseButton.hover.background = closeHoverTex;
+        CloseButton.active.background = closeHoverTex;
+    }
+
+    private static RectOffset Offset(int v)
+    {
+        var o = new RectOffset();
+        o.left = o.right = o.top = o.bottom = v;
+        return o;
     }
 
     private static GUIStyle MakeLabel(int size, FontStyle fontStyle)
     {
         var style = new GUIStyle(GUI.skin.label) { fontSize = size, fontStyle = fontStyle, richText = true };
+        if (gameFont) style.font = gameFont;
         style.normal.textColor = Color.white;
         return style;
     }
 
-    private static Texture2D MakeTex(Color color)
+    /// <summary>
+    /// Schrift des Spiels fuer die Fenster, falls die Schriftdatei im Spiel steckt (sonst bleibt die Standardschrift).
+    /// </summary>
+    private static Font FindGameFont()
     {
-        var tex = new Texture2D(1, 1);
-        tex.SetPixel(0, 0, color);
+        try
+        {
+            Font best = null;
+            foreach (var asset in Resources.FindObjectsOfTypeAll<TMPro.TMP_FontAsset>())
+            {
+                if (!asset || !asset.sourceFontFile) continue;
+                string n = asset.name.ToLowerInvariant();
+                if (n.Contains("brook") || n.Contains("amongus") || n.Contains("among us"))
+                {
+                    best = asset.sourceFontFile;
+                    break;
+                }
+                best ??= asset.sourceFontFile;
+            }
+            if (best) Plugin.Logger.LogInfo($"Fenster-Schrift: {best.name}");
+            return best;
+        }
+        catch (System.Exception e)
+        {
+            Plugin.Logger.LogWarning($"Fenster-Schrift: {e.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Abgerundetes Rechteck mit Kontur (wird per 9-Slice auf jede Groesse gestreckt).</summary>
+    private static Texture2D MakeRounded(Color fill, Color outline, int radius, int outlineWidth)
+    {
+        int size = radius * 2 + 8;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+        float half = size / 2f;
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            // Abstand zum Rand des abgerundeten Rechtecks (negativ = innen)
+            float qx = Mathf.Abs(x + 0.5f - half) - (half - radius);
+            float qy = Mathf.Abs(y + 0.5f - half) - (half - radius);
+            float outside = new Vector2(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f)).magnitude + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
+            float alpha = Mathf.Clamp01(0.5f - outside);
+            float edge = Mathf.Clamp01(outside + outlineWidth + 0.5f);
+            var c = Color.Lerp(fill, outline, edge);
+            c.a *= alpha;
+            tex.SetPixel(x, y, c);
+        }
         tex.Apply();
-        tex.hideFlags = HideFlags.HideAndDontSave;
         return tex;
     }
 }

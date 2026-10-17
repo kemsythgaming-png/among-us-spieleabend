@@ -11,18 +11,22 @@ namespace Spieleabend.Core;
 /// </summary>
 internal static class RoleGuide
 {
-    private const float W = 1500f, H = 900f, ListColumn = 250f;
+    private const float W = 1500f, H = 900f, ListWidth = 430f, RowH = 50f;
 
-    private static readonly (string Label, RoleTeam Team)[] Groups =
+    /// <summary>Reiter oben: wie im Einstellungsfenster, Geisterrollen bekommen einen eigenen.</summary>
+    private static readonly (string Label, System.Func<CustomRole, bool> Filter)[] Tabs =
     {
-        ("Crew", RoleTeam.Crewmate),
-        ("Impostor", RoleTeam.Impostor),
-        ("Neutral", RoleTeam.Neutral),
-        ("Anpassungen|Modifiers", RoleTeam.Modifier),
+        ("Crew", r => r.Team == RoleTeam.Crewmate && !r.IsGhostRole),
+        ("Impostor", r => r.Team == RoleTeam.Impostor && !r.IsGhostRole),
+        ("Neutral", r => r.Team == RoleTeam.Neutral && !r.IsGhostRole),
+        ("Geister|Ghosts", r => r.IsGhostRole),
+        ("Anpassungen|Modifiers", r => r.Team == RoleTeam.Modifier),
     };
 
     private static bool open;
+    private static int tab;
     private static int selected = -1;
+    private static Vector2 scroll;
     private static GUIStyle body;
 
     private static bool Available =>
@@ -32,13 +36,21 @@ internal static class RoleGuide
     {
         if (!Available) return;
         open = !open;
-        if (open) SelectOwnRole();
+        if (!open) return;
+        SettingsPanel.Close(); // nie zwei Fenster uebereinander
+        SelectOwnRole();
     }
+
+    public static void Close() => open = false;
 
     private static void SelectOwnRole()
     {
         var own = RoleRegistry.GetDisplayed(PlayerControl.LocalPlayer).FirstOrDefault();
-        selected = own != null ? RoleRegistry.Roles.IndexOf(own) : Mathf.Max(selected, 0);
+        if (own == null) return;
+        selected = RoleRegistry.Roles.IndexOf(own);
+        for (int i = 0; i < Tabs.Length; i++)
+            if (Tabs[i].Filter(own)) tab = i;
+        scroll = Vector2.zero;
     }
 
     internal static void Draw()
@@ -49,9 +61,9 @@ internal static class RoleGuide
             return;
         }
 
-        // Button: im Meeting links unter dem Aufgabenbalken, in der Lobby neben "Rollen-Einstellungen", sonst unten links
+        // Ersatz-Knopf, falls der Knopf oben rechts fehlt: im Meeting links unter dem Aufgabenbalken, in der Lobby neben "Rollen-Einstellungen", sonst unten links
         Rect buttonRect;
-        if (MeetingHud.Instance) buttonRect = new Rect(20, 100, 260, 52); // unter dem Aufgabenbalken
+        if (MeetingHud.Instance) buttonRect = new Rect(20, 100, 260, 52);
         else if (SettingsWindow.Available) buttonRect = new Rect(340, 1080 - 80, 260, 56);
         else buttonRect = new Rect(20, 1080 - 80, 260, 56);
 
@@ -68,36 +80,51 @@ internal static class RoleGuide
         GUI.Box(win, new GUIContent(""), Ui.Panel);
         Ui.Block(win);
         GUI.Label(new Rect(win.x + 30, win.y + 18, W - 120, 44), Lang.T("Rollen-Info", "Role info"), Ui.Title);
-        if (Ui.Button(new Rect(win.xMax - 70, win.y + 18, 50, 50), "X")) open = false;
+        if (GUI.Button(new Rect(win.xMax - 74, win.y + 18, 52, 52), new GUIContent("X"), Ui.CloseButton)) open = false;
 
-        // Links: alle Rollen nach Team, in zwei Spalten (bricht um, wenn eine Spalte voll ist)
-        float top = win.y + 80, bottom = win.yMax - 20;
-        float x = win.x + 30, y = top;
-        var local = PlayerControl.LocalPlayer;
-        foreach (var (label, team) in Groups)
+        // Reiter
+        float tx = win.x + 30;
+        for (int i = 0; i < Tabs.Length; i++)
         {
-            var roles = RoleRegistry.Roles.Where(r => r.Team == team).ToList();
-            if (roles.Count == 0) continue;
-            if (y + 30 + 40 > bottom) { x += ListColumn + 10; y = top; }
-            GUI.Label(new Rect(x, y, ListColumn, 30), Lang.Pick(label), Ui.Small);
-            y += 30;
-            foreach (var role in roles)
+            if (GUI.Button(new Rect(tx, win.y + 88, 180, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), i == tab ? Ui.TabSelected : Ui.Tab))
             {
-                if (y + 36 > bottom) { x += ListColumn + 10; y = top; }
-                int index = RoleRegistry.Roles.IndexOf(role);
-                string text = role.ColoredName;
-                if (RoleRegistry.Has(local, role)) text += Lang.T(" (du)", " (you)");
-                else if (role.Count.Int == 0) text = $"<color=#777777>{role.Name}</color>";
-                if (GUI.Button(new Rect(x, y, ListColumn, 34), new GUIContent(text), index == selected ? Ui.Selected : Ui.ButtonStyle))
-                    selected = index;
-                y += 38;
+                tab = i;
+                scroll = Vector2.zero;
+                var first = RoleRegistry.Roles.FirstOrDefault(Tabs[i].Filter);
+                selected = first != null ? RoleRegistry.Roles.IndexOf(first) : -1;
             }
-            y += 6;
+            tx += 188;
         }
 
-        if (selected < 0 || selected >= RoleRegistry.Roles.Count) selected = 0;
-        float detailX = win.x + 30 + 2 * (ListColumn + 10) + 20;
-        DrawDetails(RoleRegistry.Roles[selected], new Rect(detailX, win.y + 80, win.xMax - detailX - 30, H - 100));
+        // Links: Liste der Rollen dieses Reiters (scrollt, wenn es viele sind)
+        var listBox = new Rect(win.x + 20, win.y + 150, ListWidth + 20, H - 170);
+        GUI.Box(listBox, new GUIContent(""), Ui.Inner);
+        var roles = RoleRegistry.Roles.Where(Tabs[tab].Filter).ToList();
+        var view = new Rect(listBox.x + 10, listBox.y + 12, listBox.width - 20, listBox.height - 24);
+        var content = new Rect(0, 0, view.width - 22, Mathf.Max(view.height, roles.Count * RowH));
+        scroll = GUI.BeginScrollView(view, scroll, content);
+        var local = PlayerControl.LocalPlayer;
+        for (int i = 0; i < roles.Count; i++)
+        {
+            var role = roles[i];
+            int index = RoleRegistry.Roles.IndexOf(role);
+            string text = role.Count.Int == 0 ? $"<color=#8A8F9C>{role.Name}</color>" : role.ColoredName;
+            if (RoleRegistry.Has(local, role) && !role.IsSecret(local)) text += Lang.T("  <color=#FFFFFF>(du)</color>", "  <color=#FFFFFF>(you)</color>");
+            if (GUI.Button(new Rect(0, i * RowH, content.width, RowH - 6), new GUIContent(text), index == selected ? Ui.Selected : Ui.ButtonStyle))
+                selected = index;
+        }
+        GUI.EndScrollView();
+
+        // Rechts: Details
+        var detailBox = new Rect(listBox.xMax + 14, listBox.y, win.xMax - listBox.xMax - 34, listBox.height);
+        GUI.Box(detailBox, new GUIContent(""), Ui.Inner);
+        if (selected < 0 || selected >= RoleRegistry.Roles.Count || !Tabs[tab].Filter(RoleRegistry.Roles[selected]))
+        {
+            GUI.Label(new Rect(detailBox.x + 24, detailBox.y + 20, detailBox.width - 48, 40),
+                roles.Count == 0 ? Lang.T("Keine Rollen in diesem Reiter.", "No roles in this tab.") : Lang.T("Wähle links eine Rolle.", "Pick a role on the left."), Ui.Text);
+            return;
+        }
+        DrawDetails(RoleRegistry.Roles[selected], new Rect(detailBox.x + 24, detailBox.y + 18, detailBox.width - 48, detailBox.height - 36));
     }
 
     private static void DrawDetails(CustomRole role, Rect area)
@@ -113,12 +140,14 @@ internal static class RoleGuide
             RoleTeam.Neutral => Lang.T("<color=#AAAAAA>Neutral (eigener Sieg)</color>", "<color=#AAAAAA>Neutral (own win)</color>"),
             _ => Lang.T("<color=#FFB366>Anpassung (kommt zu jeder Rolle dazu)</color>", "<color=#FFB366>Modifier (added to any role)</color>"),
         };
+        if (role.IsGhostRole) team += Lang.T("  <color=#C8B4FF>(Geisterrolle - kommt beim Tod)</color>", "  <color=#C8B4FF>(ghost role - given on death)</color>");
         string active = role.Count.Int > 0
             ? $"<color=#5BE35B>{Lang.T("Eingeschaltet", "Enabled")}</color> ({role.Count.Int}x, {role.Chance.Int}% {Lang.T("Chance", "chance")})"
             : $"<color=#999999>{Lang.T("Ausgeschaltet", "Disabled")}</color>";
-        GUI.Label(new Rect(area.x, area.y + 44, area.width, 30), $"Team: {team}     {active}", Ui.Small);
+        GUI.Label(new Rect(area.x, area.y + 46, area.width, 30), $"Team: {team}", Ui.Small);
+        GUI.Label(new Rect(area.x, area.y + 76, area.width, 30), active, Ui.Small);
 
-        float y = area.y + 90;
+        float y = area.y + 120;
         float descHeight = body.CalcHeight(new GUIContent(role.LongDescription), area.width);
         GUI.Label(new Rect(area.x, y, area.width, descHeight), role.LongDescription, body);
         y += descHeight + 20;
