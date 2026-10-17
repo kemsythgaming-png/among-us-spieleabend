@@ -16,7 +16,7 @@ internal static class RoleGuide
     /// <summary>Reiter oben: wie im Einstellungsfenster, Geisterrollen bekommen einen eigenen.</summary>
     private static readonly (string Label, System.Func<CustomRole, bool> Filter)[] Tabs =
     {
-        ("Diese Runde|This game", r => r.Count.Int > 0), // alles, was eingeschaltet ist (verraet nicht, wer was hat)
+        ("Aktuell aktiv|Active now", r => r.Count.Int > 0), // alles, was eingeschaltet ist (verraet nicht, wer was hat)
         ("Crew", r => r.Team == RoleTeam.Crewmate && !r.IsGhostRole),
         ("Impostor", r => r.Team == RoleTeam.Impostor && !r.IsGhostRole),
         ("Neutral", r => r.Team == RoleTeam.Neutral && !r.IsGhostRole),
@@ -28,7 +28,8 @@ internal static class RoleGuide
     private static int tab;
     private static int selected = -1;
     private static Vector2 scroll;
-    private static VanillaRoleEntry selectedVanilla; // im Reiter "Diese Runde": gewaehlte Rolle aus dem Spiel
+    private static VanillaRoleEntry selectedVanilla; // im Reiter "Diese Runde" bzw. in der Suche: gewaehlte Rolle aus dem Spiel
+    private static string search = "";
     private static GUIStyle body;
 
     private static bool Available =>
@@ -43,7 +44,11 @@ internal static class RoleGuide
         SelectOwnRole();
     }
 
-    public static void Close() => open = false;
+    public static void Close()
+    {
+        if (open) Ui.StopTyping();
+        open = false;
+    }
 
     private static void SelectOwnRole()
     {
@@ -83,16 +88,29 @@ internal static class RoleGuide
         var win = new Rect((Ui.ScreenWidth - W) / 2f, (1080 - H) / 2f, W, H);
         GUI.Box(win, new GUIContent(""), Ui.Panel);
         Ui.Block(win);
-        GUI.Label(new Rect(win.x + 30, win.y + 18, W - 120, 44), Lang.T("Rollen-Info", "Role info"), Ui.Title);
+        GUI.Label(new Rect(win.x + 30, win.y + 18, W - 520, 44), Lang.T("Rollen-Info", "Role info"), Ui.Title);
+
+        // Suchfeld oben rechts: sucht in allen Reitern (Name und Beschreibung)
+        string before = search;
+        search = Ui.SearchField(new Rect(win.xMax - 74 - 380, win.y + 22, 366, 46), search, Lang.T("Rolle suchen ...", "Search role ..."));
+        if (search != before)
+        {
+            scroll = Vector2.zero;
+            selected = -1;
+            selectedVanilla = null;
+        }
+        bool searching = search.Trim().Length > 0;
         if (GUI.Button(new Rect(win.xMax - 74, win.y + 18, 52, 52), new GUIContent("X"), Ui.CloseButton)) open = false;
 
         // Reiter
         float tx = win.x + 30;
         for (int i = 0; i < Tabs.Length; i++)
         {
-            if (GUI.Button(new Rect(tx, win.y + 88, 200, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), i == tab ? Ui.TabSelected : Ui.Tab))
+            if (GUI.Button(new Rect(tx, win.y + 88, 200, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), i == tab && !searching ? Ui.TabSelected : Ui.Tab))
             {
                 tab = i;
+                search = "";
+                Ui.StopTyping();
                 scroll = Vector2.zero;
                 selectedVanilla = null;
                 var first = RoleRegistry.Roles.FirstOrDefault(Tabs[i].Filter);
@@ -104,9 +122,20 @@ internal static class RoleGuide
         // Links: Liste der Rollen dieses Reiters (scrollt, wenn es viele sind)
         var listBox = new Rect(win.x + 20, win.y + 150, ListWidth + 20, H - 170);
         GUI.Box(listBox, new GUIContent(""), Ui.Inner);
-        bool thisGame = tab == 0;
-        var roles = RoleRegistry.Roles.Where(Tabs[tab].Filter).ToList();
-        var vanilla = thisGame ? VanillaRoleEntry.All.Where(v => v.Count > 0).ToList() : new System.Collections.Generic.List<VanillaRoleEntry>();
+        bool thisGame = tab == 0 && !searching;
+        string q = search.Trim();
+        bool Match(string s) => !string.IsNullOrEmpty(s) && s.IndexOf(q, System.StringComparison.OrdinalIgnoreCase) >= 0;
+        var roles = searching
+            ? RoleRegistry.Roles.Where(r => Match(r.Name) || Match(r.Description) || Match(r.LongDescription)).ToList()
+            : RoleRegistry.Roles.Where(Tabs[tab].Filter).ToList();
+        var vanilla = searching ? VanillaRoleEntry.All.Where(v => Match(v.Name) || Match(v.Description)).ToList()
+            : thisGame ? VanillaRoleEntry.All.Where(v => v.Count > 0).ToList()
+            : new System.Collections.Generic.List<VanillaRoleEntry>();
+        if (searching && selected < 0 && selectedVanilla == null)
+        {
+            if (roles.Count > 0) selected = RoleRegistry.Roles.IndexOf(roles[0]);
+            else if (vanilla.Count > 0) selectedVanilla = vanilla[0];
+        }
         int rows = roles.Count + vanilla.Count + (thisGame ? 1 : 0);
         var view = new Rect(listBox.x + 10, listBox.y + 12, listBox.width - 20, listBox.height - 24);
         float rowWidth = view.width - 16;
@@ -117,27 +146,47 @@ internal static class RoleGuide
         float ly = 0;
         if (thisGame)
         {
-            if (Shown(ly, 44)) GUI.Label(Row(ly + 10, 34), Lang.T("<b>Aktiv in dieser Runde:</b>", "<b>Active this game:</b>"), Ui.Small);
+            // Spaltenkoepfe: Anzahl und Chance stehen sauber untereinander
+            if (Shown(ly, 44))
+            {
+                var head = Row(ly + 8, 34);
+                GUI.Label(new Rect(head.x + 16, head.y, head.width - 200, head.height), Lang.T("<b>Rolle</b>", "<b>Role</b>"), ColumnLeft);
+                GUI.Label(new Rect(head.xMax - 190, head.y, 80, head.height), Lang.T("<b>Anzahl</b>", "<b>Count</b>"), ColumnRight);
+                GUI.Label(new Rect(head.xMax - 100, head.y, 84, head.height), Lang.T("<b>Chance</b>", "<b>Chance</b>"), ColumnRight);
+            }
             ly += RowH;
         }
         foreach (var role in roles)
         {
             int index = RoleRegistry.Roles.IndexOf(role);
             string text = role.Count.Int == 0 ? $"<color=#8A8F9C>{role.Name}</color>" : role.ColoredName;
-            if (thisGame) text += $"  <color=#9AA0AE>{role.Count.Int}x · {role.Chance.Int}%</color>";
             if (RoleRegistry.Has(local, role) && !role.IsSecret(local)) text += Lang.T("  <color=#FFFFFF>(du)</color>", "  <color=#FFFFFF>(you)</color>");
-            if (Shown(ly, RowH - 6) && GUI.Button(Row(ly, RowH - 6), new GUIContent(text), index == selected && selectedVanilla == null ? Ui.Selected : Ui.ButtonStyle))
+            if (Shown(ly, RowH - 6))
             {
-                selected = index;
-                selectedVanilla = null;
+                var rect = Row(ly, RowH - 6);
+                bool clicked = thisGame
+                    ? ColumnRow(rect, text, $"{role.Count.Int}x", $"{role.Chance.Int}%", index == selected && selectedVanilla == null)
+                    : GUI.Button(rect, new GUIContent(text), index == selected && selectedVanilla == null ? Ui.Selected : Ui.ButtonStyle);
+                if (clicked)
+                {
+                    selected = index;
+                    selectedVanilla = null;
+                }
             }
             ly += RowH;
         }
         foreach (var v in vanilla)
         {
-            string text = $"<color=#{ColorUtility.ToHtmlStringRGB(v.Color)}>{v.Name}</color>  <color=#9AA0AE>{v.Summary.Replace(", ", " · ")}</color>";
-            if (Shown(ly, RowH - 6) && GUI.Button(Row(ly, RowH - 6), new GUIContent(text), v == selectedVanilla ? Ui.Selected : Ui.ButtonStyle))
-                selectedVanilla = v;
+            string name = $"<color=#{ColorUtility.ToHtmlStringRGB(v.Color)}>{v.Name}</color>";
+            if (Shown(ly, RowH - 6))
+            {
+                var rect = Row(ly, RowH - 6);
+                var parts = v.Summary.Split(new[] { ", " }, System.StringSplitOptions.None);
+                bool clicked = thisGame && parts.Length == 2
+                    ? ColumnRow(rect, name, parts[0], parts[1], v == selectedVanilla)
+                    : GUI.Button(rect, new GUIContent(name), v == selectedVanilla ? Ui.Selected : Ui.ButtonStyle);
+                if (clicked) selectedVanilla = v;
+            }
             ly += RowH;
         }
         if (thisGame && rows == 1)
@@ -146,18 +195,32 @@ internal static class RoleGuide
         // Rechts: Details
         var detailBox = new Rect(listBox.xMax + 14, listBox.y, win.xMax - listBox.xMax - 34, listBox.height);
         GUI.Box(detailBox, new GUIContent(""), Ui.Inner);
-        if (selectedVanilla != null && thisGame)
+        if (selectedVanilla != null && (thisGame || searching))
         {
             DrawVanillaDetails(selectedVanilla, new Rect(detailBox.x + 24, detailBox.y + 18, detailBox.width - 48, detailBox.height - 36));
             return;
         }
-        if (selected < 0 || selected >= RoleRegistry.Roles.Count || !Tabs[tab].Filter(RoleRegistry.Roles[selected]))
+        if (selected < 0 || selected >= RoleRegistry.Roles.Count || (!searching && !Tabs[tab].Filter(RoleRegistry.Roles[selected])))
         {
             GUI.Label(new Rect(detailBox.x + 24, detailBox.y + 20, detailBox.width - 48, 40),
-                roles.Count == 0 ? Lang.T("Keine Rollen in diesem Reiter.", "No roles in this tab.") : Lang.T("Wähle links eine Rolle.", "Pick a role on the left."), Ui.Text);
+                searching && roles.Count + vanilla.Count == 0 ? Lang.T("Nichts gefunden.", "Nothing found.") : roles.Count == 0 ? Lang.T("Keine Rollen in diesem Reiter.", "No roles in this tab.") : Lang.T("Wähle links eine Rolle.", "Pick a role on the left."), Ui.Text);
             return;
         }
         DrawDetails(RoleRegistry.Roles[selected], new Rect(detailBox.x + 24, detailBox.y + 18, detailBox.width - 48, detailBox.height - 36));
+    }
+
+    private static GUIStyle columnLeft, columnRight;
+    private static GUIStyle ColumnLeft => columnLeft ??= new GUIStyle(Ui.Text) { fontSize = 22, alignment = TextAnchor.MiddleLeft, clipping = TextClipping.Clip };
+    private static GUIStyle ColumnRight => columnRight ??= new GUIStyle(Ui.Text) { fontSize = 22, alignment = TextAnchor.MiddleRight, normal = { textColor = new Color(0.75f, 0.78f, 0.85f) } };
+
+    /// <summary>Zeile wie ein Knopf, aber mit Spalten: Name links, Anzahl und Chance rechts untereinander ausgerichtet.</summary>
+    private static bool ColumnRow(Rect rect, string name, string count, string chance, bool isSelected)
+    {
+        bool clicked = GUI.Button(rect, new GUIContent(""), isSelected ? Ui.Selected : Ui.ButtonStyle);
+        GUI.Label(new Rect(rect.x + 16, rect.y, rect.width - 210, rect.height), name, ColumnLeft);
+        GUI.Label(new Rect(rect.xMax - 190, rect.y, 80, rect.height), count, ColumnRight);
+        GUI.Label(new Rect(rect.xMax - 100, rect.y, 84, rect.height), chance, ColumnRight);
+        return clicked;
     }
 
     private static void DrawVanillaDetails(VanillaRoleEntry v, Rect area)

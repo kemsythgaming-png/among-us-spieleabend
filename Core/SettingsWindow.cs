@@ -160,16 +160,6 @@ internal static class SettingsPanel
             return;
         }
 
-        // Suchfeld oben rechts
-        var searchRect = new Rect(win.xMax - 74 - 350, win.y + 22, 336, 46);
-        string before = search;
-        search = Ui.SearchField(searchRect, search, Lang.T("Suchen ...", "Search ..."));
-        if (search != before)
-        {
-            selected = 0;
-            listScroll = detailScroll = Vector2.zero;
-        }
-
         if (!SettingsWindow.CanEdit)
             GUI.Label(new Rect(win.x + 30, win.y + 60, W - 520, 30), Lang.T("Nur der Host kann die Einstellungen ändern.", "Only the host can change the settings."), Ui.Small);
 
