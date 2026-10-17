@@ -160,11 +160,16 @@ internal sealed class VanillaRoleEntry
     private readonly string rawDescription;
     public string Description => Lang.Pick(rawDescription);
     public RoleTypes Role { get; }
+    public bool IsImpostor { get; }
+
+    /// <summary>Eingestellte Anzahl (0 = aus).</summary>
+    public int Count => int.TryParse(Settings[0].Display, out int n) ? n : 0;
     public List<ISetting> Settings { get; } = new();
 
     private VanillaRoleEntry(RoleTypes role, string name, bool impostor, string description, params ISetting[] extra)
     {
         Role = role;
+        IsImpostor = impostor;
         Name = name;
         Color = impostor ? new Color(1f, 0.1f, 0.1f) : new Color(0.55f, 1f, 1f);
         rawDescription = description;

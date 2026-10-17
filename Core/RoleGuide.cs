@@ -16,6 +16,7 @@ internal static class RoleGuide
     /// <summary>Reiter oben: wie im Einstellungsfenster, Geisterrollen bekommen einen eigenen.</summary>
     private static readonly (string Label, System.Func<CustomRole, bool> Filter)[] Tabs =
     {
+        ("Diese Runde|This game", r => r.Count.Int > 0), // alles, was eingeschaltet ist (verraet nicht, wer was hat)
         ("Crew", r => r.Team == RoleTeam.Crewmate && !r.IsGhostRole),
         ("Impostor", r => r.Team == RoleTeam.Impostor && !r.IsGhostRole),
         ("Neutral", r => r.Team == RoleTeam.Neutral && !r.IsGhostRole),
@@ -27,6 +28,7 @@ internal static class RoleGuide
     private static int tab;
     private static int selected = -1;
     private static Vector2 scroll;
+    private static VanillaRoleEntry selectedVanilla; // im Reiter "Diese Runde": gewaehlte Rolle aus dem Spiel
     private static GUIStyle body;
 
     private static bool Available =>
@@ -48,8 +50,10 @@ internal static class RoleGuide
         var own = RoleRegistry.GetDisplayed(PlayerControl.LocalPlayer).FirstOrDefault();
         if (own == null) return;
         selected = RoleRegistry.Roles.IndexOf(own);
+        tab = 0; // "Diese Runde" zuerst - dort steht die eigene Rolle auch
         for (int i = 0; i < Tabs.Length; i++)
-            if (Tabs[i].Filter(own)) tab = i;
+            if (Tabs[i].Filter(own)) { tab = i; break; }
+        selectedVanilla = null;
         scroll = Vector2.zero;
     }
 
@@ -86,38 +90,66 @@ internal static class RoleGuide
         float tx = win.x + 30;
         for (int i = 0; i < Tabs.Length; i++)
         {
-            if (GUI.Button(new Rect(tx, win.y + 88, 180, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), i == tab ? Ui.TabSelected : Ui.Tab))
+            if (GUI.Button(new Rect(tx, win.y + 88, 200, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), i == tab ? Ui.TabSelected : Ui.Tab))
             {
                 tab = i;
                 scroll = Vector2.zero;
+                selectedVanilla = null;
                 var first = RoleRegistry.Roles.FirstOrDefault(Tabs[i].Filter);
                 selected = first != null ? RoleRegistry.Roles.IndexOf(first) : -1;
             }
-            tx += 188;
+            tx += 208;
         }
 
         // Links: Liste der Rollen dieses Reiters (scrollt, wenn es viele sind)
         var listBox = new Rect(win.x + 20, win.y + 150, ListWidth + 20, H - 170);
         GUI.Box(listBox, new GUIContent(""), Ui.Inner);
+        bool thisGame = tab == 0;
         var roles = RoleRegistry.Roles.Where(Tabs[tab].Filter).ToList();
+        var vanilla = thisGame ? VanillaRoleEntry.All.Where(v => v.Count > 0).ToList() : new System.Collections.Generic.List<VanillaRoleEntry>();
+        int rows = roles.Count + vanilla.Count + (thisGame ? 1 : 0);
         var view = new Rect(listBox.x + 10, listBox.y + 12, listBox.width - 20, listBox.height - 24);
-        var content = new Rect(0, 0, view.width - 22, Mathf.Max(view.height, roles.Count * RowH));
+        var content = new Rect(0, 0, view.width - 22, Mathf.Max(view.height, rows * RowH));
         scroll = GUI.BeginScrollView(view, scroll, content);
         var local = PlayerControl.LocalPlayer;
-        for (int i = 0; i < roles.Count; i++)
+        float ly = 0;
+        if (thisGame)
         {
-            var role = roles[i];
+            GUI.Label(new Rect(4, ly + 10, content.width, 34), Lang.T("<b>Aktiv in dieser Runde:</b>", "<b>Active this game:</b>"), Ui.Small);
+            ly += RowH;
+        }
+        foreach (var role in roles)
+        {
             int index = RoleRegistry.Roles.IndexOf(role);
             string text = role.Count.Int == 0 ? $"<color=#8A8F9C>{role.Name}</color>" : role.ColoredName;
+            if (thisGame) text += $"  <color=#9AA0AE>{role.Count.Int}x · {role.Chance.Int}%</color>";
             if (RoleRegistry.Has(local, role) && !role.IsSecret(local)) text += Lang.T("  <color=#FFFFFF>(du)</color>", "  <color=#FFFFFF>(you)</color>");
-            if (GUI.Button(new Rect(0, i * RowH, content.width, RowH - 6), new GUIContent(text), index == selected ? Ui.Selected : Ui.ButtonStyle))
+            if (GUI.Button(new Rect(0, ly, content.width, RowH - 6), new GUIContent(text), index == selected && selectedVanilla == null ? Ui.Selected : Ui.ButtonStyle))
+            {
                 selected = index;
+                selectedVanilla = null;
+            }
+            ly += RowH;
         }
+        foreach (var v in vanilla)
+        {
+            string text = $"<color=#{ColorUtility.ToHtmlStringRGB(v.Color)}>{v.Name}</color>  <color=#9AA0AE>{v.Summary.Replace(", ", " · ")}</color>";
+            if (GUI.Button(new Rect(0, ly, content.width, RowH - 6), new GUIContent(text), v == selectedVanilla ? Ui.Selected : Ui.ButtonStyle))
+                selectedVanilla = v;
+            ly += RowH;
+        }
+        if (thisGame && rows == 1)
+            GUI.Label(new Rect(4, ly, content.width, 40), Lang.T("Keine Sonderrollen eingeschaltet.", "No special roles enabled."), Ui.Small);
         GUI.EndScrollView();
 
         // Rechts: Details
         var detailBox = new Rect(listBox.xMax + 14, listBox.y, win.xMax - listBox.xMax - 34, listBox.height);
         GUI.Box(detailBox, new GUIContent(""), Ui.Inner);
+        if (selectedVanilla != null && thisGame)
+        {
+            DrawVanillaDetails(selectedVanilla, new Rect(detailBox.x + 24, detailBox.y + 18, detailBox.width - 48, detailBox.height - 36));
+            return;
+        }
         if (selected < 0 || selected >= RoleRegistry.Roles.Count || !Tabs[tab].Filter(RoleRegistry.Roles[selected]))
         {
             GUI.Label(new Rect(detailBox.x + 24, detailBox.y + 20, detailBox.width - 48, 40),
@@ -125,6 +157,24 @@ internal static class RoleGuide
             return;
         }
         DrawDetails(RoleRegistry.Roles[selected], new Rect(detailBox.x + 24, detailBox.y + 18, detailBox.width - 48, detailBox.height - 36));
+    }
+
+    private static void DrawVanillaDetails(VanillaRoleEntry v, Rect area)
+    {
+        Ui.Header.normal.textColor = v.Color;
+        GUI.Label(new Rect(area.x, area.y, area.width, 44), v.Name, Ui.Header);
+        Ui.Header.normal.textColor = Color.white;
+        string team = v.IsImpostor ? "<color=#FF1919>Impostor</color>" : "<color=#8CFFFF>Crew</color>";
+        GUI.Label(new Rect(area.x, area.y + 46, area.width, 30), $"Team: {team}  <color=#9AA0AE>{Lang.T("(Rolle aus dem Spiel)", "(role from the game)")}</color>", Ui.Small);
+        GUI.Label(new Rect(area.x, area.y + 76, area.width, 30), $"<color=#5BE35B>{Lang.T("Eingeschaltet", "Enabled")}</color> ({v.Summary})", Ui.Small);
+        float h = body.CalcHeight(new GUIContent(v.Description), area.width);
+        GUI.Label(new Rect(area.x, area.y + 120, area.width, h), v.Description, body);
+        float y = area.y + 140 + h;
+        foreach (var setting in v.Settings.Skip(2)) // Anzahl/Chance stehen schon oben
+        {
+            GUI.Label(new Rect(area.x + 20, y, area.width - 20, 30), $"{setting.Name}: <b>{setting.Display}</b>", Ui.Small);
+            y += 30;
+        }
     }
 
     private static void DrawDetails(CustomRole role, Rect area)

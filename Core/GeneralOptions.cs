@@ -22,7 +22,7 @@ public static class GeneralOptions
     public static RoleOption MaxNeutralRoles { get; private set; }
     public static RoleOption MaxModifiers { get; private set; }
 
-    /// <summary>Halloween-Design fuer Map und Lobby (Kuerbisse, Geister, Farbstimmung).</summary>
+    /// <summary>Design fuer Map und Lobby: 0 = Standard, 1 = Halloween (Kuerbisse, Geister, Farbstimmung). Weitere Designs bekommen die naechsten Nummern.</summary>
     public static RoleOption Halloween { get; private set; }
 
     /// <summary>Wer letzte Runde zuerst getoetet wurde, ist in der naechsten Runde bis zum ersten Meeting geschuetzt.</summary>
@@ -40,7 +40,8 @@ public static class GeneralOptions
         MaxImpostorRoles = Add(config, "MaxImpostorRoles", "Max. Impostor-Rollen (0 = egal)|Max. impostor roles (0 = any)", 0, 0, 3, 1);
         MaxNeutralRoles = Add(config, "MaxNeutralRoles", "Max. Neutrale (0 = egal)|Max. neutral roles (0 = any)", 0, 0, 15, 1);
         MaxModifiers = Add(config, "MaxModifiers", "Max. Anpassungen (0 = egal)|Max. modifiers (0 = any)", 0, 0, 15, 1);
-        Halloween = Add(config, "Halloween", "Halloween-Design|Halloween theme", 0, 0, 1, 1, "", true);
+        Halloween = Add(config, "Halloween", "Design|Theme", 0, 0, 1, 1); // Schluessel bleibt "Halloween", damit alte Einstellungen gelten
+        Halloween.ValueNames = new[] { "Standard|Default", "Halloween|Halloween" };
         FirstDeathShield = Add(config, "FirstDeathShield", "Schutz für die ersten Toten|Shield for first deaths", 0, 0, 1, 1, "", true);
         TaskSheriffChance = Add(config, "TaskSheriffChance", "Sheriff-Chance nach allen Aufgaben|Sheriff chance after all tasks", 0, 0, 100, 10, "%");
     }

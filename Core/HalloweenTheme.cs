@@ -29,7 +29,7 @@ internal static class HalloweenTheme
         GameObject root = ShipStatus.Instance ? ShipStatus.Instance.gameObject
             : LobbyBehaviour.Instance ? LobbyBehaviour.Instance.gameObject
             : null;
-        bool enabled = GeneralOptions.Halloween.Bool && root;
+        bool enabled = GeneralOptions.Halloween.Int == 1 && root; // Design "Halloween"
         IntPtr target = enabled ? root.Pointer : IntPtr.Zero;
 
         if (target != appliedTo)

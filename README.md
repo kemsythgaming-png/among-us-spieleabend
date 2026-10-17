@@ -78,7 +78,7 @@ Nur Sheriff und Jester sind standardmäßig an (Anzahl 1). Alle anderen stellt d
 - **Max. Crew-/Impostor-/Neutrale/Anpassungen** pro Runde (0 = keine Grenze).
 - **Sheriff-Chance nach allen Aufgaben** (Standard: 0 % = aus): Erledigt ein normaler Crewmate ohne Mod-Rolle alle Aufgaben, wird er mit dieser Chance zum Sheriff.
 - **Schutz für die ersten Toten** (Standard: aus): Wer in einer Runde als Erstes getötet wurde (mehrere, wenn sie innerhalb einer Sekunde sterben), bekommt in der nächsten Runde einen goldenen Schild, den alle sehen. Bis zum ersten Meeting scheitert jeder Angriff auf ihn. Rausgevotet werden zählt nicht.
-- **Halloween-Design** (Standard: aus, im F1-Fenster unter „Allgemein“ einschaltbar): düster-lila Farbstimmung, dunkler Weltraum, flackernde Kürbisse neben den Vents (in der Lobby an den Spawnpunkten) und schwebende Geister an Aufgaben. Funktioniert auf jeder Map. Der Host schaltet es für alle ein oder aus, auch live in der Lobby. Alle Grafiken werden per Code erzeugt, es gibt keine Bilddateien (`Core/HalloweenTheme.cs`).
+- **Design „Halloween“** (Standard: aus, im F1-Fenster unter „Allgemein“ einschaltbar): düster-lila Farbstimmung, dunkler Weltraum, flackernde Kürbisse neben den Vents (in der Lobby an den Spawnpunkten) und schwebende Geister an Aufgaben. Funktioniert auf jeder Map. Der Host schaltet es für alle ein oder aus, auch live in der Lobby. Alle Grafiken werden per Code erzeugt, es gibt keine Bilddateien (`Core/HalloweenTheme.cs`).
 
 Zusätzlich hat jede Rolle ihre eigene **Anzahl** und **Wahrscheinlichkeit**, jeder Platz wird einzeln ausgewürfelt.
 

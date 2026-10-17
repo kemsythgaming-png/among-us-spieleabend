@@ -154,7 +154,7 @@ public class RoleButton
         if (ready) ui.SetEnabled();
         else ui.SetDisabled();
 
-        if (Hotkey != KeyCode.None && Input.GetKeyDown(Hotkey)) Click();
+        if (Hotkey != KeyCode.None && Input.GetKeyDown(Hotkey) && !Ui.IsTyping) Click();
     }
 
     private int shownUses = int.MinValue;

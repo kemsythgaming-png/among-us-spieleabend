@@ -14,3 +14,11 @@ internal static class PassiveButtonClickUpPatch
 {
     public static bool Prefix() => !Ui.IsMouseBlocked();
 }
+
+/// <summary>Waehrend man im Suchfeld tippt, bewegt sich die Spielfigur nicht (WASD wuerde sonst mitlaufen).</summary>
+[HarmonyLib.HarmonyPatch(typeof(KeyboardJoystick), nameof(KeyboardJoystick.Update))]
+[HarmonyLib.HarmonyPriority(HarmonyLib.Priority.First)]
+internal static class TypingBlocksMovementPatch
+{
+    public static bool Prefix() => !Ui.IsTyping;
+}

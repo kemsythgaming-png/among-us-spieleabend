@@ -32,7 +32,7 @@ public class SettingsWindow : MonoBehaviour
         // Pflicht laut Among Us Mod Policy: Mod-Stempel oben rechts immer anzeigen
         if (ModManager.InstanceExists) ModManager.Instance.ShowModStamp();
 
-        if (Input.GetKeyDown(KeyCode.F2)) RoleGuide.Toggle();
+        if (Input.GetKeyDown(KeyCode.F2) && !Ui.IsTyping) RoleGuide.Toggle();
         SettingsPanel.UpdateInput();
     }
 
@@ -66,24 +66,36 @@ public class SettingsWindow : MonoBehaviour
 /// </summary>
 internal static class SettingsPanel
 {
-    private const float W = 1160f, H = 800f, Row = 50f;
+    private const float W = 1160f, H = 800f, Row = 50f, ControlWidth = 280f, ValueWidth = 170f;
 
-    private enum TabKind { General, Game, GameRoles, ModRoles }
+    private enum TabKind { General, Game, Roles }
 
     private static readonly (string Label, TabKind Kind, RoleTeam Team)[] Tabs =
     {
         ("Allgemein|General", TabKind.General, default),
         ("Spiel|Game", TabKind.Game, default),
-        ("Spiel-Rollen|Game roles", TabKind.GameRoles, default),
-        ("Crew", TabKind.ModRoles, RoleTeam.Crewmate),
-        ("Impostor", TabKind.ModRoles, RoleTeam.Impostor),
-        ("Neutral", TabKind.ModRoles, RoleTeam.Neutral),
-        ("Anpassungen|Modifiers", TabKind.ModRoles, RoleTeam.Modifier),
+        ("Crew", TabKind.Roles, RoleTeam.Crewmate),
+        ("Impostor", TabKind.Roles, RoleTeam.Impostor),
+        ("Neutral", TabKind.Roles, RoleTeam.Neutral),
+        ("Anpassungen|Modifiers", TabKind.Roles, RoleTeam.Modifier),
     };
 
     private static bool open;
     private static int tab;
     private static int selected;
+    private static string search = "";
+    private static Vector2 listScroll, detailScroll;
+
+    /// <summary>Ein Eintrag in der Rollen-Liste: Mod-Rolle, Rolle aus dem Spiel, Zwischenueberschrift oder (bei der Suche) eine einzelne Einstellung.</summary>
+    private sealed class Entry
+    {
+        public string Label;
+        public string Name;
+        public Color Color = Color.white;
+        public string Description = "";
+        public List<ISetting> Settings = new();
+        public bool IsHeader;
+    }
 
     /// <summary>Fenster auf/zu (Knopf oben rechts oder F1).</summary>
     public static void Toggle()
@@ -91,9 +103,14 @@ internal static class SettingsPanel
         if (!SettingsWindow.Available) return;
         open = !open;
         if (open) RoleGuide.Close(); // nie zwei Fenster uebereinander
+        else Ui.StopTyping();
     }
 
-    public static void Close() => open = false;
+    public static void Close()
+    {
+        if (open) Ui.StopTyping();
+        open = false;
+    }
 
     public static void UpdateInput()
     {
@@ -102,7 +119,7 @@ internal static class SettingsPanel
             open = false;
             return;
         }
-        if (Input.GetKeyDown(KeyCode.F1)) Toggle();
+        if (Input.GetKeyDown(KeyCode.F1) && !Ui.IsTyping) Toggle();
     }
 
     public static void Draw()
@@ -124,30 +141,54 @@ internal static class SettingsPanel
         var win = new Rect((Ui.ScreenWidth - W) / 2f, (1080 - H) / 2f, W, H);
         GUI.Box(win, new GUIContent(""), Ui.Panel);
         Ui.Block(win);
-        GUI.Label(new Rect(win.x + 30, win.y + 18, W - 120, 44), $"{Plugin.Name} - {Lang.T("Einstellungen", "Settings")}", Ui.Title);
-        if (GUI.Button(new Rect(win.xMax - 74, win.y + 18, 52, 52), new GUIContent("X"), Ui.CloseButton)) open = false;
+        GUI.Label(new Rect(win.x + 30, win.y + 18, W - 520, 44), $"{Plugin.Name} - {Lang.T("Einstellungen", "Settings")}", Ui.Title);
+        if (GUI.Button(new Rect(win.xMax - 74, win.y + 18, 52, 52), new GUIContent("X"), Ui.CloseButton))
+        {
+            Close();
+            return;
+        }
+
+        // Suchfeld oben rechts
+        var searchRect = new Rect(win.xMax - 74 - 350, win.y + 22, 336, 46);
+        string before = search;
+        search = Ui.SearchField(searchRect, search, Lang.T("Suchen ...", "Search ..."));
+        if (search != before)
+        {
+            selected = 0;
+            listScroll = detailScroll = Vector2.zero;
+        }
+
         if (!SettingsWindow.CanEdit)
-            GUI.Label(new Rect(win.x + 30, win.y + 58, W - 60, 30), Lang.T("Nur der Host kann die Einstellungen ändern.", "Only the host can change the settings."), Ui.Small);
+            GUI.Label(new Rect(win.x + 30, win.y + 60, W - 520, 30), Lang.T("Nur der Host kann die Einstellungen ändern.", "Only the host can change the settings."), Ui.Small);
 
         float tx = win.x + 30;
         for (int i = 0; i < Tabs.Length; i++)
         {
-            if (GUI.Button(new Rect(tx, win.y + 92, 150, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), i == tab ? Ui.TabSelected : Ui.Tab))
+            bool active = i == tab && search.Length == 0;
+            if (GUI.Button(new Rect(tx, win.y + 92, 176, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), active ? Ui.TabSelected : Ui.Tab))
             {
                 tab = i;
                 selected = 0;
+                search = "";
+                Ui.StopTyping();
+                listScroll = detailScroll = Vector2.zero;
             }
-            tx += 157;
+            tx += 182;
         }
 
         GUI.Box(new Rect(win.x + 20, win.y + 150, W - 40, H - 170), new GUIContent(""), Ui.Inner);
         var area = new Rect(win.x + 30, win.y + 165, W - 60, H - 195);
+
+        if (search.Length > 0)
+        {
+            DrawEntries(area, SearchResults(search.Trim()));
+            return;
+        }
         switch (Tabs[tab].Kind)
         {
             case TabKind.General: DrawGeneral(area); break;
             case TabKind.Game: DrawGame(area); break;
-            case TabKind.GameRoles: DrawGameRoles(area); break;
-            default: DrawModRoles(area, Tabs[tab].Team); break;
+            default: DrawEntries(area, TeamEntries(Tabs[tab].Team)); break;
         }
     }
 
@@ -165,14 +206,14 @@ internal static class SettingsPanel
         }
 
         // Rechts daneben: Hinweis und (im Freeplay) der Test-Bereich - nie ueber den Einstellungen
-        var side = new Rect(area.x + 720, area.y, area.width - 730, area.height);
-        GUI.Label(new Rect(side.x, side.y, side.width, 90),
-            Lang.T("Mod-Rollen gehen nur an normale Crewmates/Impostor - die Rollen aus dem Spiel (Reiter \"Spiel-Rollen\") bleiben unverändert.",
-                   "Mod roles only go to plain crewmates/impostors - the game's own roles (tab \"Game roles\") stay unchanged."), Ui.Small);
+        var side = new Rect(area.x + 760, area.y, area.width - 770, area.height);
+        GUI.Label(new Rect(side.x, side.y, side.width, 110),
+            Lang.T("Mod-Rollen gehen nur an normale Crewmates/Impostor - die Rollen aus dem Spiel (in den Reitern Crew/Impostor unten) bleiben unverändert.",
+                   "Mod roles only go to plain crewmates/impostors - the game's own roles (bottom of the Crew/Impostor tabs) stay unchanged."), Ui.Small);
 
         if (FreeplayTest.IsFreeplay)
         {
-            var box = new Rect(side.x - 10, side.y + 110, side.width + 10, 150);
+            var box = new Rect(side.x - 10, side.y + 130, side.width + 10, 150);
             GUI.Box(box, new GUIContent(""), Ui.Panel);
             DrawFreeplay(new Rect(box.x + 18, box.y + 12, box.width - 36, 130));
         }
@@ -183,67 +224,120 @@ internal static class SettingsPanel
         // Zwei Spalten
         var settings = VanillaGameSettings.All;
         int perColumn = (settings.Count + 1) / 2;
+        float columnWidth = area.width / 2f;
         for (int i = 0; i < settings.Count; i++)
         {
-            float x = area.x + (i < perColumn ? 0 : area.width / 2f + 10);
+            float x = area.x + (i < perColumn ? 0 : columnWidth + 10);
             float y = area.y + (i % perColumn) * Row;
-            DrawSetting(settings[i], x, y, 270);
+            DrawSetting(settings[i], x, y, columnWidth - ControlWidth - 30);
         }
     }
 
-    private static void DrawGameRoles(Rect area)
+    /// <summary>Rollen eines Teams: zuerst die Mod-Rollen, darunter die Rollen aus dem Spiel.</summary>
+    private static List<Entry> TeamEntries(RoleTeam team)
     {
-        var roles = VanillaRoleEntry.All;
-        selected = Mathf.Clamp(selected, 0, roles.Count - 1);
-
-        float y = area.y;
-        for (int i = 0; i < roles.Count; i++)
+        var list = RoleRegistry.Roles.Where(r => r.Team == team).Select(FromRole).ToList();
+        if (team is RoleTeam.Crewmate or RoleTeam.Impostor)
         {
-            var r = roles[i];
-            string label = $"<color=#{ColorUtility.ToHtmlStringRGB(r.Color)}>{r.Name}</color>  ({r.Summary})";
-            if (Ui.Button(new Rect(area.x, y, 340, 44), label, i == selected)) selected = i;
-            y += 49;
+            var vanilla = VanillaRoleEntry.All.Where(v => v.IsImpostor == (team == RoleTeam.Impostor)).ToList();
+            if (vanilla.Count > 0)
+            {
+                list.Add(new Entry { IsHeader = true, Label = Lang.T("Rollen aus dem Spiel", "Roles from the game") });
+                list.AddRange(vanilla.Select(FromVanilla));
+            }
         }
-
-        var role = roles[selected];
-        DrawDetailHeader(new Rect(area.x + 370, area.y, area.width - 370, 110), role.Name, role.Color, role.Description);
-        y = area.y + 110;
-        foreach (var setting in role.Settings)
-        {
-            DrawSetting(setting, area.x + 370, y, 340);
-            y += Row;
-        }
+        return list;
     }
 
-    private static void DrawModRoles(Rect area, RoleTeam team)
+    /// <summary>Suche ueber alle Rollen (Mod und Spiel) und alle allgemeinen/Spiel-Einstellungen.</summary>
+    private static List<Entry> SearchResults(string text)
     {
-        var roles = RoleRegistry.Roles.Where(r => r.Team == team).ToList();
-        if (roles.Count == 0)
+        bool Match(string s) => !string.IsNullOrEmpty(s) && s.IndexOf(text, System.StringComparison.OrdinalIgnoreCase) >= 0;
+        var list = new List<Entry>();
+        list.AddRange(RoleRegistry.Roles.Where(r => Match(r.Name) || Match(r.Description)).Select(FromRole));
+        list.AddRange(VanillaRoleEntry.All.Where(v => Match(v.Name) || Match(v.Description)).Select(FromVanilla));
+
+        var settings = new List<(ISetting Setting, string Where)> { (Lang.LanguageSetting, Lang.T("Allgemein", "General")) };
+        settings.AddRange(GeneralOptions.Options.Select(o => ((ISetting)o, Lang.T("Allgemein", "General"))));
+        settings.AddRange(VanillaGameSettings.All.Select(o => (o, Lang.T("Spiel", "Game"))));
+        foreach (var (setting, where) in settings.Where(s => Match(s.Setting.Name)))
+            list.Add(new Entry
+            {
+                Label = $"{setting.Name}  <color=#9AA0AE>({where})</color>",
+                Name = setting.Name,
+                Description = Lang.T($"Einstellung im Reiter \"{where}\".", $"Setting in the \"{where}\" tab."),
+                Settings = { setting },
+            });
+        return list;
+    }
+
+    private static Entry FromRole(CustomRole r) => new()
+    {
+        Label = $"{r.ColoredName}  <color=#9AA0AE>({r.Count.Int}x, {r.Chance.Int}%)</color>",
+        Name = r.Name,
+        Color = r.NameColor,
+        Description = r.Description,
+        Settings = r.Options.Cast<ISetting>().ToList(),
+    };
+
+    private static Entry FromVanilla(VanillaRoleEntry v) => new()
+    {
+        Label = $"<color=#{ColorUtility.ToHtmlStringRGB(v.Color)}>{v.Name}</color>  <color=#9AA0AE>({v.Summary})</color>",
+        Name = v.Name,
+        Color = v.Color,
+        Description = v.Description,
+        Settings = v.Settings,
+    };
+
+    /// <summary>Links die Liste (scrollt), rechts Name, Beschreibung und Einstellungen des gewaehlten Eintrags.</summary>
+    private static void DrawEntries(Rect area, List<Entry> entries)
+    {
+        if (entries.Count(e => !e.IsHeader) == 0)
         {
-            GUI.Label(new Rect(area.x, area.y, 600, 40), Lang.T("Keine Rollen in diesem Team.", "No roles in this team."), Ui.Text);
+            GUI.Label(new Rect(area.x, area.y, 700, 40), search.Length > 0 ? Lang.T("Nichts gefunden.", "Nothing found.") : Lang.T("Keine Rollen in diesem Team.", "No roles in this team."), Ui.Text);
             return;
         }
-        selected = Mathf.Clamp(selected, 0, roles.Count - 1);
+        var clickable = entries.Where(e => !e.IsHeader).ToList();
+        selected = Mathf.Clamp(selected, 0, clickable.Count - 1);
 
-        // Bei vielen Rollen (z. B. Anpassungen) werden die Zeilen schmaler, damit alles ins Fenster passt
-        float rowH = Mathf.Min(49f, area.height / roles.Count);
-        float y = area.y;
-        for (int i = 0; i < roles.Count; i++)
+        const float listWidth = 380f, rowH = 50f;
+        var view = new Rect(area.x, area.y, listWidth, area.height);
+        var content = new Rect(0, 0, listWidth - 22, Mathf.Max(view.height, entries.Count * rowH));
+        listScroll = GUI.BeginScrollView(view, listScroll, content);
+        float y = 0;
+        int index = 0;
+        foreach (var e in entries)
         {
-            var r = roles[i];
-            string label = $"{r.ColoredName}  ({r.Count.Int}x, {r.Chance.Int}%)";
-            if (Ui.Button(new Rect(area.x, y, 340, rowH - 5f), label, i == selected)) selected = i;
+            if (e.IsHeader)
+            {
+                GUI.Label(new Rect(4, y + 12, content.width, 34), $"<b>{e.Label}</b>", Ui.Small);
+                y += rowH;
+                continue;
+            }
+            int my = index++;
+            if (GUI.Button(new Rect(0, y, content.width, rowH - 6), new GUIContent(e.Label), my == selected ? Ui.Selected : Ui.ButtonStyle))
+            {
+                selected = my;
+                detailScroll = Vector2.zero;
+            }
             y += rowH;
         }
+        GUI.EndScrollView();
 
-        var role = roles[selected];
-        DrawDetailHeader(new Rect(area.x + 370, area.y, area.width - 370, 110), role.Name, role.NameColor, role.Description);
-        y = area.y + 110;
-        foreach (var option in role.Options)
+        var entry = clickable[selected];
+        float dx = area.x + listWidth + 24, dw = area.xMax - dx;
+        DrawDetailHeader(new Rect(dx, area.y, dw, 110), entry.Name, entry.Color, entry.Description);
+
+        var detailView = new Rect(dx, area.y + 112, dw, area.height - 112);
+        var detailContent = new Rect(0, 0, dw - 22, Mathf.Max(detailView.height, entry.Settings.Count * Row));
+        detailScroll = GUI.BeginScrollView(detailView, detailScroll, detailContent);
+        float sy = 0;
+        foreach (var setting in entry.Settings)
         {
-            DrawSetting(option, area.x + 370, y, 340);
-            y += Row;
+            DrawSetting(setting, 0, sy, detailContent.width - ControlWidth - 20);
+            sy += Row;
         }
+        GUI.EndScrollView();
     }
 
     // ---------- Bausteine ----------
@@ -253,24 +347,32 @@ internal static class SettingsPanel
         Ui.Header.normal.textColor = color;
         GUI.Label(new Rect(area.x, area.y, area.width, 40), name, Ui.Header);
         Ui.Header.normal.textColor = Color.white;
-        GUI.Label(new Rect(area.x, area.y + 42, area.width, 60), description, Ui.Small);
+        GUI.Label(new Rect(area.x, area.y + 42, area.width, 66), description, Ui.Small);
     }
 
+    /// <summary>Eine Einstellung: Name links (bei langen Namen kleiner und umgebrochen), rechts -/Wert/+ oder ein An/Aus-Knopf.</summary>
     private static void DrawSetting(ISetting setting, float x, float y, float labelWidth)
     {
-        GUI.Label(new Rect(x, y + 7, labelWidth, 40), setting.Name, Ui.Text);
+        var name = new GUIContent(setting.Name);
+        if (Ui.Text.CalcSize(name).x <= labelWidth) GUI.Label(new Rect(x, y + 7, labelWidth, 40), name, Ui.Text);
+        else GUI.Label(new Rect(x, y - 2, labelWidth, 50), name, Ui.LabelWrap);
+
         float cx = x + labelWidth + 10;
         bool canEdit = SettingsWindow.CanEdit || setting.AlwaysEditable;
 
         if (setting.IsToggle)
         {
-            if (Ui.Button(new Rect(cx, y, 230, 44), setting.Display, setting.Bool) && canEdit) setting.Change(1);
+            if (Ui.Button(new Rect(cx, y, ControlWidth, 44), setting.Display, setting.Bool) && canEdit) setting.Change(1);
             return;
         }
 
         if (Ui.Button(new Rect(cx, y, 50, 44), "-") && canEdit) setting.Change(-1);
-        GUI.Label(new Rect(cx + 55, y + 7, 120, 40), setting.Display, Ui.Header);
-        if (Ui.Button(new Rect(cx + 180, y, 50, 44), "+") && canEdit) setting.Change(1);
+        // Wert: so gross wie moeglich, ohne abgeschnitten zu werden
+        var value = new GUIContent(setting.Display);
+        var style = Ui.ValueBig.CalcSize(value).x <= ValueWidth ? Ui.ValueBig
+                  : Ui.ValueMid.CalcSize(value).x <= ValueWidth ? Ui.ValueMid : Ui.ValueSmall;
+        GUI.Label(new Rect(cx + 55, y, ValueWidth, 44), value, style);
+        if (Ui.Button(new Rect(cx + 55 + ValueWidth + 5, y, 50, 44), "+") && canEdit) setting.Change(1);
     }
 
     private static void DrawFreeplay(Rect area)
@@ -338,7 +440,22 @@ public static class Ui
     public static bool Button(Rect rect, string label, bool selected) => GUI.Button(rect, new GUIContent(label), selected ? Selected : ButtonStyle);
 
     /// <summary>Innenflaeche (z. B. Liste oder Detailbereich) im selben Stil, etwas heller.</summary>
-    public static GUIStyle Inner, Tab, TabSelected, CloseButton;
+    public static GUIStyle Inner, Tab, TabSelected, CloseButton, LabelWrap, ValueBig, ValueMid, ValueSmall, SearchStyle;
+
+    /// <summary>Tippt gerade jemand in ein Textfeld (Suche)? Dann gehen Tasten nicht ans Spiel.</summary>
+    public static bool IsTyping => GUIUtility.keyboardControl != 0;
+
+    public static void StopTyping() => GUIUtility.keyboardControl = 0;
+
+    /// <summary>Suchfeld mit Platzhalter-Text und Lupe.</summary>
+    public static string SearchField(Rect rect, string text, string placeholder)
+    {
+        text = GUI.TextField(rect, text ?? "", 40, SearchStyle);
+        if (string.IsNullOrEmpty(text) && !IsTyping)
+            GUI.Label(new Rect(rect.x + 16, rect.y + 7, rect.width - 20, rect.height - 10), $"<color=#8A90A0>{placeholder}</color>", Text);
+        if (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape) StopTyping();
+        return text;
+    }
     private static Font gameFont;
 
     private static void InitStyles()
@@ -387,6 +504,25 @@ public static class Ui
         TabSelected = new GUIStyle(Tab);
         TabSelected.normal.background = selectedTex;
         TabSelected.hover.background = selectedTex;
+
+        LabelWrap = MakeLabel(19, FontStyle.Normal);
+        LabelWrap.wordWrap = true;
+        LabelWrap.alignment = TextAnchor.MiddleLeft;
+        ValueBig = MakeLabel(28, FontStyle.Bold);
+        ValueMid = MakeLabel(23, FontStyle.Bold);
+        ValueSmall = MakeLabel(18, FontStyle.Bold);
+        ValueSmall.wordWrap = true;
+        foreach (var v in new[] { ValueBig, ValueMid, ValueSmall }) v.alignment = TextAnchor.MiddleCenter;
+
+        SearchStyle = new GUIStyle(GUI.skin.textField) { fontSize = 24, border = Offset(18), padding = Offset(10) };
+        if (gameFont) SearchStyle.font = gameFont;
+        SearchStyle.normal.background = innerTex;
+        SearchStyle.hover.background = innerTex;
+        SearchStyle.focused.background = selectedTex;
+        SearchStyle.normal.textColor = Color.white;
+        SearchStyle.hover.textColor = Color.white;
+        SearchStyle.focused.textColor = Color.white;
+        SearchStyle.padding.left = 16;
 
         CloseButton = new GUIStyle(ButtonStyle) { fontSize = 26, fontStyle = FontStyle.Bold, border = Offset(24) };
         CloseButton.normal.background = closeTex;

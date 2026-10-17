@@ -50,7 +50,12 @@ public class RoleOption : ISetting
     public int Int => Mathf.RoundToInt(Value);
     public bool Bool => Value >= 0.5f;
 
-    public string Display => IsToggle ? (Bool ? Lang.T("An", "On") : Lang.T("Aus", "Off")) : $"{Value:0.##}{Suffix}";
+    /// <summary>Optional: Namen statt Zahlen ("Deutsch|English" je Wert ab Min), z. B. beim Design.</summary>
+    public string[] ValueNames;
+
+    public string Display => IsToggle ? (Bool ? Lang.T("An", "On") : Lang.T("Aus", "Off"))
+        : ValueNames != null && Int >= 0 && Int < ValueNames.Length ? Lang.Pick(ValueNames[Int])
+        : $"{Value:0.##}{Suffix}";
 
     /// <summary>Nur Host: Wert um einen Schritt erhoehen/verringern.</summary>
     public void Change(int direction)
