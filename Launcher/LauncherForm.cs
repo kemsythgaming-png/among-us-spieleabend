@@ -30,6 +30,19 @@ internal sealed class LauncherForm : Form
             AutoSize = true,
             Location = new Point(20, 18),
         };
+
+        // Version des Launchers oben rechts - so sieht man, ob man die neueste EXE hat
+        var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        Text = $"Among Us Spieleabend {ver.Major}.{ver.Minor}.{ver.Build}";
+        var versionLabel = new Label
+        {
+            Text = $"v{ver.Major}.{ver.Minor}.{ver.Build}",
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = Color.FromArgb(150, 150, 165),
+            AutoSize = true,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(ClientSize.Width - 70, 26),
+        };
         status = new Label
         {
             Text = "Starte ...",
@@ -46,6 +59,7 @@ internal sealed class LauncherForm : Form
             MarqueeAnimationSpeed = 30,
         };
         Controls.Add(title);
+        Controls.Add(versionLabel);
         Controls.Add(status);
         Controls.Add(progress);
     }

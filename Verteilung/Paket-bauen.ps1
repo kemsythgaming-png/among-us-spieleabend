@@ -48,8 +48,8 @@ $modZip = Join-Path $projekt 'dist\ModPackage.zip'
 if (Test-Path $modZip) { Remove-Item $modZip -Force }
 [IO.Compression.ZipFile]::CreateFromDirectory($mod, $modZip)
 
-dotnet build (Join-Path $projekt 'Uninstaller\Uninstaller.csproj') -c Release | Out-Null
-dotnet build (Join-Path $projekt 'Launcher\Launcher.csproj') -c Release | Out-Null
+dotnet build (Join-Path $projekt 'Uninstaller\Uninstaller.csproj') -c Release -p:Version="$version" | Out-Null
+dotnet build (Join-Path $projekt 'Launcher\Launcher.csproj') -c Release -p:Version="$version" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Launcher-Build fehlgeschlagen' }
 # Ohne Leerzeichen/Punkte im Namen (GitHub macht aus Leerzeichen sonst Punkte)
 $launcher = Join-Path $projekt 'dist\AmongUsSpieleabend-Launcher.exe'
