@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Deinstallation: eine kleine EXE, die alles von Among Us Spieleabend entfernt
+    (Mod-Kopie, Spieldaten des Mods, Verknuepfungen, gemerkte Einstellungen, Protokolle).
+    Das normale Among Us aus Steam wird nie angefasst.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>AmongUsSpieleabend-Deinstallieren</AssemblyName>
+    <RootNamespace>Spieleabend.Uninstaller</RootNamespace>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>..\Launcher\launcher.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+</Project>

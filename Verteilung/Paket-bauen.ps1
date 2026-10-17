@@ -36,6 +36,7 @@ $modZip = Join-Path $projekt 'dist\ModPackage.zip'
 if (Test-Path $modZip) { Remove-Item $modZip -Force }
 [IO.Compression.ZipFile]::CreateFromDirectory($mod, $modZip)
 
+dotnet build (Join-Path $projekt 'Uninstaller\Uninstaller.csproj') -c Release | Out-Null
 dotnet build (Join-Path $projekt 'Launcher\Launcher.csproj') -c Release | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Launcher-Build fehlgeschlagen' }
 # Ohne Leerzeichen/Punkte im Namen (GitHub macht aus Leerzeichen sonst Punkte)
@@ -46,3 +47,7 @@ Write-Host "Launcher: $launcher ($([math]::Round((Get-Item $launcher).Length / 1
 # Fuer GitHub-Releases: die Mod-DLL einzeln (der Launcher laedt nur diese Datei bei Updates)
 Copy-Item $dll (Join-Path $projekt 'dist\AmongUsSpieleabend.dll') -Force
 Write-Host "Release-Datei: dist\AmongUsSpieleabend.dll (Version $version)"
+
+# Deinstaller als eigene Datei (auch im Release)
+Copy-Item (Join-Path $projekt 'Uninstaller\bin\Release\net48\AmongUsSpieleabend-Deinstallieren.exe') (Join-Path $projekt 'dist\AmongUsSpieleabend-Deinstallieren.exe') -Force
+Write-Host "Deinstaller: dist\AmongUsSpieleabend-Deinstallieren.exe"

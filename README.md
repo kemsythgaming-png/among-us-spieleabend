@@ -129,6 +129,10 @@ Auf dem Ergebnis-Bildschirm steht oben links jeder Spieler mit seiner Rolle (auc
 
 BepInEx schreibt alles in `Among Us Spieleabend/BepInEx/LogOutput.log` (wird bei jedem Start neu angelegt). Das schwarze Konsolenfenster ist abgeschaltet, das Protokoll läuft trotzdem weiter. Der Launcher schreibt nach `%TEMP%/AmongUsSpieleabend-Launcher.log`.
 
+## Deinstallieren
+
+`AmongUsSpieleabend-Deinstallieren.exe` (liegt im Spielordner und im Release) entfernt alles: jede Mod-Kopie (gemerkter Ordner, `C:\Spieleabend`, neben dem Steam-Spiel, alte Standard-Orte, Ziel der Desktop-Verknüpfung), die Spieldaten des Mods (`AppData\LocalLow\Innersloth\Among Us Spieleabend`), Desktop-Verknüpfungen, den gemerkten Ordner in der Registry und das Launcher-Protokoll. Vorher zeigt er die Liste und fragt nach. Gelöscht werden nur Ordner, die eindeutig eine Mod-Kopie sind - das normale Among Us aus Steam und seine Spieldaten werden nie angefasst.
+
 ## Server
 
 Beim Start trägt der Mod die Modded-Server (**Modded EU**, NA, Asia) automatisch in die Serverliste ein (`Core/ServerSetup.cs`). Beim allerersten Start ist **Modded EU** gleich ausgewählt. Danach bleibt, was man selbst wählt (Weltkugel-Symbol unten rechts im Online-Menü).

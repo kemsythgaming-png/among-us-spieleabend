@@ -21,6 +21,9 @@
   <!-- Der Launcher ist ein eigenes Projekt -->
   <ItemGroup>
     <Compile Remove="Launcher\**" />
+    <Compile Remove="Uninstaller\**" />
+    <EmbeddedResource Remove="Uninstaller\**" />
+    <None Remove="Uninstaller\**" />
     <EmbeddedResource Remove="Launcher\**" />
     <None Remove="Launcher\**" />
   </ItemGroup>

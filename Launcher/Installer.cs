@@ -212,6 +212,18 @@ internal sealed class Installer
         string self = Assembly.GetExecutingAssembly().Location;
         string installed = Path.Combine(target, Config.InstalledLauncherName);
 
+        // Deinstaller in den Spielordner legen (falls im Launcher enthalten)
+        try
+        {
+            using var un = Assembly.GetExecutingAssembly().GetManifestResourceStream("Uninstaller.exe");
+            if (un != null)
+            {
+                using var file = File.Create(Path.Combine(target, "AmongUsSpieleabend-Deinstallieren.exe"));
+                un.CopyTo(file);
+            }
+        }
+        catch (Exception e) { Log.Write("Deinstaller ablegen: " + e.Message); }
+
         // Launcher in den Spielordner kopieren, damit die Verknuepfung immer funktioniert (auch wenn die Download-Datei geloescht wird)
         if (!self.Equals(installed, StringComparison.OrdinalIgnoreCase))
         {

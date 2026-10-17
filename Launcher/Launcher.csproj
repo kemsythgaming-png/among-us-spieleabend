@@ -24,6 +24,7 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="Microsoft.CSharp" />
     <EmbeddedResource Include="..\dist\ModPackage.zip" LogicalName="ModPackage.zip" Condition="Exists('..\dist\ModPackage.zip')" />
+    <EmbeddedResource Include="..\Uninstaller\bin\Release\net48\AmongUsSpieleabend-Deinstallieren.exe" LogicalName="Uninstaller.exe" Condition="Exists('..\Uninstaller\bin\Release\net48\AmongUsSpieleabend-Deinstallieren.exe')" />
   </ItemGroup>
 
 </Project>
