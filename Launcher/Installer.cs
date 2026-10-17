@@ -189,6 +189,13 @@ internal sealed class Installer
         }
     }
 
+    /// <summary>Liest eine Version aus einer kleinen Textdatei (gemerktes Release), oder null.</summary>
+    private static Version ReadVersionFile(string file)
+    {
+        try { return File.Exists(file) && Version.TryParse(File.ReadAllText(file).Trim(), out var v) ? v : null; }
+        catch { return null; }
+    }
+
     /// <summary>Version der Mod-DLL (Datei-Version), oder null.</summary>
     internal static Version ModVersion(string dll)
     {
@@ -208,9 +215,15 @@ internal sealed class Installer
         if (string.IsNullOrEmpty(Config.GitHubRepo)) return;
         status("Suche nach Updates ...");
         string plugin = Path.Combine(target, "BepInEx", "plugins", Config.ModAssetName);
+        string marker = plugin + ".release"; // merkt sich das zuletzt geladene Release (die DLL-Version kann dahinter liegen)
         try
         {
-            var update = GitHubUpdater.CheckForUpdate(Config.GitHubRepo, ModVersion(plugin));
+            // "installiert" = hoechste aus DLL-Version und gemerktem Release - sonst wuerde bei jedem Start neu geladen
+            Version installed = ModVersion(plugin);
+            Version noted = ReadVersionFile(marker);
+            if (noted != null && (installed == null || noted > installed)) installed = noted;
+
+            var update = GitHubUpdater.CheckForUpdate(Config.GitHubRepo, installed);
             if (update == null) return;
 
             status($"Lade Update {update.Version} ...");
@@ -218,6 +231,7 @@ internal sealed class Installer
             GitHubUpdater.Download(update.DownloadUrl, temp);
             File.Copy(temp, plugin, true);
             File.Delete(temp);
+            try { File.WriteAllText(marker, update.Version.ToString()); } catch { }
             status($"Mod auf Version {update.Version} aktualisiert.");
             Thread.Sleep(800);
         }
