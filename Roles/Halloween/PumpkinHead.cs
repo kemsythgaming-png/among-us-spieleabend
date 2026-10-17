@@ -19,15 +19,15 @@ public sealed class PumpkinHead : CustomRole
     public override string IntroText => Lang.T("Hohl, aber unverwundbar", "Hollow, but invincible");
     public override string Description => Lang.T("Setz den Kürbis auf (F):\nunverwundbar, aber fast blind.", "Put on the pumpkin (F):\ninvincible, but almost blind.");
     public override string LongDescription => Lang.T(
-        "Halloween-Crew. Mit Taste F setzt du für ein paar Sekunden einen Kürbis auf. Solange du ihn trägst, kann dich niemand töten.\n\nDafür siehst du nur durch zwei Augenlöcher und sehr wenig. Die anderen sehen dich in der Zeit nur als schwarze Silhouette - ohne Farbe und Namen.",
-        "Halloween crew. Press F to put on a pumpkin for a few seconds. While you wear it, nobody can kill you.\n\nBut you only see through two eye holes and very little. Meanwhile the others only see you as a black silhouette - no color, no name.");
+        "Halloween-Crew. Mit Taste F setzt du für ein paar Sekunden einen Kürbis auf. Solange du ihn trägst, kann dich niemand töten.\n\nDafür siehst du nur, was durch die zwei Augenlöcher passt - der Rest ist Kürbis. Die anderen sehen dich in der Zeit nur als schwarze Silhouette - ohne Farbe und Namen.",
+        "Halloween crew. Press F to put on a pumpkin for a few seconds. While you wear it, nobody can kill you.\n\nBut you only see what fits through the two eye holes - the rest is pumpkin. Meanwhile the others only see you as a black silhouette - no color, no name.");
 
     private const byte ActionOn = 0, ActionBlocked = 1;
     private const int BlackColorId = 6;
 
     internal static PumpkinHead Instance { get; private set; }
 
-    private RoleOption cooldown, duration, vision;
+    private RoleOption cooldown, duration;
 
     // bei allen Clients: wer traegt bis wann einen Kuerbis
     private readonly Dictionary<byte, float> wearingUntil = new();
@@ -42,7 +42,6 @@ public sealed class PumpkinHead : CustomRole
         Instance = this;
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 30f, 10f, 90f, 2.5f, "s");
         duration = AddOption("Duration", "Dauer|Duration", 10f, 3f, 20f, 1f, "s");
-        vision = AddOption("VisionDense", "Sicht mit Kürbis|Vision with pumpkin", 0.25f, 0.1f, 1f, 0.05f, "x");
 
         AddButton(new RoleButton
         {
@@ -73,7 +72,6 @@ public sealed class PumpkinHead : CustomRole
     internal bool Wearing(PlayerControl p) =>
         p && wearingUntil.TryGetValue(p.PlayerId, out float until) && until > Time.time && !InMeeting && IsAlive(p);
 
-    internal float VisionFactor => vision.Value;
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
@@ -220,16 +218,5 @@ public sealed class PumpkinHead : CustomRole
         float d = w - Mathf.Abs(x - cx);
         float edge = Mathf.Min(d, dy + soft, height - dy);
         return Mathf.Clamp01(edge / soft);
-    }
-}
-
-[HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.CalculateLightRadius))]
-internal static class PumpkinVisionPatch
-{
-    public static void Postfix(NetworkedPlayerInfo player, ref float __result)
-    {
-        var ph = PumpkinHead.Instance;
-        if (ph == null || player == null || !player.Object) return;
-        if (ph.Wearing(player.Object)) __result *= ph.VisionFactor;
     }
 }

@@ -17,10 +17,10 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | Rolle | Team | Fähigkeit (Taste) |
 |---|---|---|
 | Sheriff | Crew | Schießt (**Q**). Trifft er einen Impostor, stirbt der Impostor, sonst er selbst. Optionen: Abklingzeit, „Fehlschuss tötet auch Ziel“, „Darf Neutrale erschießen“. |
-| Medic | Crew | Gibt einem Spieler einen Schild (**F**), sichtbar als grüne Schutzblase (nur für Medic und, einstellbar, den Geschützten). Der nächste Angriff scheitert, die Blase platzt mit einem Ring-Effekt. Optionen: Schild bricht, Geschützter sieht Schild, Medic wird benachrichtigt, Schild endet mit Tod des Medics. |
-| Bodyguard | Crew | Bewacht einen Spieler (**F**), sichtbar als blaue Schutzblase, die **nur der Bodyguard** sieht. Bei einem Angriff sterben Bodyguard und Angreifer statt ihm. Option: Schutz endet beim Meeting. |
+| Medic | Crew | Gibt einem Spieler einen Schild (**F**), sichtbar als grüne Schutzblase (für Medic und, einstellbar, den Geschützten). Der nächste Angriff scheitert. Stirbt der Medic, ist der Schild sofort weg. Optionen: Schild bricht, Geschützter sieht Schild, Medic wird gewarnt. |
+| Bodyguard | Crew | Opfert sich für seinen Schützling (**F**, blaue Blase nur für ihn sichtbar): Wird der angegriffen, stirbt der Bodyguard an seiner Stelle und nimmt den Angreifer mit. Stirbt der Bodyguard vorher, ist der Schutz weg. Option: Schutz endet beim Meeting. |
 | Mayor | Crew | Seine Stimme zählt 2–5-fach (einstellbar). |
-| Seer | Crew | Prüft Spieler (**F**) und sieht danach „Gut/Böse/Neutral“ an deren Namen, optional die genaue Rolle. |
+| Seer | Crew | Prüft Spieler (**F**) und sieht danach „Gut“ oder „Böse“ an deren Namen. Neutrale zählen auch als „Böse“ - man weiß also nicht, ob Impostor oder Neutral. |
 | Guter Guesser | Crew | Im Meeting eine Spielerkarte antippen: neben Häkchen und X fährt ein **?-Knopf** aus (nach dem Abstimmen sitzt er direkt auf der Karte). Anklicken, Rolle wählen. Richtig: Der Spieler stirbt sofort ohne Leiche, ohne Meldung (nur Kill-Sound). Falsch: Der Guesser stirbt. Die Rolle muss genau stimmen: „Impostor“ ist nur richtig bei einem Impostor ohne Rolle. Ratbar: Impostor-Rollen, Neutrale, optional Crew-Rollen. Optionen: Schüsse pro Spiel, mehrere pro Meeting. |
 | Camouflager | Impostor | Tarnt alle Spieler für ein paar Sekunden (**F**): grau, ohne Namen und Kosmetik. |
 | Böser Guesser | Impostor | Hat seinen normalen Kill und rät zusätzlich im Meeting wie der Gute Guesser, aber nur Crew-Rollen und Neutrale - und (einstellbar) „Crewmate“, richtig nur bei einem Crewmate ohne Rolle. Andere Impostor kann er nicht anvisieren. |
@@ -31,12 +31,12 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | **Hexe** 🎃 | Impostor | Verflucht Spieler (**F**). Wird sie im nächsten Meeting nicht rausgevotet, sterben danach alle Verfluchten. Verfluchte haben einen violetten Totenkopf hinter dem Namen (Hexe immer, im Meeting einstellbar für alle). |
 | **Zombie** 🎃 | Neutral | Infiziert andere (**F**). Sie werden selbst Zombies, auch Impostor (einstellbar; ein infizierter Impostor verliert seine Impostor-Rolle). Die Zombies gewinnen, wenn alle Lebenden Zombies sind. Solange noch Zombies leben, gewinnt die Crew nicht schon dadurch, dass keine Impostor mehr da sind. |
 | **Vampirjäger** 🎃 | Crew | Hat eine feste Anzahl Pflöcke (**F**, Zahl am Knopf), keine Abklingzeit. Gegen Vampir, Hexe oder Zombie stirbt das Monster, sonst ist nur der Pflock weg. |
-| **Süßigkeiten-Kind** 🎃 | Crew | Nur es sieht Bonbons (Gummi-Crewmates), am Rand von Räumen fern von Aufgaben (garantiert innerhalb der Map) (Anzahl einstellbar, Standard 8). Hat es alle gesammelt: Zuckerrausch - schneller und ein Schild gegen einen Angriff. |
+| **Süßigkeiten-Kind** 🎃 | Crew | Nur es sieht kleine Bonbons (Gummi-Crewmates) am Rand von Räumen, fern von Aufgaben (Anzahl einstellbar, Standard 8). Bei jeder Sabotage springen 2-3 Extra-Bonbons an den Reparatur-Stellen heraus. Hat es genug: Zuckerrausch - schneller und ein Schild gegen einen Angriff. |
 | **Poltergeist** 🎃 | Impostor | Geht für ein paar Sekunden durch Wände (**F**). Steckt er am Ende in einer Wand oder außerhalb der Map, kommt er aus dem nächsten Vent wieder heraus. |
 | **Schwarze Katze** 🎃 | Impostor | Normaler Kill. Im Meeting einmal das Katzen-Symbol an einer Spielerkarte antippen (auch der eigenen): Eine Stimme gegen diesen Spieler zählt nicht. In der Auswertung fehlt dafür der Kopf dieses Wählers - wer aufpasst, merkt es. |
-| **Vogelscheuche** 🎃 | Impostor | Normaler Kill. Stellt eine täuschend echte Kopie eines gewählten Spielers (mit Name) auf (**F**). Wer ihr nahe kommt, erstarrt kurz vor Angst (Impostor nicht). Verschwindet beim nächsten Meeting. |
-| **Laubstreuer** 🎃 | Impostor | Normaler Kill. Legt Laubhaufen aus (**F**, max. 3, der älteste verschwindet). Wer im Laub steht, ist unsichtbar - jeder, auch die Crew. Nach 5 s raschelt es (hören alle in der Nähe, Laub wackelt). Wer im Laub war, fehlt 10 s lang auf Admin-Karte und Kameras. |
-| **Kürbiskopf** 🎃 | Crew | Setzt kurz einen Kürbis auf (**F**): unverwundbar, aber Kürbis-Sicht (zwei Augenlöcher, kleine Sicht). Die anderen sehen ihn so lange als schwarze Silhouette ohne Namen. |
+| **Vogelscheuche** 🎃 | Impostor | Normaler Kill. **F** öffnet die Auswahl wie beim Shapeshifter (auch man selbst wählbar) und stellt eine täuschend echte Kopie mit Name auf - nur im eigenen Lichtkreis sichtbar. Wer ihr nahe kommt, erstarrt kurz vor Angst (Impostor nicht). Verschwindet beim nächsten Meeting. |
+| **Laubstreuer** 🎃 | Impostor | Normaler Kill. Legt Laubhaufen aus (**F**, unterschiedlich groß, selten riesig; max. 5 auf der Map, verschwinden nach 60 s). Wer im Laub steht, ist unsichtbar (wer im selben Haufen steht, sieht sich). Leichen im Laub sieht und meldet nur, wer selbst drin steht. Wer zu lange drin ist, lässt das Laub alle 8 s rascheln. Wer im Laub war, fehlt 10 s auf Admin-Karte und Kameras. |
+| **Kürbiskopf** 🎃 | Crew | Setzt kurz einen Kürbis auf (**F**): unverwundbar, sieht aber nur durch zwei Augenlöcher (die Sichtweite selbst bleibt). Die anderen sehen ihn so lange als schwarze Silhouette ohne Namen. |
 | **Untoter** 🎃 | Neutral | Wird er getötet, ist er bis nach dem nächsten Meeting Geist (ohne Rollen-Infos) und steht dann wieder auf. Als Untoter läuft er sichtbar herum, gilt im Meeting aber als tot (keine Stimme). Steht er je 5 s an 2 fremden Leichen, gewinnt er allein (Spielende). Sonst verliert er. Töten können ihn nur Impostor und Neutrale, keine Crew-Rollen. Zweiter Tod = endgültig. |
 | Lover | Anpassung | Zwei Verliebte (♥). Stirbt einer, stirbt der andere mit. Sind beide unter den letzten 3, gewinnen sie zusammen. Option: Impostor kann Lover sein. |
 | Flash | Anpassung | Läuft schneller (Tempo einstellbar). |
@@ -47,10 +47,10 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | Adlerauge | Anpassung | Sieht weiter. |
 | Fackel | Anpassung (Crew) | Licht-Sabotage stört nicht. |
 | Köder | Anpassung (Crew) | Wer ihn tötet, meldet die Leiche automatisch sofort selbst. |
-| Zweites Leben | Crew | Überlebt den ersten Angriff einmal. |
+| Survivor | Crew | Überlebt den ersten Angriff einmal. Wird er getötet, ist der Mörder in seiner Kill-Animation getarnt. |
 | Tiebreaker | Anpassung | Bei Stimmengleichstand entscheidet seine Stimme. |
 | Spürnase | Anpassung | Meldet er eine Leiche, sieht er die Rolle des Toten. |
-| Radar | Crew | Ein Pfeil zeigt immer zum nächsten Spieler. |
+| Radar | Crew | Auf Knopfdruck (**F**) zeigt ein paar Sekunden lang ein Pfeil zum nächsten Spieler. |
 | Paranoid | Crew | Warnung, wenn ganz in der Nähe jemand getötet wird. |
 | Verräter | Anpassung (Crew) | Sterben alle Impostor, wird er (Chance einstellbar) zum neuen Impostor mit Kill-Button und das Spiel geht weiter. Eine Crew-Rolle (Sheriff, Medic ...) verliert er dabei. Neutrale bekommen ihn nicht. Geheim: Nicht einmal er selbst sieht die Anpassung, bis sie greift oder er stirbt. |
 

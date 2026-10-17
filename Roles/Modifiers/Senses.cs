@@ -48,22 +48,38 @@ internal static class SleuthReportPatch
         Sleuth.Instance?.OnReported(__instance, target);
 }
 
-/// <summary>Crew: ein Pfeil zeigt immer zum naechsten Spieler.</summary>
+/// <summary>Crew: auf Knopfdruck zeigt ein Pfeil kurz zum naechsten Spieler.</summary>
 public sealed class Radar : CustomRole
 {
     public override string Name => "Radar";
     public override Color Color => new Color32(90, 220, 120, 255);
     public override RoleTeam Team => RoleTeam.Crewmate; // eigene Crew-Rolle (war frueher eine Anpassung)
     public override string IntroText => Lang.T("Du spürst, wo die anderen sind", "You sense where the others are");
-    public override string Description => Lang.T("Ein Pfeil zeigt zum nächsten Spieler.", "An arrow points to the nearest player.");
+    public override string Description => Lang.T("Orte den nächsten Spieler (F):\nein Pfeil zeigt kurz hin.", "Locate the nearest player (F):\nan arrow briefly points there.");
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Ein Pfeil um dich herum zeigt immer zum nächsten lebenden Spieler.",
-        "You are crew. An arrow around you always points to the nearest living player.");
+        "Du bist Crew. Mit Taste F schaltest du dein Radar ein: Ein paar Sekunden lang zeigt ein Pfeil um dich herum zum nächsten lebenden Spieler - auch durch Wände.",
+        "You are crew. Press F to switch on your radar: for a few seconds an arrow around you points to the nearest living player - even through walls.");
 
     private GameObject arrow;
     private static Sprite arrowSprite;
+    private RoleButton button;
+    private RoleOption cooldown, duration;
 
-    protected override void Setup() { }
+    protected override void Setup()
+    {
+        cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 25f, 5f, 60f, 2.5f, "s");
+        duration = AddOption("Duration", "Radar-Dauer|Radar duration", 8f, 2f, 20f, 1f, "s");
+        button = AddButton(new RoleButton
+        {
+            Label = "Radar|Radar",
+            Icon = "radar",
+            NeedsTarget = false,
+            Cooldown = () => cooldown.Value,
+            Duration = () => duration.Value,
+            Hotkey = KeyCode.F,
+            OnClick = _ => Sfx.Play(Sfx.Investigate),
+        });
+    }
 
     public override void ResetState()
     {
@@ -74,7 +90,7 @@ public sealed class Radar : CustomRole
     public override void Update()
     {
         var local = PlayerControl.LocalPlayer;
-        if (!IsLocalRole || !IsAlive(local) || InMeeting)
+        if (!IsLocalRole || !IsAlive(local) || InMeeting || button == null || !button.EffectActive)
         {
             if (arrow) arrow.SetActive(false);
             return;

@@ -14,14 +14,14 @@ public sealed class Medic : CustomRole
     public override string IntroText =>
         Lang.T("Beschütze die Crew", "Protect the crew");
     public override string Description =>
-        Lang.T("Gib einem Spieler einen Schild (F).", "Give a player a shield (F).");
+        Lang.T("Gib einem Spieler einen Schild (F).\nStirbst du, ist der Schild weg.", "Give a player a shield (F).\nIf you die, the shield is gone.");
     public override string LongDescription =>
-        Lang.T("Du bist Crew und schützt einen Spieler mit einem Schild (Taste F).\n\nDer nächste Angriff auf ihn scheitert. Je nach Einstellung bricht der Schild dabei und du wirst gewarnt.\n\nEs gibt immer nur einen Schild gleichzeitig.", "You are crew and protect one player with a shield (key F).\n\nThe next attack on them fails. Depending on the settings the shield breaks and you get a warning.\n\nOnly one shield at a time.");
+        Lang.T("Du bist Crew und schützt einen Spieler mit einem Schild (Taste F).\n\nDer nächste Angriff auf ihn scheitert. Je nach Einstellung bricht der Schild dabei und du wirst gewarnt.\n\nEs gibt immer nur einen Schild gleichzeitig. Stirbst du, ist der Schild sofort weg.", "You are crew and protect one player with a shield (key F).\n\nThe next attack on them fails. Depending on the settings the shield breaks and you get a warning.\n\nOnly one shield at a time. If you die, the shield is gone immediately.");
 
     private const byte ActionShield = 0, ActionBreak = 1;
     private const byte None = byte.MaxValue;
 
-    private RoleOption cooldown, breaksOnAttack, shieldedSees, medicNotified, endsOnDeath;
+    private RoleOption cooldown, breaksOnAttack, shieldedSees, medicNotified;
 
     private byte shielded = None;
     private byte medicId = None;
@@ -32,7 +32,6 @@ public sealed class Medic : CustomRole
         breaksOnAttack = AddToggle("BreaksOnAttack", "Schild bricht beim Angriff|Shield breaks on attack", true);
         shieldedSees = AddToggle("ShieldedSees", "Geschützter sieht den Schild|Shielded player sees it", true);
         medicNotified = AddToggle("MedicNotified", "Medic wird bei Angriff gewarnt|Medic is warned on attack", true);
-        endsOnDeath = AddToggle("EndsOnDeath", "Schild endet mit dem Tod des Medics|Shield ends when Medic dies", true);
 
         AddButton(new RoleButton
         {
@@ -77,7 +76,7 @@ public sealed class Medic : CustomRole
     public override KillIntercept InterceptKill(PlayerControl killer, PlayerControl target)
     {
         if (shielded == None || target.PlayerId != shielded) return KillIntercept.None;
-        if (endsOnDeath.Bool && !IsAlive(FindPlayer(medicId))) return KillIntercept.None;
+        if (!IsAlive(FindPlayer(medicId))) return KillIntercept.None; // toter Medic = kein Schild
 
         killer.RpcMurderPlayer(target, false); // Kill scheitert sichtbar, Abklingzeit des Killers startet neu
         SendToAll(ActionBreak, (byte)(breaksOnAttack.Bool ? 1 : 0));
@@ -86,7 +85,7 @@ public sealed class Medic : CustomRole
 
     public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
     {
-        if (victim.PlayerId == shielded || (endsOnDeath.Bool && victim.PlayerId == medicId)) shielded = None;
+        if (victim.PlayerId == shielded || victim.PlayerId == medicId) shielded = None;
     }
 
     /// <summary>Den Schild sehen nur der Medic und (einstellbar) der Geschuetzte selbst.</summary>

@@ -14,9 +14,9 @@ public sealed class Bodyguard : CustomRole
     public override string IntroText =>
         Lang.T("Wirf dich vor deinen Schützling", "Take the hit for them");
     public override string Description =>
-        Lang.T("Bewache einen Spieler (F).", "Guard a player (F).");
+        Lang.T("Opfere dich für deinen Schützling (F).\nStirbst du, ist der Schutz weg.", "Sacrifice yourself for your ward (F).\nIf you die, the protection is gone.");
     public override string LongDescription =>
-        Lang.T("Du bist Crew und bewachst einen Spieler (Taste F).\n\nWird er angegriffen, stirbst du statt ihm - und nimmst den Angreifer mit in den Tod.\n\nJe nach Einstellung endet der Schutz beim nächsten Meeting.", "You are crew and guard one player (key F).\n\nIf they get attacked, you die instead - and take the attacker with you.\n\nDepending on the settings the guard ends at the next meeting.");
+        Lang.T("Du bist Crew und wählst mit Taste F deinen Schützling.\n\nWird er angegriffen, opferst du dich: Du stirbst an seiner Stelle - und nimmst den Angreifer mit in den Tod. Dein Schützling überlebt.\n\nStirbst du vorher auf anderem Weg, ist der Schutz weg. Je nach Einstellung endet er auch beim nächsten Meeting.", "You are crew and pick your ward with key F.\n\nIf they get attacked, you sacrifice yourself: you die in their place - and take the attacker with you. Your ward survives.\n\nIf you die some other way first, the protection is gone. Depending on the settings it also ends at the next meeting.");
 
     private const byte ActionGuard = 0, ActionClear = 1;
     private const byte None = byte.MaxValue;

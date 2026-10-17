@@ -27,7 +27,9 @@ public sealed class LeafSpreader : CustomRole
 
     internal static LeafSpreader Instance { get; private set; }
 
-    private RoleOption cooldown, maxPiles, rustleAfter, hiddenAfter;
+    private RoleOption cooldown, maxPiles, rustleAfter, hiddenAfter, lifetime;
+    private const float RustleEvery = 8f, ShakeTime = 1.2f;
+    private readonly HashSet<byte> hiddenBodies = new();
 
     private sealed class Pile
     {
@@ -35,7 +37,9 @@ public sealed class LeafSpreader : CustomRole
         public Vector2 Pos;
         public GameObject Visual;
         public float NextRustleSound;
+        public float ShakeUntil;
         public float Radius;
+        public float Created;
     }
 
     // bei allen Clients (jeder berechnet Sichtbarkeit selbst - alle kennen alle Positionen)
@@ -53,6 +57,7 @@ public sealed class LeafSpreader : CustomRole
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 20f, 5f, 60f, 2.5f, "s");
         maxPiles = AddOption("MaxPilesTotal", "Laubhaufen auf der Map|Piles on the map", 5f, 1f, 10f, 1f);
         rustleAfter = AddOption("RustleAfter", "Raschelt nach|Rustles after", 5f, 2f, 15f, 1f, "s");
+        lifetime = AddOption("Lifetime", "Laub verschwindet nach|Leaves vanish after", 60f, 15f, 180f, 15f, "s");
         hiddenAfter = AddOption("HiddenAfter", "Unsichtbar auf Admin/Kameras danach|Hidden on admin/cameras after", 10f, 0f, 30f, 1f, "s");
 
         AddButton(new RoleButton
@@ -72,6 +77,7 @@ public sealed class LeafSpreader : CustomRole
     {
         ShowAll();
         FadeLocal(false);
+        hiddenBodies.Clear();
         foreach (var p in piles)
             if (p.Visual) Object.Destroy(p.Visual);
         piles.Clear();
@@ -94,8 +100,37 @@ public sealed class LeafSpreader : CustomRole
         float size = Mathf.Clamp(data[0], 30, 200) / 100f;
         var pos = WorldMarker.Decode(data, 1);
         var visual = WorldMarker.Spawn("leaves", pos + new Vector2(0f, 0.1f), size, "LeafPile");
-        piles.Add(new Pile { Owner = sender.PlayerId, Pos = pos, Visual = visual, Radius = PileRadius * size / 0.55f });
+        piles.Add(new Pile { Owner = sender.PlayerId, Pos = pos, Visual = visual, Radius = PileRadius * size / 0.55f, Created = Time.time });
         if (sender == PlayerControl.LocalPlayer) Sfx.Play(RustleClip(), 0.7f);
+    }
+
+    /// <summary>Laubhaufen an dieser Stelle, oder null.</summary>
+    private Pile PileAtPos(Vector2 pos) => piles.FirstOrDefault(pile => Vector2.Distance(pos, pile.Pos) <= pile.Radius);
+
+    /// <summary>
+    /// Leichen im Laub sieht und meldet nur, wer selbst im selben Haufen steht.
+    /// </summary>
+    internal bool CanReport(PlayerControl reporter, DeadBody body)
+    {
+        if (!body) return true;
+        var pile = PileAtPos(body.TruePosition);
+        return pile == null || PileAt(reporter) == pile;
+    }
+
+    private void UpdateBodies(Pile localPile)
+    {
+        var stillHidden = new HashSet<byte>();
+        foreach (var body in Object.FindObjectsOfType<DeadBody>())
+        {
+            if (!body) continue;
+            var pile = InMeeting ? null : PileAtPos(body.TruePosition);
+            bool hide = pile != null && pile != localPile;
+            if (hide) stillHidden.Add(body.ParentId);
+            if (hide == hiddenBodies.Contains(body.ParentId)) continue;
+            foreach (var r in body.GetComponentsInChildren<SpriteRenderer>(true)) r.enabled = !hide;
+        }
+        hiddenBodies.Clear();
+        foreach (var id in stillHidden) hiddenBodies.Add(id);
     }
 
     private Pile PileAt(PlayerControl p)
@@ -116,8 +151,18 @@ public sealed class LeafSpreader : CustomRole
     public override void Update()
     {
         var local = PlayerControl.LocalPlayer;
-        if (piles.Count == 0 && hiddenByUs.Count == 0) return;
+
+        // Laub verschwindet nach einer Weile
+        for (int i = piles.Count - 1; i >= 0; i--)
+        {
+            if (Time.time - piles[i].Created < lifetime.Value) continue;
+            if (piles[i].Visual) Object.Destroy(piles[i].Visual);
+            piles.RemoveAt(i);
+        }
+
+        if (piles.Count == 0 && hiddenByUs.Count == 0 && hiddenBodies.Count == 0) return;
         var localPile = PileAt(local);
+        UpdateBodies(localPile);
         if (InMeeting)
         {
             ShowAll();
@@ -167,11 +212,15 @@ public sealed class LeafSpreader : CustomRole
         foreach (var pile in piles)
         {
             if (!pile.Visual) continue;
-            bool shakes = rustling.Contains(pile);
+            // Steckt jemand zu lange drin: alle 8 Sekunden einmal kurz wackeln und rascheln
+            if (rustling.Contains(pile) && t >= pile.NextRustleSound)
+            {
+                pile.NextRustleSound = t + RustleEvery;
+                pile.ShakeUntil = t + ShakeTime;
+                if (Vector2.Distance(me, pile.Pos) <= HearRange) Sfx.Play(RustleClip(), 0.6f);
+            }
+            bool shakes = t < pile.ShakeUntil;
             pile.Visual.transform.localRotation = Quaternion.Euler(0f, 0f, shakes ? Mathf.Sin(t * 25f) * 8f : 0f);
-            if (!shakes || t < pile.NextRustleSound || Vector2.Distance(me, pile.Pos) > HearRange) continue;
-            pile.NextRustleSound = t + 1.5f;
-            Sfx.Play(RustleClip(), 0.6f);
         }
     }
 
@@ -261,5 +310,19 @@ internal static class LeafAdminPatch
         if (__state == null) return;
         foreach (var c in __state)
             if (c) c.enabled = true;
+    }
+}
+
+/// <summary>Melden: Eine Leiche im Laub kann nur melden, wer selbst im selben Haufen steht.</summary>
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.CmdReportDeadBody))]
+internal static class LeafReportPatch
+{
+    public static bool Prefix(PlayerControl __instance, NetworkedPlayerInfo target)
+    {
+        var ls = LeafSpreader.Instance;
+        if (ls == null || target == null) return true; // Notfallknopf: immer erlaubt
+        foreach (var body in Object.FindObjectsOfType<DeadBody>())
+            if (body && body.ParentId == target.PlayerId && !ls.CanReport(__instance, body)) return false;
+        return true;
     }
 }

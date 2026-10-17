@@ -18,8 +18,8 @@ public sealed class Scarecrow : CustomRole
     public override string IntroText => Lang.T("Wer steht denn da?", "Who's standing there?");
     public override string Description => Lang.T("Stelle eine Kopie eines Spielers auf (F).\nWer ihr nahe kommt, erstarrt.", "Place a copy of a player (F).\nWhoever gets close freezes.");
     public override string LongDescription => Lang.T(
-        "Halloween-Impostor mit normalem Kill. Mit Taste F wählst du einen Spieler - eine täuschend echte Kopie von ihm (mit Name) steht dann dort, wo du stehst.\n\nWer der Kopie zu nahe kommt, erstarrt ein paar Sekunden vor Angst. So kannst du auch Alibis kaputtmachen. Die Kopie verschwindet beim nächsten Meeting.",
-        "Halloween impostor with a normal kill. Press F and choose a player - a deceptively real copy of them (with name) then stands where you are.\n\nWhoever gets too close to the copy freezes in fear for a few seconds. You can also ruin alibis this way. The copy disappears at the next meeting.");
+        "Halloween-Impostor mit normalem Kill. Mit Taste F öffnet sich die Auswahl wie beim Shapeshifter: Wähl einen Spieler (oder dich selbst) - eine täuschend echte Kopie mit Name steht dann dort, wo du stehst.\n\nWer der Kopie zu nahe kommt, erstarrt ein paar Sekunden vor Angst. So kannst du auch Alibis kaputtmachen. Die Kopie verschwindet beim nächsten Meeting.",
+        "Halloween impostor with a normal kill. Press F to open the Shapeshifter-style selection: pick a player (or yourself) - a deceptively real copy with name then stands where you are.\n\nWhoever gets too close to the copy freezes in fear for a few seconds. You can also ruin alibis this way. The copy disappears at the next meeting.");
 
     private const byte ActionPlace = 0;
     private const float FearRange = 1.2f;
@@ -61,7 +61,7 @@ public sealed class Scarecrow : CustomRole
             {
                 // Erst waehlen - die Abklingzeit startet beim Aufstellen
                 button.Timer = 0f;
-                choosing = true;
+                if (!OpenShapeshifterMenu()) choosing = true; // Notfall: eigenes Fenster
             },
         });
     }
@@ -192,7 +192,70 @@ public sealed class Scarecrow : CustomRole
         }
     }
 
-    // ---------- Auswahl, wen man kopiert ----------
+    // ---------- Auswahl, wen man kopiert: das Menue des Shapeshifters (mit einem selbst) ----------
+
+    private ShapeshifterMinigame menu;
+
+    private static ShapeshifterMinigame MenuPrefab()
+    {
+        if (!RoleManager.Instance) return null;
+        foreach (var role in RoleManager.Instance.AllRoles)
+        {
+            var ss = role ? role.TryCast<ShapeshifterRole>() : null;
+            if (ss && ss.ShapeshifterMenu) return ss.ShapeshifterMenu;
+        }
+        return null;
+    }
+
+    /// <summary>Oeffnet das Shapeshifter-Menue, aber mit allen lebenden Spielern inklusive einem selbst.</summary>
+    private bool OpenShapeshifterMenu()
+    {
+        try
+        {
+            var prefab = MenuPrefab();
+            if (!prefab || !Camera.main || Minigame.Instance) return false;
+
+            menu = Object.Instantiate(prefab, Camera.main.transform, false);
+            menu.transform.localPosition = new Vector3(0f, 0f, -50f);
+            menu.Begin(null);
+
+            // Die Spieler-Kacheln des Spiels (ohne einen selbst) durch eigene ersetzen
+            foreach (var panel in menu.potentialVictims)
+                if (panel) Object.Destroy(panel.gameObject);
+            menu.potentialVictims.Clear();
+
+            var local = PlayerControl.LocalPlayer;
+            var players = new List<PlayerControl> { local };
+            players.AddRange(PlayerControl.AllPlayerControls.ToArray().Where(p => IsAlive(p) && p != local));
+            for (int i = 0; i < players.Count; i++)
+            {
+                var target = players[i];
+                var panel = Object.Instantiate(menu.PanelPrefab, menu.transform);
+                panel.transform.localPosition = new Vector3(menu.XStart + i % 3 * menu.XOffset, menu.YStart + i / 3 * menu.YOffset, -1f);
+                panel.SetPlayer(i, target.Data, (System.Action)(() => Pick(target)));
+                menu.potentialVictims.Add(panel);
+            }
+            return true;
+        }
+        catch (System.Exception e)
+        {
+            Plugin.Logger.LogWarning($"Vogelscheuche-Menue: {e.Message}");
+            if (menu) Object.Destroy(menu.gameObject);
+            return false;
+        }
+    }
+
+    private void Pick(PlayerControl target)
+    {
+        if (menu) menu.Close();
+        menu = null;
+        var local = PlayerControl.LocalPlayer;
+        if (!target || target.Data == null || !IsAlive(local) || local.inVent || InMeeting) return;
+        SendToAll(ActionPlace, WorldMarker.Concat(target.PlayerId, WorldMarker.Encode(local.GetTruePosition())));
+        button.Timer = cooldown.Value;
+    }
+
+    // Notfall-Auswahl (falls das Shapeshifter-Menue nicht geladen werden kann)
 
     public override void DrawGUI()
     {
@@ -204,7 +267,7 @@ public sealed class Scarecrow : CustomRole
             return;
         }
 
-        var options = PlayerControl.AllPlayerControls.ToArray().Where(p => IsAlive(p) && p != local).ToList();
+        var options = PlayerControl.AllPlayerControls.ToArray().Where(IsAlive).ToList();
         const int columns = 3;
         int rows = (options.Count + columns - 1) / columns;
         float w = columns * 230 + 60, h = 110 + rows * 52 + 70;

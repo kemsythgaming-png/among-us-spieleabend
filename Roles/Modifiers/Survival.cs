@@ -55,19 +55,21 @@ public sealed class Bait : CustomRole
 public sealed class SecondLife : CustomRole
 {
     public override string ConfigSection => "ZweitesLeben";
-    public override string Name => Lang.T("Zweites Leben", "Second Life");
+    public override string Name => "Survivor";
     public override Color Color => new Color32(255, 215, 90, 255);
     public override RoleTeam Team => RoleTeam.Crewmate; // eigene Crew-Rolle (war frueher eine Anpassung)
     public override string IntroText => Lang.T("Katzen haben neun - du hast zwei", "Cats have nine - you have two");
     public override string Description => Lang.T("Du überlebst den ersten Angriff.", "You survive the first attack.");
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Der erste Angriff auf dich scheitert (der Angreifer sieht nur einen fehlgeschlagenen Kill). Danach bist du normal sterblich.",
-        "You are crew. The first attack on you fails (the attacker only sees a failed kill). After that you are mortal as usual.");
+        "Du bist Crew. Der erste Angriff auf dich scheitert (der Angreifer sieht nur einen fehlgeschlagenen Kill). Danach bist du normal sterblich.\n\nWirst du getötet, siehst du in der Kill-Animation nicht, wer es war - der Mörder ist getarnt.",
+        "You are crew. The first attack on you fails (the attacker only sees a failed kill). After that you are mortal as usual.\n\nIf you get killed, the kill animation doesn't show who did it - the killer is camouflaged.");
+
+    internal static SecondLife Instance { get; private set; }
 
     private const byte ActionUsed = 0;
     private readonly HashSet<byte> used = new();
 
-    protected override void Setup() { }
+    protected override void Setup() => Instance = this;
 
     public override void ResetState() => used.Clear();
 
@@ -135,5 +137,30 @@ internal static class TiebreakerVotePatch
             __result[votedFor] = __result[votedFor] + 1;
             return;
         }
+    }
+}
+
+/// <summary>Survivor: In seiner Kill-Animation ist der Moerder getarnt (grau, ohne Kosmetik) - er sieht nicht, wer es war.</summary>
+[HarmonyPatch(typeof(KillOverlay), nameof(KillOverlay.ShowKillAnimation), typeof(OverlayKillAnimation), typeof(KillOverlayInitData))]
+internal static class SurvivorKillOverlayPatch
+{
+    public static void Prefix(ref KillOverlayInitData initData)
+    {
+        var survivor = SecondLife.Instance;
+        var local = PlayerControl.LocalPlayer;
+        if (survivor == null || initData == null || !local || !RoleRegistry.Has(local, survivor)) return;
+        if (initData.victimOutfit == null || local.Data == null || initData.victimOutfit.PlayerName != local.Data.DefaultOutfit.PlayerName) return;
+
+        var hidden = new NetworkedPlayerInfo.PlayerOutfit
+        {
+            ColorId = 15, // grau wie bei der Tarnung
+            HatId = "hat_NoHat",
+            SkinId = "skin_None",
+            VisorId = "visor_EmptyVisor",
+            PetId = "pet_EmptyPet",
+            NamePlateId = "nameplate_NoPlate",
+            PlayerName = "",
+        };
+        initData = new KillOverlayInitData(hidden, initData.killerBodyType, initData.victimOutfit, initData.victimBodyType);
     }
 }

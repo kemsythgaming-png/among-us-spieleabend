@@ -18,11 +18,12 @@ public sealed class CandyKid : CustomRole
     public override string IntroText => Lang.T("Süßes oder Saures!", "Trick or treat!");
     public override string Description => Lang.T("Sammle alle Bonbons -\nnur du siehst sie!", "Collect all candy -\nonly you can see it!");
     public override string LongDescription => Lang.T(
-        "Halloween-Crew. In versteckten Ecken der Map liegen Bonbons, die nur du siehst. Lauf drüber, um sie einzusammeln.\n\nHast du alle, bekommst du den Zuckerrausch: Du bist für den Rest der Runde schneller und ein Schild schützt dich vor dem nächsten Angriff.",
-        "Halloween crew. Candy is hidden in corners of the map and only you can see it. Walk over it to collect it.\n\nOnce you have it all, you get a sugar rush: you are faster for the rest of the game and a shield protects you from the next attack.");
+        "Halloween-Crew. In versteckten Ecken der Map liegen Bonbons, die nur du siehst. Lauf drüber, um sie einzusammeln. Bei jeder Sabotage springen 2-3 Extra-Bonbons an den Reparatur-Stellen heraus - die zählen mit.\n\nHast du genug, bekommst du den Zuckerrausch: Du bist für den Rest der Runde schneller und ein Schild schützt dich vor dem nächsten Angriff.",
+        "Halloween crew. Candy is hidden in corners of the map and only you can see it. Walk over it to collect it. Every sabotage drops 2-3 extra candies at the repair spots - they count too.\n\nOnce you have enough, you get a sugar rush: you are faster for the rest of the game and a shield protects you from the next attack.");
 
     private const byte ActionRush = 0, ActionShieldUsed = 1;
     private const float CollectRange = 0.85f;
+    private const float CandyScale = 0.35f;
 
     private RoleOption candies, rushSpeed, rushShield;
 
@@ -31,6 +32,7 @@ public sealed class CandyKid : CustomRole
     private System.IntPtr spawnedFor;
     private int collected, total;
     private bool rushing;
+    private readonly HashSet<System.IntPtr> seenSabotages = new();
 
     // bei allen: wer hat (noch) einen Zucker-Schild
     private readonly HashSet<byte> shielded = new();
@@ -52,6 +54,7 @@ public sealed class CandyKid : CustomRole
         spawnedFor = System.IntPtr.Zero;
         collected = total = 0;
         shielded.Clear();
+        seenSabotages.Clear();
 
         rushing = false;
     }
@@ -71,6 +74,7 @@ public sealed class CandyKid : CustomRole
         }
 
         if (spawnedFor != ShipStatus.Instance.Pointer) SpawnCandies();
+        if (!rushing) CheckSabotages(local);
 
 
         bool inMeeting = InMeeting;
@@ -108,7 +112,7 @@ public sealed class CandyKid : CustomRole
             var go = new GameObject("Spieleabend_Candy");
             go.transform.SetParent(ShipStatus.Instance.transform, true);
             go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f - 0.01f);
-            go.transform.localScale = new Vector3(0.5f, 0.5f, 1f);
+            go.transform.localScale = new Vector3(CandyScale, CandyScale, 1f);
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = sprite ? sprite : CandySprite();
             candyObjects.Add(go);
@@ -171,6 +175,50 @@ public sealed class CandyKid : CustomRole
         return chosen;
     }
 
+    /// <summary>
+    /// Neue Sabotage: 2-3 Extra-Bonbons springen an zufaelligen Reparatur-Stellen heraus. Sie zaehlen normal mit -
+    /// so kommt das Kind schneller zum Zuckerrausch, wenn es zu den Sabotagen rennt.
+    /// </summary>
+    private void CheckSabotages(PlayerControl local)
+    {
+        foreach (var task in local.myTasks)
+        {
+            if (!task || !task.TryCast<SabotageTask>()) continue;
+            if (!seenSabotages.Add(task.Pointer)) continue;
+
+            var consoles = ShipStatus.Instance.AllConsoles.Where(c => c && c.TaskTypes != null && c.TaskTypes.Contains(task.TaskType)).ToList();
+            if (consoles.Count == 0) continue;
+            int count = Random.Range(2, 4);
+            var sprite = ButtonIcons.Get("candy", null);
+            for (int i = 0; i < count; i++)
+            {
+                var console = consoles[Random.Range(0, consoles.Count)];
+                var pos = FreeSpotNear(console.transform.position);
+                var go = new GameObject("Spieleabend_SabotageCandy");
+                go.transform.SetParent(ShipStatus.Instance.transform, true);
+                go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f - 0.01f);
+                go.transform.localScale = new Vector3(CandyScale, CandyScale, 1f);
+                go.AddComponent<SpriteRenderer>().sprite = sprite ? sprite : CandySprite();
+                candyObjects.Add(go);
+            }
+            ProtectionVisuals.ShowBurst(local, Color);
+            Notifier.Show($"<color={ColorHex}>{Lang.T("Sabotage! Bei der Reparatur liegen Extra-Bonbons.", "Sabotage! Extra candy is waiting at the repair spots.")}</color>", 4f);
+        }
+    }
+
+    /// <summary>Freier Platz neben einer Konsole (nicht in Waenden oder Moebeln).</summary>
+    private static Vector2 FreeSpotNear(Vector2 center)
+    {
+        var mask = Constants.ShipAndObjectsMask;
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            var pos = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * Random.Range(0.6f, 1.3f);
+            if (!Physics2D.OverlapCircle(pos, 0.3f, mask) && !PhysicsHelpers.AnythingBetween(center, pos, mask, false)) return pos;
+        }
+        return center + new Vector2(0f, -0.5f);
+    }
+
     private void Collect(int index)
     {
         var c = candyObjects[index];
@@ -190,6 +238,11 @@ public sealed class CandyKid : CustomRole
         Notifier.Show($"<color={ColorHex}>{Lang.T("Zuckerrausch! Du bist schneller", "Sugar rush! You are faster")}{(rushShield.Bool ? Lang.T(" und geschützt!", " and shielded!") : "!")}</color>", 5f);
         rushing = true;
         SendToAll(ActionRush);
+
+        // Restliche Bonbons (z. B. Extra-Bonbons aus Sabotagen) braucht es nicht mehr
+        foreach (var rest in candyObjects)
+            if (rest) Object.Destroy(rest);
+        candyObjects.Clear();
     }
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)

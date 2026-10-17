@@ -14,11 +14,11 @@ public sealed class Seer : CustomRole
     public override string IntroText =>
         Lang.T("Blicke in die Seelen", "Look into their souls");
     public override string Description =>
-        Lang.T("Prüfe Spieler (F): gut, böse oder neutral.", "Check players (F): good, evil or neutral.");
+        Lang.T("Prüfe Spieler (F): gut oder böse.", "Check players (F): good or evil.");
     public override string LongDescription =>
-        Lang.T("Du bist Crew. Mit Taste F prüfst du einen Spieler in der Nähe.\n\nDanach steht an seinem Namen, ob er [Gut], [Böse] oder [Neutral] ist - je nach Einstellung sogar die genaue Rolle. Nur du siehst das.", "You are crew. Press F to check a nearby player.\n\nAfterwards their name shows [Good], [Evil] or [Neutral] - depending on the settings even the exact role. Only you can see it.");
+        Lang.T("Du bist Crew. Mit Taste F prüfst du einen Spieler in der Nähe.\n\nDanach steht an seinem Namen, ob er [Gut] oder [Böse] ist. Neutrale (Jester, Arsonist ...) zeigen sich auch als [Böse] - du weißt also nicht, ob es ein Impostor oder ein Neutraler ist. Nur du siehst das.", "You are crew. Press F to check a nearby player.\n\nAfterwards their name shows [Good] or [Evil]. Neutrals (Jester, Arsonist ...) also show as [Evil] - so you can't tell an impostor from a neutral. Only you can see it.");
 
-    private RoleOption cooldown, exactRole;
+    private RoleOption cooldown;
 
     /// <summary>Nur beim Seer selbst: gepruefte Spieler und das Ergebnis.</summary>
     private readonly Dictionary<byte, string> results = new();
@@ -26,7 +26,6 @@ public sealed class Seer : CustomRole
     protected override void Setup()
     {
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 25f, 5f, 60f, 5f, "s");
-        exactRole = AddToggle("ExactRole", "Zeigt die genaue Rolle|Shows the exact role", false);
 
         AddButton(new RoleButton
         {
@@ -44,9 +43,7 @@ public sealed class Seer : CustomRole
     private void Check(PlayerControl target)
     {
         string result;
-        if (exactRole.Bool) result = RoleUI.RoleLabel(target);
-        else if (IsImpostor(target)) result = $"<color=#FF1919>{Lang.T("[Böse]", "[Evil]")}</color>";
-        else if (IsNeutral(target)) result = "<color=#AAAAAA>[Neutral]</color>";
+        if (IsImpostor(target) || IsNeutral(target)) result = $"<color=#FF1919>{Lang.T("[Böse]", "[Evil]")}</color>";
         else result = $"<color=#5BE35B>{Lang.T("[Gut]", "[Good]")}</color>";
 
         results[target.PlayerId] = result;

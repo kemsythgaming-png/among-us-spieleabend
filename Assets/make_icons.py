@@ -503,6 +503,20 @@ def icon_boards():
     return img
 
 
+def icon_radar():
+    """Radar: Schirm mit Ringen, Strahl und Punkt."""
+    img, d = canvas()
+    c = S / 2
+    ellipse(d, (50, 50, S - 50, S - 50), (40, 90, 60, 255), 24)
+    for r in (150, 95):
+        d.ellipse((c - r, c - r, c + r, c + r), outline=(110, 220, 140, 255), width=10)
+    d.pieslice((60, 60, S - 60, S - 60), 300, 345, fill=(140, 255, 170, 200))
+    d.line((c, c, c + 150, c - 110), fill=(160, 255, 180, 255), width=12)
+    ellipse(d, (c + 60, c - 120, c + 110, c - 70), (255, 240, 120, 255), 12)
+    ellipse(d, (c - 16, c - 16, c + 16, c + 16), (160, 255, 180, 255), 8)
+    return img
+
+
 ICONS = {
     "candy": icon_candy,
     "phase": icon_phase,
@@ -527,6 +541,7 @@ ICONS = {
     "cursed": icon_cursed,
     "frost": icon_frost,
     "boards": icon_boards,
+    "radar": icon_radar,
 }
 
 if __name__ == "__main__":
