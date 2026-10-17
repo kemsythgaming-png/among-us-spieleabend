@@ -12,7 +12,7 @@ using Microsoft.Win32;
 namespace Spieleabend.Launcher;
 
 /// <summary>
-/// Ablauf: Steam-Spiel finden -> Mod-Kopie anlegen/aktualisieren -> BepInEx + Mod einspielen ->
+/// Ablauf: (Ordner waehlt InstallLocation) -> Mod-Kopie anlegen/aktualisieren -> BepInEx + Mod einspielen ->
 /// Update von GitHub holen -> Desktop-Verknuepfung -> Steam + Spiel starten.
 /// Das Original-Spiel im Steam-Ordner wird nie veraendert (nur gelesen).
 ///
@@ -30,16 +30,9 @@ internal sealed class Installer
         this.progress = progress;
     }
 
-    /// <summary>true = Spiel wurde gestartet.</summary>
-    public bool Run()
+    /// <summary>true = Spiel wurde gestartet. steamGame und target bestimmt das Fenster vorher (siehe InstallLocation).</summary>
+    public bool Run(string steamGame, string target)
     {
-        status("Suche Among Us (Steam) ...");
-        string steamGame = SteamLocator.FindAmongUs();
-        if (steamGame == null)
-            throw new Exception("Among Us (Steam) wurde nicht gefunden.\nIst Among Us über Steam installiert?");
-
-        string target = Environment.GetEnvironmentVariable("SPIELEABEND_TARGET");
-        if (string.IsNullOrEmpty(target)) target = Path.Combine(Path.GetDirectoryName(steamGame), Config.GameFolderName);
         if (Path.GetFullPath(target).TrimEnd('\\').Equals(Path.GetFullPath(steamGame).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
             throw new Exception("Zielordner darf nicht das Original-Spiel sein.");
 

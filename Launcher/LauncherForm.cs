@@ -56,7 +56,21 @@ internal sealed class LauncherForm : Form
         var installer = new Installer(SetStatus, SetProgress);
         try
         {
-            bool started = await Task.Run(installer.Run);
+            SetStatus("Suche Among Us (Steam) ...");
+            string steamGame = SteamLocator.FindAmongUs();
+            if (steamGame == null)
+                throw new Exception("Among Us (Steam) wurde nicht gefunden.\nIst Among Us über Steam installiert?");
+
+            // Beim ersten Mal: Speicherort wie bei einer Installation bestaetigen lassen
+            string target = InstallLocation.Resolve(this, steamGame);
+            if (target == null)
+            {
+                Close();
+                return;
+            }
+            Log.Write("Zielordner: " + target);
+
+            bool started = await Task.Run(() => installer.Run(steamGame, target));
             if (started)
             {
                 SetStatus("Viel Spaß!");
