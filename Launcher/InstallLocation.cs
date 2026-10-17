@@ -7,8 +7,9 @@ using Microsoft.Win32;
 namespace Spieleabend.Launcher;
 
 /// <summary>
-/// Wohin die Mod-Kopie kommt. Beim ersten Start fragt der Launcher wie ein Installer nach dem Ordner
-/// (Vorschlag: ein Ordner im eigenen Benutzerprofil - dafuer braucht es keine Admin-Rechte).
+/// Wohin die Mod-Kopie kommt. Beim ersten Start fragt der Launcher wie ein Installer nach dem Ordner.
+/// Vorschlag: C:\Spieleabend\Among Us Spieleabend - ohne Umlaute/Benutzernamen (damit hat BepInEx Probleme:
+/// "Failed to start BepInEx") und ohne Admin-Rechte (Ordner direkt auf C:\ darf jeder Benutzer anlegen).
 /// Die Wahl wird gemerkt (Registry unter HKEY_CURRENT_USER, ebenfalls ohne Admin-Rechte).
 /// </summary>
 internal static class InstallLocation
@@ -17,9 +18,34 @@ internal static class InstallLocation
     private const string RegValue = "InstallDir";
     private const long NeededBytes = 1_500_000_000; // Spielkopie ca. 1 GB + Puffer
 
-    /// <summary>Standard-Vorschlag: %LOCALAPPDATA%\Programs\Among Us Spieleabend (wie andere Programme ohne Admin-Installation).</summary>
-    public static string DefaultFolder =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", Config.GameFolderName);
+    /// <summary>
+    /// Standard-Vorschlag: C:\Spieleabend\Among Us Spieleabend. Gibt es kein C: (oder ist es kein normales Laufwerk),
+    /// dann der oeffentliche Benutzerordner C:\Users\Public - der hat ebenfalls keinen Benutzernamen im Pfad.
+    /// </summary>
+    public static string DefaultFolder
+    {
+        get
+        {
+            try
+            {
+                var c = new DriveInfo("C");
+                if (c.IsReady && c.DriveType == DriveType.Fixed) return Path.Combine(@"C:\Spieleabend", Config.GameFolderName);
+            }
+            catch { }
+            string pub = Environment.GetEnvironmentVariable("PUBLIC");
+            if (!string.IsNullOrEmpty(pub) && IsPlainPath(pub)) return Path.Combine(pub, "Spieleabend", Config.GameFolderName);
+            return Path.Combine(@"C:\Spieleabend", Config.GameFolderName);
+        }
+    }
+
+    /// <summary>Nur einfache Zeichen (kein Umlaut, kein Sonderzeichen) - sonst startet BepInEx womoeglich nicht.</summary>
+    public static bool IsPlainPath(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        foreach (char ch in path)
+            if (ch > 126) return false;
+        return true;
+    }
 
     /// <summary>
     /// Zielordner bestimmen. null = abgebrochen.
@@ -46,12 +72,13 @@ internal static class InstallLocation
 
         if (Environment.GetEnvironmentVariable("SPIELEABEND_NOUI") == "1") return Remember(DefaultFolder);
 
-        using var dialog = new LocationDialog(string.IsNullOrEmpty(saved) ? DefaultFolder : saved, steamGame);
+        using var dialog = new LocationDialog(IsPlainPath(saved) ? saved : DefaultFolder, steamGame);
         return dialog.ShowDialog(owner) == DialogResult.OK ? Remember(dialog.Folder) : null;
     }
 
     private static bool IsInstallation(string folder) =>
-        !string.IsNullOrEmpty(folder) && File.Exists(Path.Combine(folder, "Among Us.exe")) && Directory.Exists(Path.Combine(folder, "BepInEx"));
+        !string.IsNullOrEmpty(folder) && IsPlainPath(folder)
+        && File.Exists(Path.Combine(folder, "Among Us.exe")) && Directory.Exists(Path.Combine(folder, "BepInEx"));
 
     private static string Remember(string folder)
     {
@@ -64,6 +91,8 @@ internal static class InstallLocation
     public static string Check(string folder, string steamGame)
     {
         if (string.IsNullOrWhiteSpace(folder)) return "Bitte einen Ordner wählen.";
+        if (!IsPlainPath(folder))
+            return "Der Pfad enthält Umlaute oder Sonderzeichen (z. B. ä, ö, ü, ß).\nDamit startet der Mod-Lader nicht. Bitte einen einfachen Pfad wählen, z. B. " + DefaultFolder;
         string full;
         try { full = Path.GetFullPath(folder).TrimEnd('\\'); }
         catch { return "Das ist kein gültiger Ordner."; }
@@ -129,7 +158,7 @@ internal static class InstallLocation
             };
             var info = new Label
             {
-                Text = "Hier landet eine Kopie deines Steam-Among-Us mit dem Mod (ca. 1 GB).\nDein normales Among Us bleibt unverändert. Der Vorschlag braucht keine Administrator-Rechte.",
+                Text = "Hier landet eine Kopie deines Steam-Among-Us mit dem Mod (ca. 1 GB).\nDein normales Among Us bleibt unverändert. Bitte einen Pfad ohne Umlaute wählen - der Vorschlag passt und braucht keine Administrator-Rechte.",
                 AutoSize = false,
                 Size = new Size(520, 66),
                 Location = new Point(20, 50),
