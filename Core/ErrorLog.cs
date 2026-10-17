@@ -56,14 +56,28 @@ internal static class ErrorLog
         catch { }
     }
 
-    /// <summary>Haengt sich ins BepInEx-Log und schreibt nur Warnung/Fehler/Fatal mit.</summary>
+    /// <summary>
+    /// Haengt sich ins BepInEx-Log und schreibt nur Warnung/Fehler/Fatal der MODS mit.
+    /// Das Spiel selbst (Unity/Among Us) gibt staendig harmlose Warnungen aus (fehlende Uebersetzungen, Epic-Online-Services,
+    /// Controller-Menues ...) - die gehoeren NICHT ins Fehler-Protokoll, sonst gehen echte Mod-Fehler darin unter.
+    /// </summary>
     private sealed class Listener : ILogListener
     {
         public LogLevel LogLevelFilter => LogLevel.Warning | LogLevel.Error | LogLevel.Fatal;
 
         public void LogEvent(object sender, LogEventArgs eventArgs)
         {
-            if ((eventArgs.Level & LogLevelFilter) != 0) Append(eventArgs.Level, eventArgs.Source, eventArgs.Data);
+            if ((eventArgs.Level & LogLevelFilter) == 0) return;
+            if (IsGameNoise(eventArgs.Source)) return; // das Spiel selbst nicht mitschreiben
+            Append(eventArgs.Level, eventArgs.Source, eventArgs.Data);
+        }
+
+        /// <summary>Kommt die Meldung vom Spiel selbst (Unity) und nicht von einem Mod?</summary>
+        private static bool IsGameNoise(object source)
+        {
+            string name = source?.GetType().Name ?? "";
+            string src = source is ManualLogSource m ? m.SourceName ?? "" : "";
+            return name.Contains("Unity") || src.Equals("Unity", StringComparison.OrdinalIgnoreCase) || src.StartsWith("IL2CPP", StringComparison.OrdinalIgnoreCase);
         }
 
         public void Dispose() { }
