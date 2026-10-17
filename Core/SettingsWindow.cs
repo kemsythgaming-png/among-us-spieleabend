@@ -52,9 +52,21 @@ public class SettingsWindow : MonoBehaviour
             }
         }
 
-        Notifier.Draw();
-        RoleGuide.Draw();
-        SettingsPanel.Draw();
+        // Jedes Fenster einzeln absichern: ein Fehler in einem darf die anderen nicht mitnehmen
+        Safe("Hinweise", Notifier.Draw);
+        Safe("Rollen-Info", RoleGuide.Draw);
+        Safe("Einstellungen", SettingsPanel.Draw);
+    }
+
+    private static readonly System.Collections.Generic.HashSet<string> reported = new();
+
+    private static void Safe(string what, Action draw)
+    {
+        try { draw(); }
+        catch (Exception e)
+        {
+            if (reported.Add(what + e.Message)) Plugin.Logger.LogError($"Fenster {what}: {e}");
+        }
     }
 }
 
@@ -304,42 +316,42 @@ internal static class SettingsPanel
 
         const float listWidth = 380f, rowH = 50f;
         var view = new Rect(area.x, area.y, listWidth, area.height);
-        var content = new Rect(0, 0, listWidth - 22, Mathf.Max(view.height, entries.Count * rowH));
-        listScroll = GUI.BeginScrollView(view, listScroll, content);
+        float listWidthInner = listWidth - 16;
+        listScroll.y = Ui.Scroll(view, entries.Count * rowH, listScroll.y);
         float y = 0;
         int index = 0;
         foreach (var e in entries)
         {
+            bool visible = Ui.RowVisible(view, y, rowH - 6, listScroll.y);
+            float sy0 = view.y + y - listScroll.y;
             if (e.IsHeader)
             {
-                GUI.Label(new Rect(4, y + 12, content.width, 34), $"<b>{e.Label}</b>", Ui.Small);
+                if (visible) GUI.Label(new Rect(view.x + 4, sy0 + 12, listWidthInner, 34), $"<b>{e.Label}</b>", Ui.Small);
                 y += rowH;
                 continue;
             }
             int my = index++;
-            if (GUI.Button(new Rect(0, y, content.width, rowH - 6), new GUIContent(e.Label), my == selected ? Ui.Selected : Ui.ButtonStyle))
+            if (visible && GUI.Button(new Rect(view.x, sy0, listWidthInner, rowH - 6), new GUIContent(e.Label), my == selected ? Ui.Selected : Ui.ButtonStyle))
             {
                 selected = my;
                 detailScroll = Vector2.zero;
             }
             y += rowH;
         }
-        GUI.EndScrollView();
 
         var entry = clickable[selected];
         float dx = area.x + listWidth + 24, dw = area.xMax - dx;
         DrawDetailHeader(new Rect(dx, area.y, dw, 110), entry.Name, entry.Color, entry.Description);
 
         var detailView = new Rect(dx, area.y + 112, dw, area.height - 112);
-        var detailContent = new Rect(0, 0, dw - 22, Mathf.Max(detailView.height, entry.Settings.Count * Row));
-        detailScroll = GUI.BeginScrollView(detailView, detailScroll, detailContent);
+        detailScroll.y = Ui.Scroll(detailView, entry.Settings.Count * Row, detailScroll.y);
         float sy = 0;
         foreach (var setting in entry.Settings)
         {
-            DrawSetting(setting, 0, sy, detailContent.width - ControlWidth - 20);
+            if (Ui.RowVisible(detailView, sy, 44, detailScroll.y))
+                DrawSetting(setting, detailView.x, detailView.y + sy - detailScroll.y, dw - 16 - ControlWidth - 20);
             sy += Row;
         }
-        GUI.EndScrollView();
     }
 
     // ---------- Bausteine ----------
@@ -356,7 +368,7 @@ internal static class SettingsPanel
     private static void DrawSetting(ISetting setting, float x, float y, float labelWidth)
     {
         var name = new GUIContent(setting.Name);
-        if (Ui.Text.CalcSize(name).x <= labelWidth) GUI.Label(new Rect(x, y + 7, labelWidth, 40), name, Ui.Text);
+        if (Ui.Width(Ui.Text, name) <= labelWidth) GUI.Label(new Rect(x, y + 7, labelWidth, 40), name, Ui.Text);
         else GUI.Label(new Rect(x, y - 2, labelWidth, 50), name, Ui.LabelWrap);
 
         float cx = x + labelWidth + 10;
@@ -371,8 +383,8 @@ internal static class SettingsPanel
         if (Ui.Button(new Rect(cx, y, 50, 44), "-") && canEdit) setting.Change(-1);
         // Wert: so gross wie moeglich, ohne abgeschnitten zu werden
         var value = new GUIContent(setting.Display);
-        var style = Ui.ValueBig.CalcSize(value).x <= ValueWidth ? Ui.ValueBig
-                  : Ui.ValueMid.CalcSize(value).x <= ValueWidth ? Ui.ValueMid : Ui.ValueSmall;
+        var style = Ui.Width(Ui.ValueBig, value) <= ValueWidth ? Ui.ValueBig
+                  : Ui.Width(Ui.ValueMid, value) <= ValueWidth ? Ui.ValueMid : Ui.ValueSmall;
         GUI.Label(new Rect(cx + 55, y, ValueWidth, 44), value, style);
         if (Ui.Button(new Rect(cx + 55 + ValueWidth + 5, y, 50, 44), "+") && canEdit) setting.Change(1);
     }
@@ -445,19 +457,91 @@ public static class Ui
     public static GUIStyle Inner, Tab, TabSelected, CloseButton, LabelWrap, ValueBig, ValueMid, ValueSmall, SearchStyle;
 
     /// <summary>Tippt gerade jemand in ein Textfeld (Suche)? Dann gehen Tasten nicht ans Spiel.</summary>
-    public static bool IsTyping => GUIUtility.keyboardControl != 0;
+    // GUI.TextField gibt es in diesem Spiel nicht (vom Spiel entfernt) - darum ein eigenes, einfaches Suchfeld
+    private static bool typing;
 
-    public static void StopTyping() => GUIUtility.keyboardControl = 0;
+    /// <summary>Tippt gerade jemand ins Suchfeld? Dann gehen Tasten nicht ans Spiel.</summary>
+    public static bool IsTyping => typing;
 
-    /// <summary>Suchfeld mit Platzhalter-Text und Lupe.</summary>
+    public static void StopTyping() => typing = false;
+
+    /// <summary>
+    /// Suchfeld: anklicken zum Tippen (Tasten kommen aus Input.inputString), Rueck-Taste loescht,
+    /// Enter/Esc oder ein Klick daneben beendet das Tippen.
+    /// </summary>
     public static string SearchField(Rect rect, string text, string placeholder)
     {
-        text = GUI.TextField(rect, text ?? "", 40, SearchStyle);
-        if (string.IsNullOrEmpty(text) && !IsTyping)
-            GUI.Label(new Rect(rect.x + 16, rect.y + 7, rect.width - 20, rect.height - 10), $"<color=#8A90A0>{placeholder}</color>", Text);
-        if (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape) StopTyping();
+        text ??= "";
+        var e = Event.current;
+        if (e != null && e.type == EventType.MouseDown) typing = rect.Contains(e.mousePosition);
+
+        GUI.Box(rect, new GUIContent(""), typing ? SearchFocused : SearchStyle);
+
+        // Tasten nur einmal pro Bild verarbeiten (OnGUI laeuft mehrmals pro Bild)
+        if (typing && e != null && e.type == EventType.Repaint)
+        {
+            string typed;
+            try { typed = Input.inputString ?? ""; }
+            catch { typed = ""; }
+            foreach (char c in typed)
+            {
+                if (c == '\b') { if (text.Length > 0) text = text.Substring(0, text.Length - 1); }
+                else if (c == '\n' || c == '\r') typing = false;
+                else if (!char.IsControl(c) && text.Length < 40) text += c;
+            }
+            if (Input.GetKeyDown(KeyCode.Escape)) typing = false;
+        }
+
+        var inner = new Rect(rect.x + 16, rect.y + 4, rect.width - 24, rect.height - 8);
+        if (text.Length == 0 && !typing) GUI.Label(inner, $"<color=#8A90A0>{placeholder}</color>", SearchText);
+        else
+        {
+            bool caret = typing && Time.realtimeSinceStartup % 1f < 0.55f;
+            GUI.Label(inner, text + (caret ? "|" : ""), SearchText);
+        }
         return text;
     }
+
+    public static GUIStyle SearchFocused, SearchText, ScrollThumb;
+
+    /// <summary>
+    /// Eigenes Scrollen (GUI.BeginScrollView ist im Spiel evtl. entfernt): Mausrad ueber dem Bereich verschiebt den Inhalt,
+    /// rechts zeigt ein schmaler Balken die Position. Gibt den neuen Versatz zurueck.
+    /// </summary>
+    public static float Scroll(Rect view, float contentHeight, float offset)
+    {
+        float max = Mathf.Max(0f, contentHeight - view.height);
+        var e = Event.current;
+        if (e != null && e.type == EventType.ScrollWheel && view.Contains(e.mousePosition)) offset += e.delta.y * 25f;
+        offset = Mathf.Clamp(offset, 0f, max);
+        if (max > 0f)
+        {
+            float h = Mathf.Max(30f, view.height * view.height / contentHeight);
+            float y = view.y + (view.height - h) * (offset / max);
+            GUI.Box(new Rect(view.xMax - 8f, y, 6f, h), new GUIContent(""), ScrollThumb);
+        }
+        return offset;
+    }
+
+    private static bool measureBroken;
+
+    /// <summary>Textbreite - falls das Messen im Spiel fehlt, grob geschaetzt (halbe Schriftgroesse pro Zeichen).</summary>
+    public static float Width(GUIStyle style, GUIContent content)
+    {
+        if (!measureBroken)
+        {
+            try { return style.CalcSize(content).x; }
+            catch (System.Exception e)
+            {
+                measureBroken = true;
+                Plugin.Logger.LogWarning($"Textbreite messen geht nicht, schaetze sie: {e.Message}");
+            }
+        }
+        return (content.text ?? "").Length * style.fontSize * 0.52f;
+    }
+
+    /// <summary>Liegt eine Zeile (y relativ zum Inhalt) ganz im sichtbaren Bereich?</summary>
+    public static bool RowVisible(Rect view, float y, float h, float offset) => y - offset >= -0.5f && y - offset + h <= view.height + 0.5f;
     private static Font gameFont;
 
     private static void InitStyles()
@@ -516,15 +600,15 @@ public static class Ui
         ValueSmall.wordWrap = true;
         foreach (var v in new[] { ValueBig, ValueMid, ValueSmall }) v.alignment = TextAnchor.MiddleCenter;
 
-        SearchStyle = new GUIStyle(GUI.skin.textField) { fontSize = 24, border = Offset(18), padding = Offset(10) };
-        if (gameFont) SearchStyle.font = gameFont;
+        SearchStyle = new GUIStyle(GUI.skin.box) { border = Offset(18), padding = Offset(0) };
         SearchStyle.normal.background = innerTex;
-        SearchStyle.hover.background = innerTex;
-        SearchStyle.focused.background = selectedTex;
-        SearchStyle.normal.textColor = Color.white;
-        SearchStyle.hover.textColor = Color.white;
-        SearchStyle.focused.textColor = Color.white;
-        SearchStyle.padding.left = 16;
+        SearchFocused = new GUIStyle(SearchStyle);
+        SearchFocused.normal.background = selectedTex;
+        ScrollThumb = new GUIStyle(GUI.skin.box) { border = Offset(3), padding = Offset(0) };
+        ScrollThumb.normal.background = MakeRounded(new Color(0.75f, 0.78f, 0.85f, 0.9f), new Color(0.75f, 0.78f, 0.85f, 0.9f), 3, 0);
+        SearchText = MakeLabel(24, FontStyle.Normal);
+        SearchText.alignment = TextAnchor.MiddleLeft;
+        SearchText.clipping = TextClipping.Clip;
 
         CloseButton = new GUIStyle(ButtonStyle) { fontSize = 26, fontStyle = FontStyle.Bold, border = Offset(24) };
         CloseButton.normal.background = closeTex;

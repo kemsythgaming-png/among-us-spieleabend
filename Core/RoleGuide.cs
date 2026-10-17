@@ -109,13 +109,15 @@ internal static class RoleGuide
         var vanilla = thisGame ? VanillaRoleEntry.All.Where(v => v.Count > 0).ToList() : new System.Collections.Generic.List<VanillaRoleEntry>();
         int rows = roles.Count + vanilla.Count + (thisGame ? 1 : 0);
         var view = new Rect(listBox.x + 10, listBox.y + 12, listBox.width - 20, listBox.height - 24);
-        var content = new Rect(0, 0, view.width - 22, Mathf.Max(view.height, rows * RowH));
-        scroll = GUI.BeginScrollView(view, scroll, content);
+        float rowWidth = view.width - 16;
+        scroll.y = Ui.Scroll(view, rows * RowH, scroll.y);
+        Rect Row(float y, float h) => new(view.x, view.y + y - scroll.y, rowWidth, h);
+        bool Shown(float y, float h) => Ui.RowVisible(view, y, h, scroll.y);
         var local = PlayerControl.LocalPlayer;
         float ly = 0;
         if (thisGame)
         {
-            GUI.Label(new Rect(4, ly + 10, content.width, 34), Lang.T("<b>Aktiv in dieser Runde:</b>", "<b>Active this game:</b>"), Ui.Small);
+            if (Shown(ly, 44)) GUI.Label(Row(ly + 10, 34), Lang.T("<b>Aktiv in dieser Runde:</b>", "<b>Active this game:</b>"), Ui.Small);
             ly += RowH;
         }
         foreach (var role in roles)
@@ -124,7 +126,7 @@ internal static class RoleGuide
             string text = role.Count.Int == 0 ? $"<color=#8A8F9C>{role.Name}</color>" : role.ColoredName;
             if (thisGame) text += $"  <color=#9AA0AE>{role.Count.Int}x · {role.Chance.Int}%</color>";
             if (RoleRegistry.Has(local, role) && !role.IsSecret(local)) text += Lang.T("  <color=#FFFFFF>(du)</color>", "  <color=#FFFFFF>(you)</color>");
-            if (GUI.Button(new Rect(0, ly, content.width, RowH - 6), new GUIContent(text), index == selected && selectedVanilla == null ? Ui.Selected : Ui.ButtonStyle))
+            if (Shown(ly, RowH - 6) && GUI.Button(Row(ly, RowH - 6), new GUIContent(text), index == selected && selectedVanilla == null ? Ui.Selected : Ui.ButtonStyle))
             {
                 selected = index;
                 selectedVanilla = null;
@@ -134,13 +136,12 @@ internal static class RoleGuide
         foreach (var v in vanilla)
         {
             string text = $"<color=#{ColorUtility.ToHtmlStringRGB(v.Color)}>{v.Name}</color>  <color=#9AA0AE>{v.Summary.Replace(", ", " · ")}</color>";
-            if (GUI.Button(new Rect(0, ly, content.width, RowH - 6), new GUIContent(text), v == selectedVanilla ? Ui.Selected : Ui.ButtonStyle))
+            if (Shown(ly, RowH - 6) && GUI.Button(Row(ly, RowH - 6), new GUIContent(text), v == selectedVanilla ? Ui.Selected : Ui.ButtonStyle))
                 selectedVanilla = v;
             ly += RowH;
         }
         if (thisGame && rows == 1)
-            GUI.Label(new Rect(4, ly, content.width, 40), Lang.T("Keine Sonderrollen eingeschaltet.", "No special roles enabled."), Ui.Small);
-        GUI.EndScrollView();
+            GUI.Label(Row(ly, 40), Lang.T("Keine Sonderrollen eingeschaltet.", "No special roles enabled."), Ui.Small);
 
         // Rechts: Details
         var detailBox = new Rect(listBox.xMax + 14, listBox.y, win.xMax - listBox.xMax - 34, listBox.height);
