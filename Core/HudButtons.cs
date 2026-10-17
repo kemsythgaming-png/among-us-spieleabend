@@ -36,10 +36,12 @@ internal static class HudButtons
             infoButton.gameObject.SetActive(hudUp && RoleRegistry.Roles.Count > 0);
             settingsButton.gameObject.SetActive(hudUp && SettingsWindow.Available);
 
-            // Abstand wie zwischen den Original-Knoepfen (Notizblock -> Zahnrad), sonst eine Knopfbreite
+            // Oben LINKS platzieren (dort stoeren sie am wenigsten). Gleicher Rand-Abstand wie die Original-Knoepfe rechts,
+            // nur von der linken Seite aus; der zweite Knopf steht rechts daneben.
             float spacing = Spacing(hud, sourcePos, source);
-            Place(infoPos, sourcePos, spacing);
-            Place(settingsPos, sourcePos, spacing * 2f);
+            float baseLeft = sourcePos ? sourcePos.DistanceFromEdge.x : 0.9f;
+            Place(infoPos, sourcePos, baseLeft);
+            Place(settingsPos, sourcePos, baseLeft + spacing);
         }
         catch (Exception e)
         {
@@ -96,12 +98,12 @@ internal static class HudButtons
         return w > 0.1f ? w : 0.75f;
     }
 
-    private static void Place(AspectPosition target, AspectPosition source, float offset)
+    private static void Place(AspectPosition target, AspectPosition source, float xFromLeft)
     {
         if (!target || !source) return;
         var d = source.DistanceFromEdge;
-        target.Alignment = source.Alignment;
-        target.DistanceFromEdge = new Vector3(d.x + offset, d.y, d.z);
+        target.Alignment = AspectPosition.EdgeAlignments.LeftTop; // oben links statt oben rechts
+        target.DistanceFromEdge = new Vector3(xFromLeft, d.y, d.z);
         target.AdjustPosition();
     }
 }

@@ -102,6 +102,9 @@ internal static class SettingsPanel
     private static string search = "";
     private static Vector2 listScroll, detailScroll;
 
+    // Schnell-Einstellung (Reiter "Allgemein"): Zielwerte fuer "alle Chancen"/"alle Anzahl"
+    private static int bulkChance = 50, bulkCount = 1;
+
     /// <summary>Ein Eintrag in der Rollen-Liste: Mod-Rolle, Rolle aus dem Spiel, Zwischenueberschrift oder (bei der Suche) eine einzelne Einstellung.</summary>
     private sealed class Entry
     {
@@ -212,6 +215,9 @@ internal static class SettingsPanel
             y += Row;
         }
 
+        // Mitte: Schnell-Einstellung fuer alle Mod-Rollen auf einmal
+        DrawBulk(area.x + 470, area.y, 280);
+
         // Rechts daneben: Hinweis und (im Freeplay) der Test-Bereich - nie ueber den Einstellungen
         var side = new Rect(area.x + 760, area.y, area.width - 770, area.height);
         GUI.Label(new Rect(side.x, side.y, side.width, 110),
@@ -224,6 +230,49 @@ internal static class SettingsPanel
             GUI.Box(box, new GUIContent(""), Ui.Panel);
             DrawFreeplay(new Rect(box.x + 18, box.y + 12, box.width - 36, 130));
         }
+    }
+
+    /// <summary>Schnell-Einstellung: alle Mod-Rollen-Chancen/-Anzahlen auf einmal setzen (nur Host/Freeplay).</summary>
+    private static void DrawBulk(float x, float y, float width)
+    {
+        bool canEdit = SettingsWindow.CanEdit;
+        GUI.Label(new Rect(x, y, width, 32), Lang.T("<b>Schnell einstellen</b>", "<b>Quick set</b>"), Ui.Text);
+        GUI.Label(new Rect(x, y + 30, width, 26), Lang.T("alle Mod-Rollen auf einmal", "all mod roles at once"), Ui.Small);
+        y += 64;
+
+        bool guiBefore = GUI.enabled;
+        GUI.enabled = canEdit;
+
+        if (Ui.Button(new Rect(x, y, width, 44), Lang.T("Alle Chancen zufällig", "Randomize all chances")) && canEdit)
+            BulkRoleOps.RandomizeChances();
+        y += 58;
+
+        // Alle Chancen auf denselben Wert
+        GUI.enabled = guiBefore;
+        GUI.Label(new Rect(x, y, width, 26), Lang.T("Alle Chancen:", "All chances:"), Ui.Small);
+        y += 28;
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(x, y, 44, 44), "-") && canEdit) bulkChance = Mathf.Clamp(bulkChance - 10, 0, 100);
+        GUI.enabled = guiBefore;
+        GUI.Label(new Rect(x + 48, y, 66, 44), $"{bulkChance}%", Ui.ValueMid);
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(x + 118, y, 44, 44), "+") && canEdit) bulkChance = Mathf.Clamp(bulkChance + 10, 0, 100);
+        if (Ui.Button(new Rect(x + 170, y, width - 170, 44), Lang.T("Setzen", "Apply")) && canEdit) BulkRoleOps.SetAllChances(bulkChance);
+        y += 58;
+
+        // Alle Anzahlen auf denselben Wert
+        GUI.enabled = guiBefore;
+        GUI.Label(new Rect(x, y, width, 26), Lang.T("Alle Anzahl:", "All counts:"), Ui.Small);
+        y += 28;
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(x, y, 44, 44), "-") && canEdit) bulkCount = Mathf.Clamp(bulkCount - 1, 0, 15);
+        GUI.enabled = guiBefore;
+        GUI.Label(new Rect(x + 48, y, 66, 44), $"{bulkCount}", Ui.ValueMid);
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(x + 118, y, 44, 44), "+") && canEdit) bulkCount = Mathf.Clamp(bulkCount + 1, 0, 15);
+        if (Ui.Button(new Rect(x + 170, y, width - 170, 44), Lang.T("Setzen", "Apply")) && canEdit) BulkRoleOps.SetAllCounts(bulkCount);
+
+        GUI.enabled = guiBefore;
     }
 
     private static void DrawGame(Rect area)

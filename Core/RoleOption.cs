@@ -68,4 +68,15 @@ public class RoleOption : ISetting
         entry.Value = next;
         RoleRpc.MarkOptionsDirty();
     }
+
+    /// <summary>Nur Host/Freeplay: Wert direkt setzen (fuer Sammel-Aktionen, z. B. "alle Chancen auf X").</summary>
+    public void SetValue(float value)
+    {
+        if (!SettingsWindow.CanEdit) return;
+        if (IsToggle) value = value >= 0.5f ? 1f : 0f;
+        float next = Mathf.Clamp(Mathf.Round(value / Step) * Step, Min, Max);
+        if (Mathf.Approximately(next, entry.Value)) return;
+        entry.Value = next;
+        RoleRpc.MarkOptionsDirty();
+    }
 }

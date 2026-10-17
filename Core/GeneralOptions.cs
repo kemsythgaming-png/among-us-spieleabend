@@ -34,6 +34,9 @@ public static class GeneralOptions
     /// <summary>Belohnungs-Bildschirm (XP/Pods/Cubes) nach dem Spiel anzeigen. Aus = kein Fortschritt/kein "Geld". Reiter "Spiel".</summary>
     public static RoleOption PostGameRewards { get; private set; }
 
+    /// <summary>Kamera-Wackeln (Screen Shake). Standard aus - in einer neuen Lobby wackelt die Kamera nicht.</summary>
+    public static RoleOption CameraShake { get; private set; }
+
     /// <summary>Mod-Einstellungen, die im Reiter "Spiel" (statt "Allgemein") stehen. Werden trotzdem mit allen synchronisiert.</summary>
     internal static readonly System.Collections.Generic.List<RoleOption> GameTab = new();
 
@@ -58,6 +61,7 @@ public static class GeneralOptions
         GameTab.Add(CardSwipeHelp);
         PostGameRewards = Add(config, "PostGameRewards", "Belohnungen nach dem Spiel (XP/Pods/Cubes)|Post-game rewards (XP/Pods/Cubes)", 1, 0, 1, 1, "", true);
         GameTab.Add(PostGameRewards);
+        CameraShake = Add(config, "CameraShake", "Kamera-Wackeln|Camera shake", 0, 0, 1, 1, "", true); // Standard aus
     }
 
     public static int MaxFor(RoleTeam team)
