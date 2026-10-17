@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>AmongUsSpieleabend</AssemblyName>
     <RootNamespace>Spieleabend</RootNamespace>
-    <Version>4.7.6</Version>
+    <Version>4.7.7</Version>
     <DebugType>embedded</DebugType>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>

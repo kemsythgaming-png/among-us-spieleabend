@@ -23,6 +23,18 @@ Copy-Item "$GameDir\winhttp.dll", "$GameDir\doorstop_config.ini" $mod
 Set-Content "$mod\steam_appid.txt" '945360' -NoNewline -Encoding ascii
 Copy-Item $dll "$mod\BepInEx\plugins"
 
+# BepInEx-Konfiguration mitliefern, damit das schwarze Konsolenfenster NIE aufgeht (auch nicht beim allerersten Start).
+# BepInEx ergaenzt fehlende Werte selbst; "Enabled = false" bleibt erhalten.
+New-Item -ItemType Directory -Force "$mod\BepInEx\config" | Out-Null
+@"
+[Logging.Console]
+
+## Enables showing a console for log output.
+# Setting type: Boolean
+# Default value: true
+Enabled = false
+"@ | Set-Content "$mod\BepInEx\config\BepInEx.cfg" -Encoding ascii
+
 Copy-Item "$PSScriptRoot\Installieren.ps1", "$PSScriptRoot\Installieren.bat", "$PSScriptRoot\LIESMICH.txt" $bau
 
 $zip = Join-Path $projekt "dist\AmongUsSpieleabend-$version.zip"
