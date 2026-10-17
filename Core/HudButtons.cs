@@ -30,8 +30,9 @@ internal static class HudButtons
             if (!settingsButton) (settingsButton, settingsPos) = Create(source, "hud_settings", "Spieleabend_SettingsButton", SettingsPanel.Toggle);
 
             // Oben rechts anzeigen - in der Lobby UND im Spiel/Meeting. Unabhaengig davon, ob der "Match Info"-Knopf
-            // gerade aktiv ist (in der Lobby ist er es naemlich nicht).
-            bool hudUp = (LobbyBehaviour.Instance || ShipStatus.Instance) && !IntroCutscene.Instance;
+            // gerade aktiv ist (in der Lobby ist er es naemlich nicht). Nicht, wenn gerade die Kleiderkammer offen ist.
+            bool hudUp = (LobbyBehaviour.Instance || ShipStatus.Instance) && !IntroCutscene.Instance
+                         && !PlayerCustomizationMenu.Instance;
             infoButton.gameObject.SetActive(hudUp && RoleRegistry.Roles.Count > 0);
             settingsButton.gameObject.SetActive(hudUp && SettingsWindow.Available);
 

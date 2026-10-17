@@ -79,6 +79,7 @@ public sealed class Haunting : CustomRole
     {
         HideAll();
         released.Clear();
+        localCollider = false;
     }
 
     /// <summary>Spukt dieser Spieler gerade (Geist mit dieser Rolle, nicht erloest)?</summary>
@@ -101,10 +102,23 @@ public sealed class Haunting : CustomRole
             Notifier.Show($"<color={ColorHex}>{Lang.T("Du wurdest erlöst - du kannst nicht mehr gewinnen.", "You were released - you can't win anymore.")}</color>", 5f);
     }
 
+    // Nur beim Spukgeist selbst: Collider wieder an, damit er wie eine lebende Figur an Waenden haengen bleibt
+    private bool localCollider;
+
+    private void UpdateLocalCollision()
+    {
+        var local = PlayerControl.LocalPlayer;
+        bool want = Haunts(local) && !InMeeting;
+        if (want == localCollider) return;
+        localCollider = want;
+        if (local && local.Collider) local.Collider.enabled = want || IsAlive(local);
+    }
+
     public override void Update()
     {
         var local = PlayerControl.LocalPlayer;
         if (!local || local.Data == null) return;
+        UpdateLocalCollision();
         bool livingViewer = IsAlive(local) && !InMeeting;
 
         foreach (var p in PlayerControl.AllPlayerControls)

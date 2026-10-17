@@ -258,12 +258,31 @@ internal static class RoleUI
     private static void UpdateIntro(CustomRole main, List<CustomRole> all)
     {
         var intro = IntroCutscene.Instance;
-        if (!intro) return;
+        if (intro) WriteIntro(intro, main, all);
+    }
 
-        intro.YouAreText.color = main.NameColor;
-        intro.RoleText.text = main.Name;
-        intro.RoleText.color = main.NameColor;
+    /// <summary>
+    /// Setzt den Rollen-Text im Rollen-Bildschirm (Intro) auf die Mod-Rolle. Wird auch waehrend der Rollen-Enthuellung
+    /// (IntroCutscene.ShowRole) staendig aufgerufen, damit dort die echte Rolle steht und nicht "Crewmate/Impostor".
+    /// </summary>
+    public static void ApplyIntroOverride(IntroCutscene intro)
+    {
+        var local = PlayerControl.LocalPlayer;
+        if (!intro || !local) return;
+        var main = RoleRegistry.GetGhostRole(local) ?? RoleRegistry.LocalRole;
+        if (main == null) return; // Rolle noch nicht zugewiesen -> Vanilla-Text stehen lassen
+        WriteIntro(intro, main, RoleRegistry.GetDisplayed(local).ToList());
+    }
 
+    private static void WriteIntro(IntroCutscene intro, CustomRole main, List<CustomRole> all)
+    {
+        if (intro.YouAreText) intro.YouAreText.color = main.NameColor;
+        if (intro.RoleText)
+        {
+            intro.RoleText.text = main.Name;
+            intro.RoleText.color = main.NameColor;
+        }
+        if (!intro.RoleBlurbText) return;
         string blurb = main.IntroText;
         foreach (var mod in all.Where(r => r.IsModifier)) blurb += $"\n<size=70%>+ {mod.ColoredName}</size>";
         intro.RoleBlurbText.text = blurb;

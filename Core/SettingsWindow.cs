@@ -34,6 +34,10 @@ public class SettingsWindow : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.F2) && !Ui.IsTyping) RoleGuide.Toggle();
         SettingsPanel.UpdateInput();
+
+        // Laeuft immer (auch waehrend der Rollen-Enthuellung, wenn der HUD noch nicht da ist):
+        // im Intro die echte Mod-Rolle schreiben statt "Crewmate/Impostor"
+        if (IntroCutscene.Instance) RoleUI.ApplyIntroOverride(IntroCutscene.Instance);
     }
 
     private void OnGUI()

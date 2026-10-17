@@ -17,10 +17,27 @@ public sealed class Executioner : CustomRole
     public override RoleTeam Team => RoleTeam.Neutral;
     public override string IntroText =>
         Lang.T("Bring dein Ziel an den Galgen", "Get your target ejected");
-    public override string Description =>
-        Lang.T("Lass dein [Ziel] rausvoten,\ndann gewinnst du allein.", "Get your [Target] voted out\nto win alone.");
+    public override string Description
+    {
+        get
+        {
+            string name = LocalTargetName();
+            return name != null
+                ? Lang.T($"Lass dein Ziel rausvoten: {name}\nDann gewinnst du allein.", $"Get your target voted out: {name}\nThen you win alone.")
+                : Lang.T("Lass dein Ziel rausvoten,\ndann gewinnst du allein.", "Get your target voted out,\nto win alone.");
+        }
+    }
     public override string LongDescription =>
-        Lang.T("Du bist neutral und hast ein Ziel - nur du siehst es am Namen.\n\nWird genau dieses Ziel rausgevotet, gewinnst du allein. Stirbt es anders, wirst du (einstellbar) zum Jester.", "You are neutral and have a target - only you see it next to their name.\n\nIf exactly this target is voted out, you win alone. If it dies another way, you become a Jester (configurable).");
+        Lang.T("Du bist neutral und hast ein Ziel - es steht oben links bei deiner Rolle.\n\nWird genau dieses Ziel rausgevotet, gewinnst du allein. Stirbt es anders, wirst du (einstellbar) zum Jester.", "You are neutral and have a target - it's shown with your role (top left).\n\nIf exactly this target is voted out, you win alone. If it dies another way, you become a Jester (configurable).");
+
+    /// <summary>Name des eigenen Ziels (nur fuer den Executioner selbst), oder null.</summary>
+    private string LocalTargetName()
+    {
+        var local = PlayerControl.LocalPlayer;
+        if (!local || !RoleRegistry.Has(local, this) || !targets.TryGetValue(local.PlayerId, out var t)) return null;
+        var target = FindPlayer(t);
+        return target && target.Data != null ? target.Data.PlayerName : null;
+    }
 
     private const byte ActionSetTarget = 0;
 
@@ -78,8 +95,5 @@ public sealed class Executioner : CustomRole
         }
     }
 
-    public override string GetNameMark(PlayerControl viewer, PlayerControl target) =>
-        RoleRegistry.Has(viewer, this) && targets.TryGetValue(viewer.PlayerId, out var t) && t == target.PlayerId
-            ? $"<color={ColorHex}>{Lang.T("[Ziel]", "[Target]")}</color>"
-            : null;
+    // Kein Zeichen mehr ueber dem Kopf des Ziels - der Zielname steht nur oben links bei der Rolle (siehe Description).
 }

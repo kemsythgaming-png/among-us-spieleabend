@@ -31,6 +31,9 @@ public static class GeneralOptions
     /// <summary>Karte durchziehen: nach so vielen Fehlversuchen gilt die Aufgabe als geschafft (0 = aus). Steht im Reiter "Spiel".</summary>
     public static RoleOption CardSwipeHelp { get; private set; }
 
+    /// <summary>Belohnungs-Bildschirm (XP/Pods/Cubes) nach dem Spiel anzeigen. Aus = kein Fortschritt/kein "Geld". Reiter "Spiel".</summary>
+    public static RoleOption PostGameRewards { get; private set; }
+
     /// <summary>Mod-Einstellungen, die im Reiter "Spiel" (statt "Allgemein") stehen. Werden trotzdem mit allen synchronisiert.</summary>
     internal static readonly System.Collections.Generic.List<RoleOption> GameTab = new();
 
@@ -53,6 +56,8 @@ public static class GeneralOptions
         // Neue Optionen immer hinten anhaengen (Reihenfolge = Reihenfolge beim Synchronisieren)
         CardSwipeHelp = Add(config, "CardSwipeHelp", "Karte gilt nach X Fehlversuchen (0 = aus)|Card counts after X failed swipes (0 = off)", 25, 0, 50, 5);
         GameTab.Add(CardSwipeHelp);
+        PostGameRewards = Add(config, "PostGameRewards", "Belohnungen nach dem Spiel (XP/Pods/Cubes)|Post-game rewards (XP/Pods/Cubes)", 1, 0, 1, 1, "", true);
+        GameTab.Add(PostGameRewards);
     }
 
     public static int MaxFor(RoleTeam team)

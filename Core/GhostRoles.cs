@@ -43,6 +43,9 @@ internal static class GhostRoles
         if (!CustomRole.AmHost || !victim || victim.Data == null || victim.Data.Disconnected) return;
         if (RoleRegistry.GetModifiers(victim).Any(r => r.IsGhostRole)) return;
         if ((Roles.Halloween.Undead.Instance?.WillRise(victim) ?? false) || (Roles.Modifiers.SecondLife.Instance?.WillRise(victim) ?? false)) return; // steht wieder auf
+        // Survivor und Untoter bekommen nie eine Geisterrolle (sonst haetten sie nach dem endgueltigen Tod einen Geister-Knopf)
+        if (Roles.Modifiers.SecondLife.Instance != null && RoleRegistry.Has(victim, Roles.Modifiers.SecondLife.Instance)) return;
+        if (Roles.Halloween.Undead.Instance != null && RoleRegistry.Has(victim, Roles.Halloween.Undead.Instance)) return;
 
         foreach (var role in RoleRegistry.Roles.Where(r => r.IsGhostRole && r.Count.Int > 0).OrderBy(_ => Random.value))
         {
