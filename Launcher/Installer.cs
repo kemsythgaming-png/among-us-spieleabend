@@ -107,7 +107,18 @@ internal sealed class Installer
 
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
         string plugin = Path.Combine(target, "BepInEx", "plugins", Config.ModAssetName);
-        bool bepinexMissing = !File.Exists(Path.Combine(target, "winhttp.dll")) || !Directory.Exists(Path.Combine(target, "BepInEx", "core"));
+
+        // BepInEx neu einspielen, wenn es fehlt ODER nicht unser BepInEx ist (altes/fremdes aus einem frueheren Versuch,
+        // z. B. weil die Deinstallation nicht komplett ging). Erkannt an einer Versionsmarke, die wir selbst ablegen.
+        const string markerPath = "BepInEx/spieleabend.txt";
+        string installedMarker = TryRead(Path.Combine(target, "BepInEx", "spieleabend.txt"));
+        string packagedMarker = ReadEntryText(zip, markerPath);
+        bool bepinexMissing = !File.Exists(Path.Combine(target, "winhttp.dll"))
+                              || !Directory.Exists(Path.Combine(target, "BepInEx", "core"))
+                              || string.IsNullOrEmpty(installedMarker)
+                              || (packagedMarker != null && installedMarker != packagedMarker);
+        if (bepinexMissing && File.Exists(Path.Combine(target, "winhttp.dll")))
+            Log.Write($"BepInEx wird neu eingespielt (Marke installiert='{installedMarker}', Paket='{packagedMarker}').");
 
         var packagedDll = zip.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/').EndsWith("BepInEx/plugins/" + Config.ModAssetName));
         Version packaged = packagedDll != null ? ReadVersion(packagedDll) : null;
@@ -149,6 +160,20 @@ internal sealed class Installer
 
     private static string DestOf(string target, ZipArchiveEntry entry) =>
         Path.Combine(target, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+
+    private static string TryRead(string path)
+    {
+        try { return File.Exists(path) ? File.ReadAllText(path).Trim() : null; }
+        catch { return null; }
+    }
+
+    private static string ReadEntryText(ZipArchive zip, string entryPath)
+    {
+        var entry = zip.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/').Equals(entryPath, StringComparison.OrdinalIgnoreCase));
+        if (entry == null) return null;
+        try { using var r = new StreamReader(entry.Open()); return r.ReadToEnd().Trim(); }
+        catch { return null; }
+    }
 
     private static Version ReadVersion(ZipArchiveEntry entry)
     {

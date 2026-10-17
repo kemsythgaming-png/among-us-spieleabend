@@ -35,6 +35,10 @@ New-Item -ItemType Directory -Force "$mod\BepInEx\config" | Out-Null
 Enabled = false
 "@ | Set-Content "$mod\BepInEx\config\BepInEx.cfg" -Encoding ascii
 
+# Versionsmarke fuer BepInEx: erkennt ein altes/fremdes BepInEx (dann spielt der Launcher es komplett neu ein).
+# Nur erhoehen, wenn sich an BepInEx selbst oder der mitgelieferten Konfiguration etwas aendert.
+Set-Content "$mod\BepInEx\spieleabend.txt" 'bepinex-v2-console-off' -NoNewline -Encoding ascii
+
 Copy-Item "$PSScriptRoot\Installieren.ps1", "$PSScriptRoot\Installieren.bat", "$PSScriptRoot\LIESMICH.txt" $bau
 
 $zip = Join-Path $projekt "dist\AmongUsSpieleabend-$version.zip"
