@@ -47,7 +47,7 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | Adlerauge | Anpassung | Sieht weiter. |
 | Fackel | Anpassung (Crew) | Licht-Sabotage stört nicht. |
 | Köder | Anpassung (Crew) | Wer ihn tötet, meldet die Leiche automatisch sofort selbst. |
-| Survivor | Crew | Überlebt den ersten Angriff einmal. Wird er getötet, ist der Mörder in seiner Kill-Animation getarnt. |
+| Survivor | Crew | Wird er getötet, sieht er nicht, wer es war (Mörder in der Kill-Animation getarnt). Bis zum nächsten Meeting hängt er als Geist an der Todesstelle fest und sieht alle nur getarnt, ohne Rollen-Infos. Danach steht er wieder auf, kann aber kein Meeting mehr einberufen (kein Notfallknopf, kein Melden). Zweiter Tod = endgültig. |
 | Tiebreaker | Anpassung | Bei Stimmengleichstand entscheidet seine Stimme. |
 | Spürnase | Anpassung | Meldet er eine Leiche, sieht er die Rolle des Toten. |
 | Radar | Crew | Auf Knopfdruck (**F**) zeigt ein paar Sekunden lang ein Pfeil zum nächsten Spieler. |

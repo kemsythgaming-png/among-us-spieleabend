@@ -51,7 +51,11 @@ public sealed class Bait : CustomRole
     }
 }
 
-/// <summary>Anpassung: ueberlebt den ersten Angriff einmal.</summary>
+/// <summary>
+/// Crew: Wird er getoetet, steht er nach dem naechsten Meeting wieder auf. Bis dahin ist er ein Geist, der an der Stelle
+/// seines Todes festhaengt und alle Vorbeilaufenden nur getarnt sieht (er weiss nicht, wer ihn getoetet hat).
+/// Zurueck im Spiel kann er kein Meeting mehr einberufen.
+/// </summary>
 public sealed class SecondLife : CustomRole
 {
     public override string ConfigSection => "ZweitesLeben";
@@ -59,39 +63,112 @@ public sealed class SecondLife : CustomRole
     public override Color Color => new Color32(255, 215, 90, 255);
     public override RoleTeam Team => RoleTeam.Crewmate; // eigene Crew-Rolle (war frueher eine Anpassung)
     public override string IntroText => Lang.T("Katzen haben neun - du hast zwei", "Cats have nine - you have two");
-    public override string Description => Lang.T("Du überlebst den ersten Angriff.", "You survive the first attack.");
+    public override string Description => Stage(PlayerControl.LocalPlayer) switch
+    {
+        SurvivorStage.Waiting => Lang.T("Du bist tot - nach dem nächsten\nMeeting kommst du zurück.", "You are dead - you come back\nafter the next meeting."),
+        SurvivorStage.Back => Lang.T("Zurück! Aber du kannst kein\nMeeting mehr einberufen.", "Back! But you can't call\nmeetings anymore."),
+        _ => Lang.T("Wirst du getötet, kommst du nach\ndem nächsten Meeting zurück.", "If you get killed, you come back\nafter the next meeting."),
+    };
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Der erste Angriff auf dich scheitert (der Angreifer sieht nur einen fehlgeschlagenen Kill). Danach bist du normal sterblich.\n\nWirst du getötet, siehst du in der Kill-Animation nicht, wer es war - der Mörder ist getarnt.",
-        "You are crew. The first attack on you fails (the attacker only sees a failed kill). After that you are mortal as usual.\n\nIf you get killed, the kill animation doesn't show who did it - the killer is camouflaged.");
+        "Du bist Crew. Wirst du getötet, siehst du nicht, wer es war - der Mörder ist in der Kill-Animation getarnt.\n\nBis zum nächsten Meeting bist du ein Geist, der an der Stelle seines Todes festhängt. Alle, die vorbeilaufen, siehst du nur getarnt (grau, ohne Namen). Nach dem Meeting stehst du wieder auf - kannst aber kein Meeting mehr einberufen (weder Notfallknopf noch Leiche melden). Reden kannst du also nur, wenn jemand anderes ein Meeting startet. Ein zweiter Tod ist endgültig.",
+        "You are crew. If you get killed, you don't see who did it - the killer is camouflaged in the kill animation.\n\nUntil the next meeting you are a ghost stuck at the spot of your death. Everyone walking by looks camouflaged to you (gray, no name). After the meeting you rise again - but you can't call meetings anymore (no emergency button, no reporting). So you can only talk when someone else starts a meeting. A second death is final.");
 
     internal static SecondLife Instance { get; private set; }
 
-    private const byte ActionUsed = 0;
-    private readonly HashSet<byte> used = new();
+    private const byte ActionRise = 0;
+
+    // bei allen Clients
+    private readonly Dictionary<byte, SurvivorStage> stages = new();
+
+    // lokal: wo man gestorben ist
+    private Vector3 deathPos;
 
     protected override void Setup() => Instance = this;
 
-    public override void ResetState() => used.Clear();
+    public override void ResetState() => stages.Clear();
 
-    public override KillIntercept InterceptKill(PlayerControl killer, PlayerControl target)
+    internal SurvivorStage Stage(PlayerControl p) =>
+        p && stages.TryGetValue(p.PlayerId, out var s) ? s : SurvivorStage.Alive;
+
+    /// <summary>Toter Survivor, der wieder aufsteht (bekommt keine Geisterrolle und keine Rollen-Infos).</summary>
+    internal bool WillRise(PlayerControl p) => RoleRegistry.Has(p, this) && Stage(p) == SurvivorStage.Waiting;
+
+    /// <summary>Zurueckgekehrter Survivor: darf kein Meeting einberufen.</summary>
+    internal bool CannotCallMeetings(PlayerControl p) => RoleRegistry.Has(p, this) && Stage(p) == SurvivorStage.Back && IsAlive(p);
+
+    public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
     {
-        if (!RoleRegistry.Has(target, this) || used.Contains(target.PlayerId) || killer == target) return KillIntercept.None;
-        killer.RpcMurderPlayer(target, false);
-        SendToAll(ActionUsed, target.PlayerId);
-        return KillIntercept.Handled;
+        if (!RoleRegistry.Has(victim, this)) return;
+        bool first = Stage(victim) == SurvivorStage.Alive && cause != DeathCause.Exile;
+        stages[victim.PlayerId] = first ? SurvivorStage.Waiting : SurvivorStage.Final;
+        if (!first || victim != PlayerControl.LocalPlayer) return;
+
+        deathPos = victim.transform.position;
+        Notifier.Show($"<color={ColorHex}>{Lang.T("Du bist gestorben ... aber nach dem nächsten Meeting kommst du zurück.", "You died ... but you come back after the next meeting.")}</color>", 6f);
+    }
+
+    public override void OnMeetingEnd(PlayerControl exiled)
+    {
+        if (!AmHost) return;
+        foreach (var pair in stages.Where(s => s.Value == SurvivorStage.Waiting).ToList())
+        {
+            var p = FindPlayer(pair.Key);
+            if (!p || p.Data == null || p.Data.Disconnected || p == exiled) continue;
+            SendToAll(ActionRise, pair.Key);
+        }
     }
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
-        if (action != ActionUsed || data.Length < 1) return;
-        used.Add(data[0]);
-        var local = PlayerControl.LocalPlayer;
-        if (local && local.PlayerId == data[0])
+        if (action != ActionRise || data.Length < 1 || !sender) return;
+        if (AmongUsClient.Instance && sender.OwnerId != AmongUsClient.Instance.HostId) return; // nur der Host laesst aufstehen
+        var p = FindPlayer(data[0]);
+        if (!p || Stage(p) != SurvivorStage.Waiting) return;
+        stages[p.PlayerId] = SurvivorStage.Back;
+        p.Revive();
+        if (AmHost) p.RpcSetRole(AmongUs.GameOptions.RoleTypes.Crewmate, true);
+        ProtectionVisuals.ShowBurst(p, Color);
+        if (p == PlayerControl.LocalPlayer)
         {
-            ProtectionVisuals.ShowBurst(local, Color);
             Sfx.Play(Sfx.Protect);
-            Notifier.Show($"<color={ColorHex}>{Lang.T("Dein zweites Leben hat dich gerettet!", "Your second life saved you!")}</color>");
+            Notifier.Show($"<color={ColorHex}>{Lang.T("Du bist zurück! Ein Meeting kannst du aber nicht mehr einberufen.", "You are back! But you can't call a meeting anymore.")}</color>", 6f);
         }
+    }
+
+    public override void Update()
+    {
+        var local = PlayerControl.LocalPlayer;
+        if (!IsLocalRole || Stage(local) != SurvivorStage.Waiting || InMeeting) return;
+
+        // Als Geist an der Stelle des Todes festhalten
+        if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
+        if (((Vector2)local.transform.position - (Vector2)deathPos).sqrMagnitude > 0.0004f)
+            local.transform.position = new Vector3(deathPos.x, deathPos.y, local.transform.position.z);
+
+        // Alle Vorbeilaufenden nur getarnt sehen (nur bei ihm selbst)
+        Camouflage.Start(0.5f);
+    }
+}
+
+internal enum SurvivorStage
+{
+    Alive,
+    Waiting,
+    Back,
+    Final,
+}
+
+/// <summary>Zurueckgekehrter Survivor: kein Notfallknopf, keine Leiche melden.</summary>
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.CmdReportDeadBody))]
+internal static class SurvivorNoMeetingPatch
+{
+    public static bool Prefix(PlayerControl __instance)
+    {
+        var survivor = SecondLife.Instance;
+        if (survivor == null || !survivor.CannotCallMeetings(__instance)) return true;
+        if (__instance == PlayerControl.LocalPlayer)
+            Notifier.Show($"<color={survivor.ColorHex}>{Lang.T("Du kannst kein Meeting einberufen.", "You can't call a meeting.")}</color>", 2.5f);
+        return false;
     }
 }
 

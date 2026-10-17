@@ -162,7 +162,8 @@ internal static class RoleUI
         var parts = new List<string>();
 
         bool deadView = !CustomRole.IsAlive(viewer) && GeneralOptions.DeadSeeRoles.Bool
-                        && !(Roles.Halloween.Undead.Instance?.HidesRoles(viewer) ?? false); // toter Untoter steht wieder auf
+                        && !(Roles.Halloween.Undead.Instance?.HidesRoles(viewer) ?? false) // toter Untoter steht wieder auf
+                        && !(Roles.Modifiers.SecondLife.Instance?.WillRise(viewer) ?? false); // toter Survivor auch
         bool self = target == viewer && GeneralOptions.ShowOwnRole.Bool;
         if (deadView || self)
         {

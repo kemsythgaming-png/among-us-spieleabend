@@ -42,7 +42,7 @@ internal static class GhostRoles
     {
         if (!CustomRole.AmHost || !victim || victim.Data == null || victim.Data.Disconnected) return;
         if (RoleRegistry.GetModifiers(victim).Any(r => r.IsGhostRole)) return;
-        if (Roles.Halloween.Undead.Instance?.WillRise(victim) ?? false) return; // steht wieder auf
+        if ((Roles.Halloween.Undead.Instance?.WillRise(victim) ?? false) || (Roles.Modifiers.SecondLife.Instance?.WillRise(victim) ?? false)) return; // steht wieder auf
 
         foreach (var role in RoleRegistry.Roles.Where(r => r.IsGhostRole && r.Count.Int > 0).OrderBy(_ => Random.value))
         {
