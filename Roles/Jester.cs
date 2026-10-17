@@ -34,6 +34,7 @@ public sealed class Jester : CustomRole
         {
             Label = "Venten|Vent",
             Icon = "vent",
+            GameIcon = hud => hud.ImpostorVentButton && hud.ImpostorVentButton.graphic ? hud.ImpostorVentButton.graphic.sprite : null,
             NeedsTarget = false,
             UsableInVent = true,
             Cooldown = () => 0f,
@@ -44,6 +45,26 @@ public sealed class Jester : CustomRole
             OnClick = _ => VentToUse()?.Use(),
         });
     }
+
+    private Vent shownArrowsFor;
+
+    /// <summary>Im Vent die Pfeile zu den Nachbar-Vents zeigen (macht das Spiel sonst nur fuer Impostor/Engineer).</summary>
+    public override void Update()
+    {
+        var local = PlayerControl.LocalPlayer;
+        Vent current = null;
+        if (IsLocalRole && IsAlive(local) && local.inVent && ShipStatus.Instance && !InMeeting)
+        {
+            Vector2 me = local.GetTruePosition();
+            current = ShipStatus.Instance.AllVents.Where(v => v).OrderBy(v => Vector2.Distance(me, v.transform.position)).FirstOrDefault();
+        }
+        if (current == shownArrowsFor) return;
+        if (shownArrowsFor) shownArrowsFor.SetButtons(false);
+        if (current) current.SetButtons(true);
+        shownArrowsFor = current;
+    }
+
+    public override void ResetState() => shownArrowsFor = null;
 
     /// <summary>Darf dieser Spieler venten?</summary>
     internal bool Vents(PlayerControl p) => canVent.Bool && RoleRegistry.Has(p, this) && IsAlive(p);

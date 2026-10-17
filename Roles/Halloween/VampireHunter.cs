@@ -21,7 +21,7 @@ public sealed class VampireHunter : CustomRole
 
     private const byte ActionStake = 0, ActionResult = 1;
 
-    private RoleOption stakes, showResult;
+    private RoleOption stakes, showResult, cooldown;
 
     private int stakesLeft;
     private readonly Dictionary<byte, int> stakesUsed = new(); // beim Host
@@ -29,14 +29,14 @@ public sealed class VampireHunter : CustomRole
     protected override void Setup()
     {
         stakes = AddOption("Stakes", "Pflöcke pro Spiel|Stakes per game", 2f, 1f, 5f, 1f);
+        cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 20f, 0f, 60f, 2.5f, "s");
         showResult = AddToggle("ShowResult", "Erfährt, ob es ein Monster war|Learns if it was a monster", true);
 
         AddButton(new RoleButton
         {
             Label = "Pflock|Stake",
             Icon = "stake",
-            Cooldown = () => 1f,      // keine echte Abklingzeit - begrenzt sind nur die Pfloecke
-            StartCooldown = 1f,
+            Cooldown = () => cooldown.Value,
             Hotkey = KeyCode.F,
             CanUse = () => stakesLeft > 0,
             UsesLeft = () => stakesLeft,

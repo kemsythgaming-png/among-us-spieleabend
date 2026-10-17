@@ -40,7 +40,7 @@ public sealed class Zombie : CustomRole
     protected override void Setup()
     {
         Instance = this;
-        cooldown = AddOption("EatCooldown", "Abklingzeit nach dem Fressen|Cooldown after eating", 15f, 0f, 60f, 2.5f, "s");
+        cooldown = AddOption("EatCooldownSec", "Abklingzeit nach dem Fressen|Cooldown after eating", 20f, 0f, 60f, 2.5f, "s");
         toWin = AddOption("BodiesToWin", "Leichen zum Sieg|Bodies to win", 3f, 1f, 8f, 1f);
 
         AddButton(new RoleButton
@@ -52,7 +52,6 @@ public sealed class Zombie : CustomRole
             StartCooldown = 5f,
             Hotkey = KeyCode.F,
             CanUse = () => NearbyBody() != null,
-            UsesLeft = () => Mathf.Max(0, toWin.Int - EatenByLocal), // wie viele noch fehlen
             OnClick = _ =>
             {
                 var body = NearbyBody();
