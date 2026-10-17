@@ -57,9 +57,16 @@ internal static class Program
 
             if (!CloseRunningGame(targets.Folders)) return;
 
-            var problems = targets.DeleteAll();
-            if (problems.Count == 0)
-                MessageBox.Show("Among Us Spieleabend wurde vollständig entfernt.\n\nDie heruntergeladene Launcher-Datei (falls noch irgendwo, z. B. unter Downloads) kannst du selbst löschen.",
+            var (problems, leftovers) = targets.DeleteAll();
+            string downloadHint = "\n\nDie heruntergeladene Launcher-Datei (falls noch irgendwo, z. B. unter Downloads) kannst du selbst löschen.";
+
+            if (problems.Count == 0 && leftovers.Count == 0)
+                MessageBox.Show("Among Us Spieleabend wurde vollständig entfernt." + downloadHint,
+                    Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            else if (problems.Count == 0)
+                MessageBox.Show("Among Us Spieleabend ist entfernt - alle Dateien sind weg.\n\nNur ein leerer Ordner ist noch übrig (er war wohl im Explorer geöffnet):\n" +
+                                string.Join("\n", leftovers.Select(p => "  - " + p)) +
+                                "\n\nSchließe das Explorer-Fenster - der leere Ordner verschwindet dann von selbst (sonst beim nächsten Neustart)." + downloadHint,
                     Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
             else
                 MessageBox.Show("Fast alles wurde entfernt. Das hier ging nicht (evtl. noch geöffnet):\n\n" + string.Join("\n", problems.Select(p => "  - " + p)) +
@@ -96,11 +103,17 @@ internal static class Program
             if (Registry) yield return "Gemerkter Installationsordner (Registry)";
         }
 
-        public List<string> DeleteAll()
+        /// <summary>Loescht alles. problems = echte Fehler, leftovers = nur noch leere Ordner (werden im Hintergrund entfernt).</summary>
+        public (List<string> Problems, List<string> Leftovers) DeleteAll()
         {
             var problems = new List<string>();
+            var leftovers = new List<string>();
             foreach (var f in Folders.Concat(DataFolders))
-                if (!TryDeleteFolder(f)) problems.Add(f);
+                switch (DeleteFolder(f))
+                {
+                    case DeleteResult.EmptyLeftover: leftovers.Add(f); break;
+                    case DeleteResult.Failed: problems.Add(f); break;
+                }
             foreach (var f in Files)
                 if (!TryDeleteFile(f)) problems.Add(f);
             if (Registry)
@@ -116,7 +129,7 @@ internal static class Program
                 }
                 catch { }
             }
-            return problems;
+            return (problems, leftovers);
         }
     }
 
@@ -257,21 +270,73 @@ internal static class Program
         return true;
     }
 
-    private static bool TryDeleteFolder(string folder)
+    internal enum DeleteResult { Ok, EmptyLeftover, Failed }
+
+    /// <summary>
+    /// Loescht erst allen Inhalt (Datei fuer Datei, auch schreibgeschuetzte), dann den Ordner selbst.
+    /// Haengt nur noch die leere Huelle (z. B. weil der Ordner gerade im Explorer offen ist), wird sie fuer
+    /// spaeter zum Loeschen vorgemerkt - der Inhalt ist dann weg, nur ein leerer Ordner bleibt kurz uebrig.
+    /// </summary>
+    private static DeleteResult DeleteFolder(string folder)
     {
+        if (!Directory.Exists(folder)) return DeleteResult.Ok;
+
+        // 1) Inhalt restlos entfernen
         for (int i = 0; i < 3; i++)
         {
             try
             {
-                if (!Directory.Exists(folder)) return true;
                 foreach (var file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
-                    File.SetAttributes(file, FileAttributes.Normal); // schreibgeschuetzte Dateien auch
-                Directory.Delete(folder, true);
-                return true;
+                {
+                    try { File.SetAttributes(file, FileAttributes.Normal); File.Delete(file); } catch { }
+                }
+                foreach (var dir in Directory.GetDirectories(folder, "*", SearchOption.AllDirectories)
+                             .OrderByDescending(d => d.Length)) // tiefste zuerst
+                {
+                    try { Directory.Delete(dir, false); } catch { }
+                }
+                break;
             }
-            catch { Thread.Sleep(800); }
+            catch { }
+            Thread.Sleep(600);
         }
-        return !Directory.Exists(folder);
+
+        // 2) Ordner selbst
+        for (int i = 0; i < 3; i++)
+        {
+            try { Directory.Delete(folder, true); return DeleteResult.Ok; }
+            catch { Thread.Sleep(600); }
+        }
+        if (!Directory.Exists(folder)) return DeleteResult.Ok;
+
+        // 3) Nur noch leer uebrig (meist: gerade im Explorer offen) -> fuer spaeter vormerken
+        bool empty = !Directory.EnumerateFileSystemEntries(folder).Any();
+        if (empty)
+        {
+            ScheduleEmptyFolderRemoval(folder);
+            return DeleteResult.EmptyLeftover;
+        }
+        return DeleteResult.Failed;
+    }
+
+    /// <summary>Loescht den leeren Ordner im Hintergrund noch mehrmals (sobald z. B. das Explorer-Fenster zu ist) - ohne Admin.</summary>
+    private static void ScheduleEmptyFolderRemoval(string folder)
+    {
+        try
+        {
+            // wartet und versucht es ein paar Mal; auch der uebergeordnete leere "Spieleabend"-Ordner wird mitgenommen
+            string parent = Path.GetDirectoryName(folder);
+            bool parentToo = parent != null && Path.GetFileName(parent).Equals("Spieleabend", StringComparison.OrdinalIgnoreCase);
+            string cmd = $"for /l %i in (1,1,6) do (rd /q \"{folder}\" 2>nul & ping 127.0.0.1 -n 4 >nul)";
+            if (parentToo) cmd += $" & rd /q \"{parent}\" 2>nul";
+            Process.Start(new ProcessStartInfo("cmd.exe", "/c " + cmd)
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            });
+        }
+        catch { }
     }
 
     private static bool TryDeleteFile(string file)
