@@ -85,11 +85,6 @@ internal sealed class LauncherForm : Form
             Log.Write("Zielordner: " + target);
             Log.UseGameFolder(target);
 
-            // Bei Windows Defender: vor dem Kopieren anbieten, den Ordner freizugeben (sonst Quarantaene der Mod-Dateien)
-            SetStatus("Prüfe den Virenschutz ...");
-            if (await Task.Run(() => Defender.ShouldOffer(target)))
-                Defender.RunExclusionFlow(this, target); // Fenster + UAC auf dem UI-Thread
-
             bool started = await Task.Run(() => installer.Run(steamGame, target));
             if (started)
             {

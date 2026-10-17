@@ -293,39 +293,42 @@ def hud_glyph(img, draw_mask, details=None):
 
 
 def icon_hud_roleinfo():
-    """Rollenkarte (Ausweis mit Crewmate) und ein kleines i."""
+    """Crewmate mit Info-Abzeichen (Rollen-Info)."""
     img = hud_button()
-    c = S / 2
 
     def shape(m):
-        m.rounded_rectangle((150, 140, 330, 372), 18, fill=255)       # Karte
-        m.ellipse((292, 286, 372, 366), fill=255)                      # i-Kreis
+        # Crewmate gross und zentriert (Koerper als Bohne, Rucksack links, Visier oben)
+        m.rounded_rectangle((168, 150, 300, 350), 58, fill=255)   # Koerper
+        m.rounded_rectangle((126, 200, 172, 300), 22, fill=255)   # Rucksack
+        m.rounded_rectangle((206, 178, 300, 236), 24, fill=255)   # Visier (buendig mit dem Koerper)
 
     def details(d):
-        # Crewmate auf der Karte
-        d.rounded_rectangle((190, 175, 290, 290), 40, fill=HUD_GLYPH_LINE)
-        d.rounded_rectangle((232, 200, 296, 232), 14, fill=HUD_PANEL)
-        d.rectangle((180, 312, 300, 324), fill=HUD_GLYPH_LINE)
-        d.rectangle((180, 340, 262, 350), fill=HUD_GLYPH_LINE)
-        # i im Kreis
-        d.ellipse((290, 284, 374, 368), outline=HUD_GLYPH_LINE, width=10)
-        d.rectangle((326, 318, 338, 350), fill=HUD_GLYPH_LINE)
-        d.ellipse((325, 297, 339, 311), fill=HUD_GLYPH_LINE)
+        # Visier hell
+        d.rounded_rectangle((218, 188, 292, 228), 18, fill=HUD_PANEL)
+        # i-Abzeichen unten rechts
+        cx, cy, r = 350, 352, 62
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=HUD_GLYPH_LINE, outline=HUD_PANEL, width=12)
+        d.ellipse((cx - 9, cy - 32, cx + 9, cy - 14), fill=HUD_PANEL)
+        d.rounded_rectangle((cx - 9, cy - 6, cx + 9, cy + 34), 6, fill=HUD_PANEL)
 
     return hud_glyph(img, shape, details)
 
 
 def icon_hud_settings():
-    """Drei Schieberegler (Rollen-Einstellungen)."""
+    """Drei saubere Schieberegler (Rollen-Einstellungen)."""
     img = hud_button()
-    rows = ((180, 300), (256, 205), (332, 330))
+    rows = ((176, 324), (256, 198), (336, 342))  # (Hoehe, Knopf-x)
 
     def shape(m):
         for y, knob in rows:
-            m.rounded_rectangle((150, y - 9, 362, y + 9), 9, fill=255)
-            m.ellipse((knob - 30, y - 30, knob + 30, y + 30), fill=255)
+            m.rounded_rectangle((136, y - 11, 376, y + 11), 11, fill=255)
+            m.ellipse((knob - 33, y - 33, knob + 33, y + 33), fill=255)
 
-    return hud_glyph(img, shape)
+    def details(d):
+        for y, knob in rows:
+            d.ellipse((knob - 15, y - 15, knob + 15, y + 15), fill=HUD_PANEL)
+
+    return hud_glyph(img, shape, details)
 
 
 def icon_candy():

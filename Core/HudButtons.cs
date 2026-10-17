@@ -29,9 +29,11 @@ internal static class HudButtons
             if (!infoButton) (infoButton, infoPos) = Create(source, "hud_roleinfo", "Spieleabend_RoleInfoButton", RoleGuide.Toggle);
             if (!settingsButton) (settingsButton, settingsPos) = Create(source, "hud_settings", "Spieleabend_SettingsButton", SettingsPanel.Toggle);
 
-            bool sourceShown = source.gameObject.activeInHierarchy;
-            infoButton.gameObject.SetActive(sourceShown && RoleRegistry.Roles.Count > 0);
-            settingsButton.gameObject.SetActive(sourceShown && SettingsWindow.Available);
+            // Oben rechts anzeigen - in der Lobby UND im Spiel/Meeting. Unabhaengig davon, ob der "Match Info"-Knopf
+            // gerade aktiv ist (in der Lobby ist er es naemlich nicht).
+            bool hudUp = (LobbyBehaviour.Instance || ShipStatus.Instance) && !IntroCutscene.Instance;
+            infoButton.gameObject.SetActive(hudUp && RoleRegistry.Roles.Count > 0);
+            settingsButton.gameObject.SetActive(hudUp && SettingsWindow.Available);
 
             // Abstand wie zwischen den Original-Knoepfen (Notizblock -> Zahnrad), sonst eine Knopfbreite
             float spacing = Spacing(hud, sourcePos, source);

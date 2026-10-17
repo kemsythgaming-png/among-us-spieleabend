@@ -364,19 +364,27 @@ internal static class SettingsPanel
         float cx = x + labelWidth + 10;
         bool canEdit = SettingsWindow.CanEdit || setting.AlwaysEditable;
 
+        // Gaeste (nicht Host) sehen die Werte, koennen sie aber nicht aendern -> Knoepfe ausgegraut
+        bool guiBefore = GUI.enabled;
+        GUI.enabled = canEdit;
+
         if (setting.IsToggle)
         {
             if (Ui.Button(new Rect(cx, y, ControlWidth, 44), setting.Display, setting.Bool) && canEdit) setting.Change(1);
+            GUI.enabled = guiBefore;
             return;
         }
 
         if (Ui.Button(new Rect(cx, y, 50, 44), "-") && canEdit) setting.Change(-1);
+        GUI.enabled = true; // der Wert selbst bleibt immer gut lesbar
         // Wert: so gross wie moeglich, ohne abgeschnitten zu werden
         var value = new GUIContent(setting.Display);
         var style = Ui.Width(Ui.ValueBig, value) <= ValueWidth ? Ui.ValueBig
                   : Ui.Width(Ui.ValueMid, value) <= ValueWidth ? Ui.ValueMid : Ui.ValueSmall;
         GUI.Label(new Rect(cx + 55, y, ValueWidth, 44), value, style);
+        GUI.enabled = canEdit;
         if (Ui.Button(new Rect(cx + 55 + ValueWidth + 5, y, 50, 44), "+") && canEdit) setting.Change(1);
+        GUI.enabled = guiBefore;
     }
 
     private static void DrawFreeplay(Rect area)
