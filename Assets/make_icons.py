@@ -517,6 +517,37 @@ def icon_radar():
     return img
 
 
+def icon_eat():
+    """Zombie: abgenagter Knochen."""
+    img, d = canvas()
+    c = S / 2
+    bone = (240, 232, 210, 255)
+    ang = math.radians(-35)
+    dx, dy = math.cos(ang) * 150, math.sin(ang) * 150
+    nx, ny = -math.sin(ang) * 42, math.cos(ang) * 42
+    shaft = [(c - dx - nx, c - dy - ny), (c + dx - nx, c + dy - ny), (c + dx + nx, c + dy + ny), (c - dx + nx, c - dy + ny)]
+    for sx in (-1, 1):
+        ex, ey = c + sx * dx, c + sx * dy
+        for k in (-1, 1):
+            ox, oy = ex + k * nx * 1.1 + sx * math.cos(ang) * 25, ey + k * ny * 1.1 + sx * math.sin(ang) * 25
+            ellipse(d, (ox - 62, oy - 62, ox + 62, oy + 62), bone, 18)
+    poly(d, shaft, bone, 18)
+    # Bissspuren (gruen)
+    for t in (-0.25, 0.15):
+        bx, by = c + dx * t + nx, c + dy * t + ny
+        d.ellipse((bx - 30, by - 30, bx + 30, by + 30), fill=(110, 170, 60, 255), outline=OUTLINE, width=12)
+    return img
+
+
+def icon_vent():
+    """Vent-Gitter (Jester)."""
+    img, d = canvas()
+    d.rounded_rectangle((60, 120, S - 60, S - 120), 34, fill=(130, 140, 150, 255), outline=OUTLINE, width=W)
+    for y in range(165, S - 150, 40):
+        d.rounded_rectangle((105, y, S - 105, y + 18), 9, fill=(55, 60, 70, 255))
+    return img
+
+
 ICONS = {
     "candy": icon_candy,
     "phase": icon_phase,
@@ -542,6 +573,8 @@ ICONS = {
     "frost": icon_frost,
     "boards": icon_boards,
     "radar": icon_radar,
+    "eat": icon_eat,
+    "vent": icon_vent,
 }
 
 if __name__ == "__main__":

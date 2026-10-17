@@ -69,7 +69,7 @@ public static class RoleRegistry
 
     public static bool HasAssignments => mainRoles.Count > 0 || modifiers.Count > 0;
 
-    /// <summary>true waehrend OnAssigned wegen eines Rollenwechsels mitten in der Runde (z. B. Zombie-Infektion) aufgerufen wird.</summary>
+    /// <summary>true waehrend OnAssigned wegen eines Rollenwechsels mitten in der Runde (z. B. Geisterrolle beim Tod) aufgerufen wird.</summary>
     public static bool IsRoleChange { get; private set; }
 
     public static IEnumerable<PlayerControl> PlayersWith(CustomRole role)

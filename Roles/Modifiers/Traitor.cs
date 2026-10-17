@@ -61,7 +61,7 @@ public sealed class Traitor : CustomRole
         var alive = PlayerControl.AllPlayerControls.ToArray().Where(IsAlive).ToList();
         if (alive.Any(IsImpostor)) return false;
 
-        // Nur Verraeter, die (noch) Crew sind - z. B. kein inzwischen infizierter Zombie
+        // Nur Verraeter, die (noch) Crew sind
         var traitor = alive.Where(p => RoleRegistry.Has(p, this) && !IsNeutral(p)).OrderBy(_ => Random.value).FirstOrDefault();
         if (!traitor) return false;
 

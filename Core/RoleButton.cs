@@ -38,6 +38,9 @@ public class RoleButton
 
     public bool UsableWhenDead;
 
+    /// <summary>Auch im Vent benutzbar (dort kann man sich sonst nicht bewegen, z. B. zum Aussteigen).</summary>
+    public bool UsableInVent;
+
     /// <summary>Optional: Button nur anzeigen, wenn true (z. B. Arsonist "Anzuenden" erst wenn alle uebergossen).</summary>
     public Func<bool> Visible;
 
@@ -256,7 +259,8 @@ public class RoleButton
     public void Click()
     {
         var local = PlayerControl.LocalPlayer;
-        if (!local || local.Data == null || (local.Data.IsDead && !UsableWhenDead) || !local.CanMove) return;
+        if (!local || local.Data == null || (local.Data.IsDead && !UsableWhenDead)) return;
+        if (!local.CanMove && !(UsableInVent && local.inVent)) return;
         if (Owner == null || !Owner.IsLocalRole || Timer > 0f) return;
         if (NeedsTarget && !CustomRole.IsAlive(Target)) return;
         if (Visible != null && !Visible()) return;
