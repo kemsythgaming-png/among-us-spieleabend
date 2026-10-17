@@ -13,7 +13,7 @@
 
     <!-- Among-Us-Kopie mit BepInEx 6 (IL2CPP), in die der Mod installiert wird.
          Ueberschreibbar per: dotnet build -p:GameDir="..." -->
-    <GameDir Condition="'$(GameDir)' == ''">D:\Installiertes\Steam\steamapps\common\Among Us Spieleabend</GameDir>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Spieleabend\Among Us Spieleabend</GameDir>
     <!-- Referenz-DLLs (BepInEx + interop) kommen aus derselben Kopie; interop entsteht beim ersten Spielstart -->
     <RefDir Condition="'$(RefDir)' == ''">$(GameDir)</RefDir>
   </PropertyGroup>

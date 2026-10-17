@@ -114,19 +114,41 @@ internal sealed class Installer
         Version installed = ModVersion(plugin);
 
         bool modOutdated = packaged != null && (installed == null || packaged > installed);
-        if (!bepinexMissing && !modOutdated) return;
 
-        status(bepinexMissing ? "Installiere BepInEx und den Mod ..." : $"Aktualisiere den Mod auf {packaged} ...");
+        // Fehlende Dateien (z. B. vom Virenscanner geloescht) immer wiederherstellen - die Konfiguration bleibt
+        var missing = zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name) && !File.Exists(DestOf(target, e))).ToList();
+        if (!bepinexMissing && !modOutdated && missing.Count == 0) return;
+
+        status(bepinexMissing ? "Installiere BepInEx und den Mod ..."
+            : modOutdated ? $"Aktualisiere den Mod auf {packaged} ..."
+            : $"Repariere {missing.Count} fehlende Datei(en) ...");
+        if (missing.Count > 0 && !bepinexMissing) Log.Write("Fehlende Dateien: " + string.Join(", ", missing.Select(e => e.FullName)));
         foreach (var entry in zip.Entries)
         {
             if (string.IsNullOrEmpty(entry.Name)) continue; // Ordner
-            // Bei bestehender Installation nur den Mod selbst tauschen, BepInEx-Konfiguration bleibt
-            if (!bepinexMissing && !entry.FullName.Replace('\\', '/').EndsWith(Config.ModAssetName)) continue;
-            string dest = Path.Combine(target, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+            // Bei bestehender Installation nur den Mod selbst und fehlende Dateien, BepInEx-Konfiguration bleibt
+            bool isMod = entry.FullName.Replace('\\', '/').EndsWith(Config.ModAssetName);
+            if (!bepinexMissing && !(isMod && modOutdated) && !missing.Contains(entry)) continue;
+            string dest = DestOf(target, entry);
             Directory.CreateDirectory(Path.GetDirectoryName(dest));
             entry.ExtractToFile(dest, true);
         }
+
+        // Loescht ein Virenscanner die Dateien gleich wieder, startet BepInEx nicht ("Failed to start BepInEx")
+        Thread.Sleep(1500);
+        var gone = zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name) && !File.Exists(DestOf(target, e))).Select(e => e.FullName).ToList();
+        if (gone.Count > 0)
+        {
+            Log.Write("Nach dem Entpacken wieder verschwunden: " + string.Join(", ", gone));
+            throw new Exception(
+                "Dein Virenscanner hat Dateien des Mods entfernt (z. B. " + gone[0] + ").\n\n" +
+                "Bitte im Virenscanner den Ordner\n" + target + "\nals Ausnahme freigeben (bzw. die Dateien aus der Quarantäne wiederherstellen) " +
+                "und den Launcher danach noch einmal starten - er repariert die fehlenden Dateien selbst.");
+        }
     }
+
+    private static string DestOf(string target, ZipArchiveEntry entry) =>
+        Path.Combine(target, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
 
     private static Version ReadVersion(ZipArchiveEntry entry)
     {

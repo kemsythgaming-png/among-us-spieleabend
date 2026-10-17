@@ -1,7 +1,7 @@
 # Baut das Weitergabe-Paket dist\AmongUsSpieleabend-<Version>.zip
 # Inhalt: Installer + BepInEx (aus der eigenen Mod-Kopie) + Mod-DLL. KEINE Spieldateien (Among Us Mod Policy).
 
-param([string]$GameDir = 'D:\Installiertes\Steam\steamapps\common\Among Us Spieleabend')
+param([string]$GameDir = 'C:\Spieleabend\Among Us Spieleabend')
 
 $ErrorActionPreference = 'Stop'
 $projekt = Split-Path $PSScriptRoot
