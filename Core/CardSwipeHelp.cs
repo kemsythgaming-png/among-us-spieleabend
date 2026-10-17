@@ -36,12 +36,9 @@ internal static class CardSwipeHelpPatch
             {
                 fails = 0;
                 __instance.MyNormTask.NextStep();
-                Notifier.Show(Lang.T("Die Karte hat jetzt genug gelitten - Aufgabe geschafft!", "The card has suffered enough - task done!"), 4f);
                 __instance.Close();
                 return;
             }
-            if (fails >= needed - 5 && fails < needed)
-                Notifier.Show(Lang.T($"Noch {needed - fails} Fehlversuche, dann gilt die Karte als durchgezogen.", $"{needed - fails} more failed swipes and the card counts."), 2.5f);
         }
         redWasOn = redOn;
     }

@@ -124,10 +124,11 @@ public static class RoleRegistry
             role.OnAssigned(player);
         }
 
-        // Rollen-Ansage zusaetzlich zum Intro (falls das Intro nicht greift oder schon vorbei ist)
+        // Die Rolle steht im Intro (Rollen-Bildschirm, siehe RoleUI.UpdateIntro). Nur im Freeplay gibt es kein Intro -
+        // dort kurz ansagen, welche Testrolle man hat.
         var local = PlayerControl.LocalPlayer;
         var mine = GetDisplayed(local).ToList();
-        if (mine.Count > 0)
+        if (mine.Count > 0 && FreeplayTest.IsFreeplay)
             Notifier.Show(Lang.T("Deine Rolle: ", "Your role: ") + string.Join(" + ", mine.Select(r => r.ColoredName)), 8f);
     }
 
