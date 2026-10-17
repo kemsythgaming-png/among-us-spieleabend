@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Id = "de.spieleabend.amongus";
     public const string Name = "Among Us Spieleabend";
-    public const string Version = "4.8.4";
+    public const string Version = "4.8.5";
 
     internal static ManualLogSource Logger;
 

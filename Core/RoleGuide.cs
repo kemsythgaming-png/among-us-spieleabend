@@ -70,16 +70,19 @@ internal static class RoleGuide
             return;
         }
 
-        // Ersatz-Knopf, falls der Knopf oben rechts fehlt: im Meeting links unter dem Aufgabenbalken, in der Lobby neben "Rollen-Einstellungen", sonst unten links
-        Rect buttonRect;
-        if (MeetingHud.Instance) buttonRect = new Rect(20, 100, 260, 52);
-        else if (SettingsWindow.Available) buttonRect = new Rect(340, 1080 - 80, 260, 56);
-        else buttonRect = new Rect(20, 1080 - 80, 260, 56);
-
+        // Ersatz-Knopf nur im Meeting (links unter dem Aufgabenbalken) oder in der Lobby/Freeplay (neben "Rollen-Einstellungen").
+        // Waehrend der laufenden Runde KEIN Knopf - er wuerde die Aufgabenliste stoeren; F2 oeffnet die Rollen-Info weiterhin.
         if (!HudButtons.InfoVisible)
         {
-            if (Ui.Button(buttonRect, Lang.T("Rollen-Info (F2)", "Role info (F2)"), open)) Toggle();
-            Ui.Block(buttonRect);
+            Rect? buttonRect = null;
+            if (MeetingHud.Instance) buttonRect = new Rect(20, 100, 260, 52);
+            else if (SettingsWindow.Available) buttonRect = new Rect(340, 1080 - 80, 260, 56);
+
+            if (buttonRect.HasValue)
+            {
+                if (Ui.Button(buttonRect.Value, Lang.T("Rollen-Info (F2)", "Role info (F2)"), open)) Toggle();
+                Ui.Block(buttonRect.Value);
+            }
         }
 
         if (!open) return;

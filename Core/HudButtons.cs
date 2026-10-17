@@ -29,10 +29,10 @@ internal static class HudButtons
             if (!infoButton) (infoButton, infoPos) = Create(source, "hud_roleinfo", "Spieleabend_RoleInfoButton", RoleGuide.Toggle);
             if (!settingsButton) (settingsButton, settingsPos) = Create(source, "hud_settings", "Spieleabend_SettingsButton", SettingsPanel.Toggle);
 
-            // Oben rechts anzeigen - in der Lobby UND im Spiel/Meeting. Unabhaengig davon, ob der "Match Info"-Knopf
-            // gerade aktiv ist (in der Lobby ist er es naemlich nicht). Nicht, wenn gerade die Kleiderkammer offen ist.
-            bool hudUp = (LobbyBehaviour.Instance || ShipStatus.Instance) && !IntroCutscene.Instance
-                         && !PlayerCustomizationMenu.Instance;
+            // Nur in der Lobby anzeigen - waehrend der Runde wuerden die Knoepfe oben links die Aufgabenliste ueberdecken.
+            // Im Meeting und waehrend des Spiels uebernimmt der IMGUI-Ersatzknopf der Rollen-Info (liegt zuverlaessig oben).
+            // Nicht, wenn gerade die Kleiderkammer offen ist.
+            bool hudUp = LobbyBehaviour.Instance && !IntroCutscene.Instance && !PlayerCustomizationMenu.Instance;
             infoButton.gameObject.SetActive(hudUp && RoleRegistry.Roles.Count > 0);
             settingsButton.gameObject.SetActive(hudUp && SettingsWindow.Available);
 

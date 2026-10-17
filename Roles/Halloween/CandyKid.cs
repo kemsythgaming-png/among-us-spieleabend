@@ -153,8 +153,8 @@ public sealed class CandyKid : CustomRole
                 var hit = Physics2D.Raycast(anchor, dir, 12f, mask);
                 if (!hit.collider || hit.distance < 1.6f) continue;               // keine Wand in Reichweite / zu nah
 
-                var pos = anchor + dir * (hit.distance - 0.6f);                     // kurz vor der Wand
-                if (Physics2D.OverlapCircle(pos, 0.35f, mask)) continue;           // nicht in Moebeln
+                var pos = anchor + dir * (hit.distance - 0.8f);                     // ein Stueck vor der Wand (nicht in der Wand)
+                if (Physics2D.OverlapCircle(pos, 0.45f, mask)) continue;           // genug Abstand zu Wand/Moebeln
                 float score = busy.Min(x => (x - pos).sqrMagnitude);                // weit weg von Aufgaben = Ecke
                 candidates.Add((pos, score));
             }
@@ -193,7 +193,7 @@ public sealed class CandyKid : CustomRole
             for (int i = 0; i < count; i++)
             {
                 var console = consoles[Random.Range(0, consoles.Count)];
-                var pos = FreeSpotNear(console.transform.position);
+                if (!TryFreeSpotNear(console.transform.position, out var pos)) continue; // kein freier Platz -> lieber kein Bonbon als eins in der Wand
                 var go = new GameObject("Spieleabend_SabotageCandy");
                 go.transform.SetParent(ShipStatus.Instance.transform, true);
                 go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f - 0.01f);
@@ -206,17 +206,23 @@ public sealed class CandyKid : CustomRole
         }
     }
 
-    /// <summary>Freier Platz neben einer Konsole (nicht in Waenden oder Moebeln).</summary>
-    private static Vector2 FreeSpotNear(Vector2 center)
+    /// <summary>Freier Platz neben einer Konsole (nicht in Waenden oder Moebeln). false = kein freier Platz gefunden.</summary>
+    private static bool TryFreeSpotNear(Vector2 center, out Vector2 spot)
     {
         var mask = Constants.ShipAndObjectsMask;
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < 30; i++)
         {
             float angle = Random.Range(0f, Mathf.PI * 2f);
             var pos = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * Random.Range(0.6f, 1.3f);
-            if (!Physics2D.OverlapCircle(pos, 0.3f, mask) && !PhysicsHelpers.AnythingBetween(center, pos, mask, false)) return pos;
+            // Platz frei (nicht in Wand/Moebel) UND keine Wand zwischen Konsole und Platz (sonst liegt das Bonbon hinter der Wand)
+            if (!Physics2D.OverlapCircle(pos, 0.35f, mask) && !PhysicsHelpers.AnythingBetween(center, pos, mask, false))
+            {
+                spot = pos;
+                return true;
+            }
         }
-        return center + new Vector2(0f, -0.5f);
+        spot = center;
+        return false;
     }
 
     private void Collect(int index)
