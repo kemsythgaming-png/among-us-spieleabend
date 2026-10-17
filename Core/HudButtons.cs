@@ -29,19 +29,18 @@ internal static class HudButtons
             if (!infoButton) (infoButton, infoPos) = Create(source, "hud_roleinfo", "Spieleabend_RoleInfoButton", RoleGuide.Toggle);
             if (!settingsButton) (settingsButton, settingsPos) = Create(source, "hud_settings", "Spieleabend_SettingsButton", SettingsPanel.Toggle);
 
-            // Nur in der Lobby anzeigen - waehrend der Runde wuerden die Knoepfe oben links die Aufgabenliste ueberdecken.
-            // Im Meeting und waehrend des Spiels uebernimmt der IMGUI-Ersatzknopf der Rollen-Info (liegt zuverlaessig oben).
-            // Nicht, wenn gerade die Kleiderkammer offen ist.
-            bool hudUp = LobbyBehaviour.Instance && !IntroCutscene.Instance && !PlayerCustomizationMenu.Instance;
+            // Oben rechts neben "Match Info Guide" - in der Lobby UND im Spiel. Aber NICHT waehrend einer Aufgabe (Minigame,
+            // sonst liegt der Knopf ueber dem Aufgabenfenster), nicht im Meeting (dort gibt es den IMGUI-Ersatzknopf),
+            // nicht in der Kleiderkammer und nicht im Intro.
+            bool hudUp = (LobbyBehaviour.Instance || ShipStatus.Instance) && !IntroCutscene.Instance
+                         && !PlayerCustomizationMenu.Instance && !Minigame.Instance && !MeetingHud.Instance;
             infoButton.gameObject.SetActive(hudUp && RoleRegistry.Roles.Count > 0);
             settingsButton.gameObject.SetActive(hudUp && SettingsWindow.Available);
 
-            // Oben LINKS platzieren (dort stoeren sie am wenigsten). Gleicher Rand-Abstand wie die Original-Knoepfe rechts,
-            // nur von der linken Seite aus; der zweite Knopf steht rechts daneben.
+            // Abstand wie zwischen den Original-Knoepfen (z. B. Chat -> Match Info Guide); der zweite Knopf steht daneben.
             float spacing = Spacing(hud, sourcePos, source);
-            float baseLeft = sourcePos ? sourcePos.DistanceFromEdge.x : 0.9f;
-            Place(infoPos, sourcePos, baseLeft);
-            Place(settingsPos, sourcePos, baseLeft + spacing);
+            Place(infoPos, sourcePos, spacing);
+            Place(settingsPos, sourcePos, spacing * 2f);
         }
         catch (Exception e)
         {
@@ -98,12 +97,12 @@ internal static class HudButtons
         return w > 0.1f ? w : 0.75f;
     }
 
-    private static void Place(AspectPosition target, AspectPosition source, float xFromLeft)
+    private static void Place(AspectPosition target, AspectPosition source, float offset)
     {
         if (!target || !source) return;
         var d = source.DistanceFromEdge;
-        target.Alignment = AspectPosition.EdgeAlignments.LeftTop; // oben links statt oben rechts
-        target.DistanceFromEdge = new Vector3(xFromLeft, d.y, d.z);
+        target.Alignment = source.Alignment; // gleiche Ausrichtung wie "Match Info Guide" (oben rechts)
+        target.DistanceFromEdge = new Vector3(d.x + offset, d.y, d.z);
         target.AdjustPosition();
     }
 }

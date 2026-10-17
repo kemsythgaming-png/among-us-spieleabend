@@ -154,24 +154,19 @@ public sealed class Paranoid : CustomRole
     public override Color Color => new Color32(200, 90, 90, 255);
     public override RoleTeam Team => RoleTeam.Crewmate; // eigene Crew-Rolle (war frueher eine Anpassung)
     public override string IntroText => Lang.T("Hast du das gehört?", "Did you hear that?");
-    public override string Description => Lang.T("Du merkst, wenn in der Nähe jemand stirbt.", "You notice when someone dies nearby.");
+    public override string Description => Lang.T("Du merkst, wenn jemand getötet wird.", "You notice when someone is killed.");
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Wird ganz in deiner Nähe jemand getötet, bekommst du eine Warnung - aber nicht, wo genau.",
-        "You are crew. When someone is killed close to you, you get a warning - but not exactly where.");
+        "Du bist Crew. Wird jemand getötet, bekommst du eine Warnung - aber nicht, wer oder wo.",
+        "You are crew. When someone is killed, you get a warning - but not who or where.");
 
-    private RoleOption range;
-
-    protected override void Setup()
-    {
-        range = AddOption("Range", "Reichweite|Range", 6f, 2f, 15f, 1f);
-    }
+    protected override void Setup() { }
 
     public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
     {
         var local = PlayerControl.LocalPlayer;
+        // Immer bei jedem Kill warnen (egal wie weit weg)
         if (cause != DeathCause.Kill || !IsLocalRole || !IsAlive(local) || victim == local) return;
-        if (Vector2.Distance(victim.GetTruePosition(), local.GetTruePosition()) > range.Value) return;
-        Notifier.Show($"<color={ColorHex}>{Lang.T("Du hast etwas gehört ... ganz in der Nähe ist jemand gestorben!", "You heard something ... someone died close by!")}</color>", 4f);
+        Notifier.Show($"<color={ColorHex}>{Lang.T("Du hast etwas gehört ... jemand wurde getötet!", "You heard something ... someone was killed!")}</color>", 4f);
         Sfx.Play(Sfx.Warning);
     }
 }

@@ -90,6 +90,11 @@ public sealed class Zombie : CustomRole
         }
         if (!found) return; // schon gefressen
 
+        // Das Pet des gefressenen Spielers verschwindet mit (sonst laeuft es ohne Leiche weiter herum)
+        var owner = FindPlayer(data[0]);
+        if (owner && owner.cosmetics && owner.cosmetics.currentPet)
+            owner.cosmetics.currentPet.gameObject.SetActive(false);
+
         eaten.TryGetValue(sender.PlayerId, out int n);
         eaten[sender.PlayerId] = ++n;
 

@@ -17,16 +17,42 @@ internal static class GhostRoles
 
     private static float nextCheck;
 
-    /// <summary>Host, jede Sekunde: Spieler mit unserer Geisterrolle behalten keine Spiel-Geisterrolle (falls das Spiel sie spaeter vergibt).</summary>
+    /// <summary>
+    /// Rollen, die nach dem Tod KEIN normaler Geist werden: eigene Geisterrollen (Spukgestalt/Waechtergeist/Poltergeist)
+    /// sowie Survivor und Untoter, solange sie wieder aufstehen. Diese bekommen keine Spiel-Geisterrolle und keinen
+    /// Haunt-Knopf. Normale Tote (auch Guardian Angel / Spirit Guide) bleiben unberuehrt.
+    /// </summary>
+    internal static bool PlainGhostOnly(PlayerControl p)
+    {
+        if (p == null || p.Data == null) return false;
+        if (RoleRegistry.GetGhostRole(p) != null) return true;
+        if (Roles.Modifiers.SecondLife.Instance?.WillRise(p) ?? false) return true;
+        if (Roles.Halloween.Undead.Instance?.WillRise(p) ?? false) return true;
+        return false;
+    }
+
+    /// <summary>Host, regelmaessig: betroffene Rollen behalten keine Spiel-Geisterrolle (falls das Spiel sie vergibt).</summary>
     internal static void Update()
     {
         if (!CustomRole.AmHost || Time.time < nextCheck) return;
-        nextCheck = Time.time + 1f;
+        nextCheck = Time.time + 0.5f;
         foreach (var p in PlayerControl.AllPlayerControls)
-            if (p && p.Data != null && p.Data.IsDead && RoleRegistry.GetGhostRole(p) != null) EnsurePlainGhost(p);
+            if (p && p.Data != null && p.Data.IsDead && !p.Data.Disconnected && PlainGhostOnly(p)) EnsurePlainGhost(p);
     }
 
-    /// <summary>Keine Spiel-Geisterrolle (Guardian Angel ...) zusaetzlich - unsere ersetzt sie.</summary>
+    /// <summary>
+    /// Den Vanilla-"Haunt"-Knopf (Geister-Faehigkeit, die jeder normale Geist hat) fuer den lokalen Spieler ausblenden,
+    /// wenn er eine Rolle hat, die kein normaler Geist wird (Spukgestalt, Survivor ...). Laeuft bei jedem Client.
+    /// </summary>
+    internal static void SuppressHauntButton()
+    {
+        var local = PlayerControl.LocalPlayer;
+        var hud = HudManager.Instance;
+        if (!local || local.Data == null || !hud || !hud.AbilityButton) return;
+        if (local.Data.IsDead && PlainGhostOnly(local)) hud.AbilityButton.gameObject.SetActive(false);
+    }
+
+    /// <summary>Keine Spiel-Geisterrolle (Guardian Angel, Spirit Guide ...) - diese Rolle ist nur ein reiner Geist.</summary>
     private static void EnsurePlainGhost(PlayerControl p)
     {
         try

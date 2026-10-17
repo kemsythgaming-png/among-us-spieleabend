@@ -57,6 +57,7 @@ public class SettingsWindow : MonoBehaviour
         }
 
         // Jedes Fenster einzeln absichern: ein Fehler in einem darf die anderen nicht mitnehmen
+        Safe("BOO-Kleckse", Spieleabend.Roles.BooOverlay.Draw); // zuerst - liegt hinter den Fenstern
         Safe("Hinweise", Notifier.Draw);
         Safe("Rollen-Info", RoleGuide.Draw);
         Safe("Einstellungen", SettingsPanel.Draw);

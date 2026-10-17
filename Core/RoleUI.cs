@@ -251,7 +251,9 @@ internal static class RoleUI
             intro.RoleText.color = main.NameColor;
         }
         if (!intro.RoleBlurbText) return;
-        string blurb = main.IntroText;
+        // Rollennamen zur Sicherheit auch in den Beschreibungstext schreiben - falls die grosse Rollen-Zeile
+        // ("Your role is ...") vom Spiel noch mit "Crewmate/Impostor" ueberschrieben wird, steht die Rolle trotzdem hier.
+        string blurb = $"<b>{main.Name}</b>\n{main.IntroText}";
         foreach (var mod in all.Where(r => r.IsModifier)) blurb += $"\n<size=70%>+ {mod.ColoredName}</size>";
         intro.RoleBlurbText.text = blurb;
         intro.RoleBlurbText.color = main.NameColor;

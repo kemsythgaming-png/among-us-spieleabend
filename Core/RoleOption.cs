@@ -67,6 +67,7 @@ public class RoleOption : ISetting
         if (Mathf.Approximately(next, entry.Value)) return;
         entry.Value = next;
         RoleRpc.MarkOptionsDirty();
+        ChatNote.OptionChanged(this);
     }
 
     /// <summary>Nur Host/Freeplay: Wert direkt setzen (fuer Sammel-Aktionen, z. B. "alle Chancen auf X").</summary>
@@ -78,5 +79,6 @@ public class RoleOption : ISetting
         if (Mathf.Approximately(next, entry.Value)) return;
         entry.Value = next;
         RoleRpc.MarkOptionsDirty();
+        // Bewusst KEIN Chat-Hinweis hier - Sammel-Aktionen (alle Rollen) wuerden sonst den Chat zuspammen.
     }
 }

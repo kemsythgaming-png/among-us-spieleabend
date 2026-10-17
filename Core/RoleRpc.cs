@@ -29,12 +29,16 @@ internal enum RpcId : byte
 
     /// <summary>Host -> alle: Zusatzrolle mitten in der Runde (Geisterrolle) [playerId][roleId]</summary>
     AddRole = 217,
+
+    /// <summary>Host -> alle: Hinweis in den Chat schreiben (z. B. geaenderte Einstellung) [text]</summary>
+    ChatNote = 218,
 }
 
 internal static class RoleRpc
 {
     private static bool optionsDirty = true;
     private static int lastPlayerCount;
+    private static float nextPeriodicSync;
 
     public static void MarkOptionsDirty() => optionsDirty = true;
 
@@ -69,6 +73,18 @@ internal static class RoleRpc
         writer.Write(playerId);
         writer.Write(roleId);
         AmongUsClient.Instance.FinishRpcImmediately(writer);
+    }
+
+    /// <summary>Host -> alle anderen: einen Hinweis in den Chat schreiben.</summary>
+    public static void SendChatNote(string text)
+    {
+        try
+        {
+            var writer = Start(RpcId.ChatNote, -1);
+            writer.Write(text);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"ChatNote senden: {e.Message}"); }
     }
 
     public static void SendKillNoBody(byte playerId, byte killerId)
@@ -113,10 +129,14 @@ internal static class RoleRpc
         var client = AmongUsClient.Instance;
         if (!client || !client.AmHost || !client.AmConnected || !LobbyBehaviour.Instance || !PlayerControl.LocalPlayer) return;
 
+        // Zusaetzlich regelmaessig neu senden: so bekommen auch verspaetet beigetretene Spieler die aktiven Rollen,
+        // selbst wenn sie den einmaligen Sync beim Beitritt (Spielerzahl-Aenderung) verpasst haben.
         int count = PlayerControl.AllPlayerControls.Count;
-        if (!optionsDirty && count == lastPlayerCount) return;
+        bool periodic = UnityEngine.Time.time >= nextPeriodicSync;
+        if (!optionsDirty && count == lastPlayerCount && !periodic) return;
         optionsDirty = false;
         lastPlayerCount = count;
+        nextPeriodicSync = UnityEngine.Time.time + 2f;
 
         var writer = Start(RpcId.SyncOptions, -1);
         WriteOptions(writer);
@@ -161,6 +181,9 @@ internal static class RoleRpc
                 break;
             case RpcId.KillNoBody:
                 KillSystem.ApplyKillNoBody(reader.ReadByte(), reader.ReadByte());
+                break;
+            case RpcId.ChatNote:
+                ChatNote.Display(sender, reader.ReadString());
                 break;
         }
     }

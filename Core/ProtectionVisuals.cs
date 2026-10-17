@@ -69,10 +69,12 @@ public static class ProtectionVisuals
         }
 
         // 1. Welche Blasen soll der lokale Spieler gerade sehen?
+        // Waehrend der Tarnung (Camouflager) KEINE Schutz-Blasen zeigen - sonst sieht man, wer geschuetzt ist.
+        bool showBubbles = !CustomRole.InMeeting && !Camouflage.Active;
         var wanted = new Dictionary<string, (PlayerControl Target, Color Color)>();
-        if (!CustomRole.InMeeting)
+        if (showBubbles)
             foreach (var (target, color) in FirstDeathShield.Bubbles()) wanted[$"first_{target.PlayerId}"] = (target, color);
-        if (RoleRegistry.HasAssignments && !CustomRole.InMeeting)
+        if (RoleRegistry.HasAssignments && showBubbles)
         {
             foreach (var role in RoleRegistry.Roles)
             {

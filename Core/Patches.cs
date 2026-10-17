@@ -46,6 +46,7 @@ internal static class HudUpdatePatch
             SpeedControl.Update();
             Camouflage.Update();
             GhostRoles.Update();
+            GhostRoles.SuppressHauntButton();
             foreach (var role in RoleRegistry.Roles)
             {
                 try { role.Update(); }

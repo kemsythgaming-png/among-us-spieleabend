@@ -29,8 +29,16 @@ public sealed class Traitor : CustomRole
 
     internal static Traitor Instance { get; private set; }
 
-    /// <summary>Geheim, auch fuer ihn selbst: erst sichtbar, wenn er zum Impostor wird oder stirbt.</summary>
-    public override bool IsSecret(PlayerControl holder) => IsAlive(holder) && !IsImpostor(holder);
+    /// <summary>Geheim, auch fuer ihn selbst: erst sichtbar, wenn er zum Impostor wird oder endgueltig stirbt.</summary>
+    public override bool IsSecret(PlayerControl holder)
+    {
+        if (IsImpostor(holder)) return false;       // als Impostor sichtbar
+        if (IsAlive(holder)) return true;           // lebend geheim
+        // Survivor ist nach dem ersten Tod nur voruebergehend tot -> weiter geheim, bis er endgueltig tot ist
+        var sl = SecondLife.Instance;
+        if (sl != null && RoleRegistry.Has(holder, sl) && sl.Stage(holder) != SurvivorStage.Final) return true;
+        return false;                               // endgueltig tot -> sichtbar
+    }
 
     private RoleOption turnChance;
     private bool decided;

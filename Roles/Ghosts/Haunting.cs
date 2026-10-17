@@ -80,6 +80,9 @@ public sealed class Haunting : CustomRole
         HideAll();
         released.Clear();
         localCollider = false;
+        hasLastPos = false;
+        wasInMeeting = false;
+        restoreUntil = 0f;
     }
 
     /// <summary>Spukt dieser Spieler gerade (Geist mit dieser Rolle, nicht erloest)?</summary>
@@ -94,6 +97,13 @@ public sealed class Haunting : CustomRole
         released.Add(ghost.PlayerId);
         Hide(ghost);
 
+        // Erloest -> seine (neuen) Aufgaben verschwinden, sonst schleppt der normale Geist noch Crew-Aufgaben mit
+        if (AmHost && ghost.Data != null)
+        {
+            try { ghost.Data.RpcSetTasks(new byte[0]); }
+            catch (System.Exception e) { Plugin.Logger.LogWarning($"Spukgestalt-Aufgaben leeren: {e.Message}"); }
+        }
+
         var local = PlayerControl.LocalPlayer;
         if (local == sender || local == ghost) Sfx.Play(Sfx.Protect);
         if (local == sender)
@@ -102,16 +112,29 @@ public sealed class Haunting : CustomRole
             Notifier.Show($"<color={ColorHex}>{Lang.T("Du wurdest erlöst - du kannst nicht mehr gewinnen.", "You were released - you can't win anymore.")}</color>", 5f);
     }
 
+    // Nach dem Meeting an die vorherige Stelle zurueck (nicht am Vent/Spawn neu erscheinen)
+    private Vector3 lastGoodPos;
+    private bool hasLastPos, wasInMeeting;
+    private float restoreUntil;
+
     // Nur beim Spukgeist selbst: Collider wieder an, damit er wie eine lebende Figur an Waenden haengen bleibt
     private bool localCollider;
 
     private void UpdateLocalCollision()
     {
         var local = PlayerControl.LocalPlayer;
+        if (!local || !local.Collider) return;
         bool want = Haunts(local) && !InMeeting;
-        if (want == localCollider) return;
+        // Jeden Frame erzwingen: das Spiel schaltet den Collider fuer Tote sonst gleich wieder aus -> man liefe durch Waende.
+        if (want)
+        {
+            if (!local.Collider.enabled) local.Collider.enabled = true;
+        }
+        else if (localCollider && !IsAlive(local))
+        {
+            local.Collider.enabled = false; // erloest/Meeting -> wieder normaler Geist (durch Waende)
+        }
         localCollider = want;
-        if (local && local.Collider) local.Collider.enabled = want || IsAlive(local);
     }
 
     public override void Update()
@@ -119,6 +142,21 @@ public sealed class Haunting : CustomRole
         var local = PlayerControl.LocalPlayer;
         if (!local || local.Data == null) return;
         UpdateLocalCollision();
+
+        // Nach einem Meeting an die letzte Stelle vor dem Meeting zurueck (statt am Vent/Spawn)
+        bool meetingNow = InMeeting;
+        if (wasInMeeting && !meetingNow && Haunts(local) && hasLastPos) restoreUntil = Time.time + 0.5f;
+        wasInMeeting = meetingNow;
+        if (Haunts(local) && !meetingNow)
+        {
+            if (Time.time < restoreUntil)
+            {
+                local.transform.position = new Vector3(lastGoodPos.x, lastGoodPos.y, local.transform.position.z);
+                if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
+            }
+            else { lastGoodPos = local.transform.position; hasLastPos = true; }
+        }
+
         bool livingViewer = IsAlive(local) && !InMeeting;
 
         foreach (var p in PlayerControl.AllPlayerControls)
