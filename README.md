@@ -89,7 +89,7 @@ Zusätzlich hat jede Rolle ihre eigene **Anzahl** und **Wahrscheinlichkeit**, je
 
 ## An Freunde weitergeben (Launcher)
 
-Freunde laden `Among.Us.Spieleabend.exe` von der [Release-Seite](https://github.com/kemsythgaming-png/among-us-spieleabend/releases/latest) (oder aus dem Discord) und starten sie. Der Launcher:
+Freunde laden `AmongUsSpieleabend-Launcher.exe` von der [Release-Seite](https://github.com/kemsythgaming-png/among-us-spieleabend/releases/latest) (oder aus dem Discord) und starten sie. Der Launcher:
 
 1. fragt beim ersten Start wie ein Installer nach dem Speicherort (Vorschlag: `C:\Spieleabend\Among Us Spieleabend` - ohne Umlaute und ohne Benutzernamen im Pfad, damit startet BepInEx sicher, und ohne Administrator-Rechte; Pfade mit Umlauten, Ordner ohne Schreibrecht, zu wenig Platz oder der Ordner des Original-Spiels werden abgelehnt). Die Wahl wird unter `HKEY_CURRENT_USER\Software\AmongUsSpieleabend` gemerkt; ältere Installationen neben dem Steam-Spiel werden weiter benutzt,
 1. findet Among Us in Steam und kopiert es in diesen Ordner (nach Steam-Updates nur die geänderten Dateien),
@@ -108,7 +108,7 @@ Die EXE enthält **keine Spieldateien**, das verbietet die Among Us Mod Policy. 
    ```
 3. Release anlegen:
    ```
-   gh release create v4.5.1 dist/AmongUsSpieleabend.dll "dist/Among Us Spieleabend.exe" --title "Among Us Spieleabend 4.5.1" --notes "Was neu ist"
+   gh release create v4.5.1 dist/AmongUsSpieleabend.dll dist/AmongUsSpieleabend-Launcher.exe --title "Among Us Spieleabend 4.5.1" --notes "Was neu ist"
    ```
 
 Beim nächsten Start holt sich jeder Launcher die neue `AmongUsSpieleabend.dll` automatisch. Alle Spieler brauchen dieselbe Mod-Version, also vor dem Spieleabend einmal über die Verknüpfung starten.

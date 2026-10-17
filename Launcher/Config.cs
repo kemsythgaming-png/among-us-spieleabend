@@ -14,5 +14,5 @@ internal static class Config
 
     public const string GameFolderName = "Among Us Spieleabend";
     public const string ShortcutName = "Among Us Spieleabend";
-    public const string InstalledLauncherName = "Among Us Spieleabend Launcher.exe";
+    public const string InstalledLauncherName = "AmongUsSpieleabend-Launcher.exe";
 }

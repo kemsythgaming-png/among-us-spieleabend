@@ -58,6 +58,13 @@ internal static class InstallLocation
         if (!string.IsNullOrEmpty(env)) return env;
 
         string saved = Registry.GetValue(@"HKEY_CURRENT_USER\" + RegKey, RegValue, null) as string;
+
+        // Shift beim Start gedrueckt: Ordner neu waehlen (z. B. auf ein anderes Laufwerk umziehen)
+        if ((Control.ModifierKeys & Keys.Shift) != 0 && Environment.GetEnvironmentVariable("SPIELEABEND_NOUI") != "1")
+        {
+            using var move = new LocationDialog(IsPlainPath(saved) ? saved : DefaultFolder, steamGame);
+            return move.ShowDialog(owner) == DialogResult.OK ? Remember(move.Folder) : null;
+        }
         if (IsInstallation(saved)) return saved;
 
         string self = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
@@ -142,7 +149,7 @@ internal static class InstallLocation
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(560, 236);
+            ClientSize = new Size(560, 256);
             BackColor = Color.FromArgb(24, 22, 34);
             ForeColor = Color.White;
             Font = new Font("Segoe UI", 10f);
@@ -158,24 +165,24 @@ internal static class InstallLocation
             };
             var info = new Label
             {
-                Text = "Hier landet eine Kopie deines Steam-Among-Us mit dem Mod (ca. 1 GB).\nDein normales Among Us bleibt unverändert. Bitte einen Pfad ohne Umlaute wählen - der Vorschlag passt und braucht keine Administrator-Rechte.",
+                Text = "Hier landet eine Kopie deines Steam-Among-Us mit dem Mod (ca. 1 GB).\nDein normales Among Us bleibt unverändert. Bitte einen Pfad ohne Umlaute wählen - der Vorschlag passt und braucht keine Administrator-Rechte.\nSpäter ändern: beim Start des Launchers Shift gedrückt halten.",
                 AutoSize = false,
-                Size = new Size(520, 66),
+                Size = new Size(520, 88),
                 Location = new Point(20, 50),
                 ForeColor = Color.Gainsboro,
             };
             path = new TextBox
             {
                 Text = suggestion,
-                Location = new Point(20, 128),
+                Location = new Point(20, 148),
                 Size = new Size(400, 26),
             };
-            var browse = new Button { Text = "Durchsuchen ...", Location = new Point(428, 126), Size = new Size(112, 30), ForeColor = Color.Black, BackColor = Color.Gainsboro };
+            var browse = new Button { Text = "Durchsuchen ...", Location = new Point(428, 146), Size = new Size(112, 30), ForeColor = Color.Black, BackColor = Color.Gainsboro };
             browse.Click += (_, _) => Browse();
 
-            var install = new Button { Text = "Installieren", Location = new Point(320, 186), Size = new Size(110, 34), ForeColor = Color.Black, BackColor = Color.FromArgb(255, 160, 60) };
+            var install = new Button { Text = "Installieren", Location = new Point(320, 206), Size = new Size(110, 34), ForeColor = Color.Black, BackColor = Color.FromArgb(255, 160, 60) };
             install.Click += (_, _) => Confirm();
-            var cancel = new Button { Text = "Abbrechen", Location = new Point(440, 186), Size = new Size(100, 34), ForeColor = Color.Black, BackColor = Color.Gainsboro, DialogResult = DialogResult.Cancel };
+            var cancel = new Button { Text = "Abbrechen", Location = new Point(440, 206), Size = new Size(100, 34), ForeColor = Color.Black, BackColor = Color.Gainsboro, DialogResult = DialogResult.Cancel };
 
             path.SelectionStart = path.Text.Length; // Ende des Pfads sichtbar, nichts markiert
             AcceptButton = install;

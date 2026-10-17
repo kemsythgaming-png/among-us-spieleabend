@@ -38,7 +38,8 @@ if (Test-Path $modZip) { Remove-Item $modZip -Force }
 
 dotnet build (Join-Path $projekt 'Launcher\Launcher.csproj') -c Release | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Launcher-Build fehlgeschlagen' }
-$launcher = Join-Path $projekt 'dist\Among Us Spieleabend.exe'
+# Ohne Leerzeichen/Punkte im Namen (GitHub macht aus Leerzeichen sonst Punkte)
+$launcher = Join-Path $projekt 'dist\AmongUsSpieleabend-Launcher.exe'
 Copy-Item (Join-Path $projekt 'Launcher\bin\Release\net48\AmongUsSpieleabend.Launcher.exe') $launcher -Force
 Write-Host "Launcher: $launcher ($([math]::Round((Get-Item $launcher).Length / 1MB, 1)) MB) - diese Datei an Freunde schicken"
 
