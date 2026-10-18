@@ -1,11 +1,12 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using Spieleabend.Core;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Spieleabend.Roles.Ghosts;
 
-/// <summary>Impostor-Geist: laesst alle Crewmates im selben Raum kurz vor Kaelte erstarren.</summary>
+/// <summary>Impostor-Geist: legt eine Frost-Zone (Kreis) ab. Wer darin steht, bewegt sich 9x langsamer - fuer 10 Sekunden.</summary>
 public sealed class VengefulSpirit : CustomRole
 {
     public override string ConfigSection => "Rachegeist";
@@ -15,26 +16,28 @@ public sealed class VengefulSpirit : CustomRole
     public override bool IsGhostRole => true;
     public override bool CanHaunt(PlayerControl dead) => IsImpostor(dead);
     public override string IntroText => Lang.T("Auch tot hilfst du deinem Team", "Even dead you help your team");
-    public override string Description => Lang.T("Geist: Lass alle Crewmates im Raum\nerstarren (F).", "Ghost: freeze all crewmates\nin the room (F).");
+    public override string Description => Lang.T("Geist: Leg eine Frost-Zone ab (F).\nDarin sind alle extrem langsam.", "Ghost: drop a frost zone (F).\nEveryone inside is very slow.");
     public override string LongDescription => Lang.T(
-        "Geisterrolle für tote Impostor. Schwebe in einen Raum und drück F: Alle lebenden Crewmates und Neutralen in diesem Raum erstarren ein paar Sekunden vor Kälte.\n\nIm Gang (außerhalb von Räumen) trifft es alle in deiner Nähe.",
-        "Ghost role for dead impostors. Float into a room and press F: all living crewmates and neutrals in that room freeze in the cold for a few seconds.\n\nIn a hallway (outside rooms) it hits everyone near you.");
+        "Geisterrolle für tote Impostor. Schwebe an eine Stelle und drück F: Dort erscheint ein Frost-Kreis (etwa so groß wie der Admin-Tisch). Jeder lebende Crewmate oder Neutrale, der darin steht, bewegt sich 9-mal langsamer. Der Kreis bleibt 10 Sekunden liegen.",
+        "Ghost role for dead impostors. Float to a spot and press F: a frost circle appears (about the size of the admin table). Any living crewmate or neutral standing inside moves 9x slower. The circle stays for 10 seconds.");
 
-    private const byte ActionFreeze = 0;
-    private const float HallwayRadius = 4f;
-    private static readonly Color Ice = new Color32(150, 220, 255, 255);
+    private const byte ActionZone = 0;
+    private const float SlowFactor = 1f / 9f, Radius = 1.8f;
+    private static Sprite zoneSprite;
 
-    private RoleOption cooldown, freezeTime;
-    private float frozenUntil;
+    private RoleOption cooldown, duration;
+
+    private sealed class Zone { public Vector2 Pos; public float Until; public GameObject Obj; }
+    private readonly List<Zone> zones = new();
 
     protected override void Setup()
     {
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 40f, 15f, 90f, 2.5f, "s");
-        freezeTime = AddOption("FreezeTime", "Erstarren|Freeze time", 3f, 1f, 8f, 0.5f, "s");
+        duration = AddOption("Duration", "Zone-Dauer|Zone duration", 10f, 5f, 20f, 1f, "s");
 
         AddButton(new RoleButton
         {
-            Label = "Erstarren|Freeze",
+            Label = "Frost-Zone|Frost zone",
             Icon = "frost",
             NeedsTarget = false,
             UsableWhenDead = true,
@@ -42,53 +45,87 @@ public sealed class VengefulSpirit : CustomRole
             Cooldown = () => cooldown.Value,
             StartCooldown = 15f,
             Hotkey = KeyCode.F,
-            OnClick = _ => Freeze(),
+            OnClick = _ =>
+            {
+                var local = PlayerControl.LocalPlayer;
+                if (!local) return;
+                var pos = local.GetTruePosition();
+                var data = new byte[8];
+                BitConverter.GetBytes(pos.x).CopyTo(data, 0);
+                BitConverter.GetBytes(pos.y).CopyTo(data, 4);
+                SendToAll(ActionZone, data);
+            },
         });
     }
 
-    public override void ResetState() => frozenUntil = 0f;
-
-    public override void OnMeetingStart() => frozenUntil = 0f;
-
-    public override float SpeedMultiplier(PlayerControl local) => frozenUntil > Time.time && !InMeeting ? 0f : 1f;
-
-    private void Freeze()
+    public override void ResetState()
     {
-        var local = PlayerControl.LocalPlayer;
-        Vector2 me = local.GetTruePosition();
-        var room = ShipStatus.Instance ? ShipStatus.Instance.AllRooms.FirstOrDefault(r => r && r.roomArea && r.roomArea.OverlapPoint(me)) : null;
-
-        var targets = new List<byte>();
-        foreach (var p in PlayerControl.AllPlayerControls)
-        {
-            if (!IsAlive(p) || IsImpostor(p) || p.inVent) continue;
-            Vector2 pos = p.GetTruePosition();
-            bool hit = room ? room.roomArea.OverlapPoint(pos) : Vector2.Distance(me, pos) <= HallwayRadius;
-            if (hit) targets.Add(p.PlayerId);
-        }
-
-        Sfx.Play(Sfx.Creepy);
-        if (targets.Count == 0)
-        {
-            Notifier.Show($"<color={ColorHex}>{Lang.T("Niemand hier zum Einfrieren.", "Nobody here to freeze.")}</color>", 2.5f);
-            return;
-        }
-        SendToAll(ActionFreeze, targets.ToArray());
+        foreach (var z in zones) if (z.Obj) Object.Destroy(z.Obj);
+        zones.Clear();
     }
+
+    public override void OnMeetingStart() => ResetState();
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
-        if (action != ActionFreeze || !RoleRegistry.Has(sender, this) || IsAlive(sender) || InMeeting) return;
-        var local = PlayerControl.LocalPlayer;
-        foreach (var id in data)
+        if (action != ActionZone || data.Length < 8 || !RoleRegistry.Has(sender, this)) return;
+        var pos = new Vector2(BitConverter.ToSingle(data, 0), BitConverter.ToSingle(data, 4));
+
+        var go = new GameObject("Spieleabend_FrostZone");
+        if (ShipStatus.Instance) go.transform.SetParent(ShipStatus.Instance.transform, true);
+        go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f + 0.02f);
+        go.transform.localScale = Vector3.one * (Radius * 2f);
+        go.AddComponent<SpriteRenderer>().sprite = ZoneSprite();
+        zones.Add(new Zone { Pos = pos, Until = Time.time + duration.Value, Obj = go });
+
+        if (sender == PlayerControl.LocalPlayer) Sfx.Play(Sfx.Creepy);
+    }
+
+    public override void Update()
+    {
+        float t = Time.time;
+        for (int i = zones.Count - 1; i >= 0; i--)
         {
-            var p = FindPlayer(id);
-            if (!IsAlive(p)) continue;
-            ProtectionVisuals.ShowBurst(p, Ice);
-            if (p != local) continue;
-            frozenUntil = Time.time + freezeTime.Value;
-            Sfx.Play(Sfx.Creepy);
-            Notifier.Show($"<color={ColorHex}>{Lang.T("Eiskalte Geisterhände halten dich fest!", "Ice-cold ghost hands hold you tight!")}</color>", freezeTime.Value);
+            if (t >= zones[i].Until || !zones[i].Obj)
+            {
+                if (zones[i].Obj) Object.Destroy(zones[i].Obj);
+                zones.RemoveAt(i);
+                continue;
+            }
+            // sanftes Pulsieren
+            var sr = zones[i].Obj.GetComponent<SpriteRenderer>();
+            if (sr) sr.color = new Color(0.6f, 0.86f, 1f, 0.35f + 0.1f * Mathf.Sin(t * 3f));
         }
+    }
+
+    public override float SpeedMultiplier(PlayerControl local)
+    {
+        if (!IsAlive(local) || IsImpostor(local) || InMeeting || zones.Count == 0) return 1f;
+        Vector2 me = local.GetTruePosition();
+        foreach (var z in zones)
+            if (z.Until > Time.time && Vector2.Distance(me, z.Pos) <= Radius) return SlowFactor;
+        return 1f;
+    }
+
+    /// <summary>Weicher, halbdurchsichtiger Eis-Kreis - im Code erzeugt.</summary>
+    private static Sprite ZoneSprite()
+    {
+        if (zoneSprite) return zoneSprite;
+        const int S = 128;
+        var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+        for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++)
+        {
+            float d = Vector2.Distance(new Vector2(x, y), new Vector2(63.5f, 63.5f)) / 63.5f;
+            float ring = Mathf.Exp(-Mathf.Pow((d - 0.9f) / 0.08f, 2f)); // heller Rand
+            float fill = d < 1f ? 0.30f : 0f;
+            float a = Mathf.Clamp01(fill + ring * 0.7f);
+            if (d > 1f) a = 0f;
+            tex.SetPixel(x, y, new Color(0.65f, 0.88f, 1f, a));
+        }
+        tex.Apply();
+        zoneSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), S);
+        zoneSprite.hideFlags = HideFlags.HideAndDontSave;
+        return zoneSprite;
     }
 }

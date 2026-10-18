@@ -11,12 +11,20 @@ namespace Spieleabend.Core;
 /// </summary>
 internal static class HudButtons
 {
-    private static PassiveButton infoButton, settingsButton;
-    private static AspectPosition infoPos, settingsPos;
+    private static PassiveButton infoButton, settingsButton, freeplayButton;
+    private static AspectPosition infoPos, settingsPos, freeplayPos;
+
+    // Position/Abstand nur EINMAL festhalten - sonst verrutschen die Knoepfe, wenn das Spiel seine Leiste umsortiert
+    private static float cachedSpacing;
+    private static Vector3 cachedBase;
+    private static AspectPosition.EdgeAlignments cachedAlign;
+    private static bool cached;
+    private static int lastW, lastH;
 
     /// <summary>true, wenn unsere Knoepfe oben rechts sichtbar sind (dann braucht es die Ersatz-Knoepfe unten links nicht).</summary>
     public static bool InfoVisible => infoButton && infoButton.gameObject.activeInHierarchy;
     public static bool SettingsVisible => settingsButton && settingsButton.gameObject.activeInHierarchy;
+    public static bool FreeplayVisible => freeplayButton && freeplayButton.gameObject.activeInHierarchy;
 
     public static void Update(HudManager hud)
     {
@@ -28,6 +36,7 @@ internal static class HudButtons
 
             if (!infoButton) (infoButton, infoPos) = Create(source, "hud_roleinfo", "Spieleabend_RoleInfoButton", RoleGuide.Toggle);
             if (!settingsButton) (settingsButton, settingsPos) = Create(source, "hud_settings", "Spieleabend_SettingsButton", SettingsPanel.Toggle);
+            if (!freeplayButton) (freeplayButton, freeplayPos) = Create(source, "hud_test", "Spieleabend_FreeplayButton", FreeplayPanel.Toggle);
 
             // Oben rechts neben "Match Info Guide" - in der Lobby UND im Spiel. Aber NICHT waehrend einer Aufgabe (Minigame,
             // sonst liegt der Knopf ueber dem Aufgabenfenster), nicht im Meeting (dort gibt es den IMGUI-Ersatzknopf),
@@ -36,11 +45,25 @@ internal static class HudButtons
                          && !PlayerCustomizationMenu.Instance && !Minigame.Instance;
             infoButton.gameObject.SetActive(hudUp && RoleRegistry.Roles.Count > 0);
             settingsButton.gameObject.SetActive(hudUp && SettingsWindow.Available);
+            freeplayButton.gameObject.SetActive(hudUp && FreeplayPanel.Available); // dritter Knopf nur im Freeplay
 
-            // Abstand wie zwischen den Original-Knoepfen (z. B. Chat -> Match Info Guide); der zweite Knopf steht daneben.
-            float spacing = Spacing(hud, sourcePos, source);
-            Place(infoPos, sourcePos, spacing);
-            Place(settingsPos, sourcePos, spacing * 2f);
+            // Abstand und Grundposition nur einmal berechnen (bei neuer Aufloesung neu), danach fest halten.
+            if (sourcePos && sourcePos.DistanceFromEdge != Vector3.zero
+                && (!cached || Screen.width != lastW || Screen.height != lastH))
+            {
+                cachedSpacing = Spacing(hud, sourcePos, source);
+                cachedBase = sourcePos.DistanceFromEdge;
+                cachedAlign = sourcePos.Alignment;
+                cached = true;
+                lastW = Screen.width;
+                lastH = Screen.height;
+            }
+            if (cached)
+            {
+                Place(infoPos, cachedSpacing);
+                Place(settingsPos, cachedSpacing * 2f);
+                Place(freeplayPos, cachedSpacing * 3f);
+            }
         }
         catch (Exception e)
         {
@@ -112,12 +135,11 @@ internal static class HudButtons
         return w > 0.1f ? w : 0.75f;
     }
 
-    private static void Place(AspectPosition target, AspectPosition source, float offset)
+    private static void Place(AspectPosition target, float offset)
     {
-        if (!target || !source) return;
-        var d = source.DistanceFromEdge;
-        target.Alignment = source.Alignment; // gleiche Ausrichtung wie "Match Info Guide" (oben rechts)
-        target.DistanceFromEdge = new Vector3(d.x + offset, d.y, d.z);
+        if (!target) return;
+        target.Alignment = cachedAlign; // gleiche Ausrichtung wie "Match Info Guide" (oben rechts), fest gecacht
+        target.DistanceFromEdge = new Vector3(cachedBase.x + offset, cachedBase.y, cachedBase.z);
         target.AdjustPosition();
     }
 }

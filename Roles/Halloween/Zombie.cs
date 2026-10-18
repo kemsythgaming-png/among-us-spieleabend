@@ -34,6 +34,7 @@ public sealed class Zombie : CustomRole
 
     private GameObject arrow;
     private static Sprite arrowSprite;
+    private float frozenUntil; // nach dem Fressen kurz bewegungsunfaehig
 
     private int EatenByLocal => PlayerControl.LocalPlayer && eaten.TryGetValue(PlayerControl.LocalPlayer.PlayerId, out int n) ? n : 0;
 
@@ -65,7 +66,11 @@ public sealed class Zombie : CustomRole
         eaten.Clear();
         if (arrow) Object.Destroy(arrow);
         arrow = null;
+        frozenUntil = 0f;
     }
+
+    public override float SpeedMultiplier(PlayerControl local) =>
+        frozenUntil > Time.time && IsLocalRole && IsAlive(local) && !InMeeting ? 0f : 1f;
 
     private static DeadBody NearbyBody()
     {
@@ -101,6 +106,7 @@ public sealed class Zombie : CustomRole
         if (sender == PlayerControl.LocalPlayer)
         {
             Sfx.Play(Sfx.Kill, 0.6f);
+            frozenUntil = Time.time + 3f; // satt und traege - 3 Sekunden festgewachsen
             if (n < toWin.Int) Notifier.Show($"<color={ColorHex}>{Lang.T("Mahlzeit!", "Yum!")} {n}/{toWin.Int}</color>", 2.5f);
         }
 

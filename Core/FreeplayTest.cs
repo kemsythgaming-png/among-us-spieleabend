@@ -77,6 +77,24 @@ internal static class FreeplayTest
         Apply();
     }
 
+    /// <summary>Genau diesem Dummy die gewaehlte Rolle geben (leer = Rolle entfernen).</summary>
+    public static void SetDummyRole(byte dummyId, string section)
+    {
+        if (!IsFreeplay || !ShipStatus.Instance) return;
+        if (string.IsNullOrEmpty(section)) dummyRoles.Remove(dummyId);
+        else
+        {
+            var role = RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == section || r.Name == section);
+            if (role == null) return;
+            dummyRoles[dummyId] = role.Id;
+        }
+        Apply();
+    }
+
+    /// <summary>Zugewiesene Rolle eines Dummys (oder null).</summary>
+    public static CustomRole DummyRole(byte dummyId) =>
+        dummyRoles.TryGetValue(dummyId, out var id) ? RoleRegistry.Get(id) : null;
+
     /// <summary>Alle Dummy-Rollen wieder entfernen.</summary>
     public static void ClearDummyRoles()
     {
@@ -214,6 +232,7 @@ internal static class FreeplayTest
             if (pairs.All(x => x.Item1 != d.PlayerId)) pairs.Add((d.PlayerId, dRole.Id));
         }
         RoleRegistry.SetAssignments(pairs);
+        ButtonManager.OnRolesAssigned(); // Knopf-Timer neu (im Freeplay 3s)
 
         Plugin.Logger.LogInfo($"Freeplay-Test: Rolle '{testRole.Value}', {fakeImpostors.Count} Dummy-Impostor(s)");
     }

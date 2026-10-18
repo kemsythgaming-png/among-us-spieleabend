@@ -80,6 +80,8 @@ public sealed class Haunting : CustomRole
         HideAll();
         released.Clear();
         localCollider = false;
+        localFaded = false;
+        spawnedInRoom = false;
         hasLastPos = false;
         wasInMeeting = false;
         restoreUntil = 0f;
@@ -119,6 +121,8 @@ public sealed class Haunting : CustomRole
 
     // Nur beim Spukgeist selbst: Collider wieder an, damit er wie eine lebende Figur an Waenden haengen bleibt
     private bool localCollider;
+    private bool localFaded;     // Spukgestalt sieht auch sich selbst nur schwach
+    private bool spawnedInRoom;  // beim Werden einmal in einen leeren Raum versetzen
 
     private void UpdateLocalCollision()
     {
@@ -142,6 +146,22 @@ public sealed class Haunting : CustomRole
         var local = PlayerControl.LocalPlayer;
         if (!local || local.Data == null) return;
         UpdateLocalCollision();
+
+        // Spukgestalt sieht auch SICH SELBST nur schwach (gleiche Sichtbarkeit wie fuer andere)
+        bool fadeLocal = Haunts(local) && !InMeeting;
+        if (local.cosmetics)
+        {
+            if (fadeLocal) local.cosmetics.SetPhantomRoleAlpha(visibility.Value / 100f);
+            else if (localFaded) local.cosmetics.SetPhantomRoleAlpha(1f);
+        }
+        localFaded = fadeLocal;
+
+        // Beim Werden einmal in einen moeglichst leeren Raum versetzen (nicht direkt neben Lebende)
+        if (Haunts(local) && !spawnedInRoom && !InMeeting)
+        {
+            spawnedInRoom = true;
+            SpawnInEmptyRoom(local);
+        }
 
         // Nach einem Meeting an die letzte Stelle vor dem Meeting zurueck (statt am Vent/Spawn)
         bool meetingNow = InMeeting;
@@ -185,6 +205,26 @@ public sealed class Haunting : CustomRole
         if (AmHost && !InMeeting)
             foreach (var p in PlayerControl.AllPlayerControls)
                 if (Haunts(p) && AllTasksDone(p)) CustomWin.Trigger(this, new[] { p });
+    }
+
+    /// <summary>Den lokalen Spieler in einen Raum ohne lebende Spieler versetzen (sonst irgendeinen Raum).</summary>
+    private void SpawnInEmptyRoom(PlayerControl local)
+    {
+        var ship = ShipStatus.Instance;
+        if (!ship || ship.AllRooms == null) return;
+        var rooms = ship.AllRooms.ToArray().Where(r => r && r.roomArea).ToList();
+        if (rooms.Count == 0) return;
+
+        var alive = PlayerControl.AllPlayerControls.ToArray().Where(p => p && p != local && IsAlive(p)).ToList();
+        var empty = rooms.Where(r => !alive.Any(p => r.roomArea.OverlapPoint(p.GetTruePosition()))).ToList();
+        var pool = empty.Count > 0 ? empty : rooms;
+        var room = pool[Random.Range(0, pool.Count)];
+
+        Vector2 c = room.roomArea.bounds.center;
+        local.transform.position = new Vector3(c.x, c.y, local.transform.position.z);
+        if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
+        lastGoodPos = c;
+        hasLastPos = true;
     }
 
     private static bool AllTasksDone(PlayerControl p)

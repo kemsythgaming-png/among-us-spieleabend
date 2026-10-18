@@ -94,6 +94,8 @@ public class RoleButton
     internal void ResetTimer(bool roundStart)
     {
         float max = Cooldown();
+        // Im Freeplay sind die Knoepfe nach einem Rollenwechsel fast sofort bereit (max 3s), zum schnellen Testen
+        if (FreeplayTest.IsFreeplay) { Timer = Mathf.Min(3f, max); return; }
         Timer = roundStart ? Mathf.Min(StartCooldown, max) : max;
     }
 

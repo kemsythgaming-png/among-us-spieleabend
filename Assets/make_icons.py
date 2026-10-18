@@ -331,6 +331,24 @@ def icon_hud_settings():
     return hud_glyph(img, shape, details)
 
 
+def icon_hud_test():
+    """Reagenzglas/Kolben (Freeplay-Test)."""
+    img = hud_button()
+
+    def shape(m):
+        m.rounded_rectangle((226, 110, 286, 240), 12, fill=255)              # Hals
+        m.polygon([(238, 230), (274, 230), (366, 402), (146, 402)], fill=255)  # Koerper
+        m.rounded_rectangle((146, 360, 366, 410), 24, fill=255)             # Boden
+
+    def details(d):
+        d.polygon([(196, 330), (316, 330), (348, 398), (164, 398)], fill=(110, 205, 240, 255))  # Fluessigkeit
+        d.rounded_rectangle((214, 100, 298, 126), 10, fill=HUD_PANEL)       # Oeffnung oben
+        d.ellipse((232, 350, 252, 370), fill=(205, 240, 255, 255))          # Blaeschen
+        d.ellipse((276, 366, 290, 380), fill=(205, 240, 255, 255))
+
+    return hud_glyph(img, shape, details)
+
+
 def icon_candy():
     """Bonbon im Among-Us-Stil: runder Gummi-Crewmate in Bonbonpapier mit dicker Kontur."""
     img, d = canvas()
@@ -557,6 +575,7 @@ ICONS = {
     "guess": icon_guess,
     "hud_roleinfo": icon_hud_roleinfo,
     "hud_settings": icon_hud_settings,
+    "hud_test": icon_hud_test,
     "shoot": icon_shoot,
     "shield": icon_shield,
     "guard": icon_guard,

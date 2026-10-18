@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HarmonyLib;
+using UnityEngine;
 
 namespace Spieleabend.Core;
 
@@ -158,8 +159,17 @@ internal static class ExiledPatch
 [HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Start))]
 internal static class MeetingStartPatch
 {
-    public static void Postfix()
+    public static void Postfix(MeetingHud __instance)
     {
+        // Practice/Freeplay: Diskussionszeit sofort vorbei (direkt abstimmen), aber die Abstimmzeit bleibt bestehen -
+        // sonst waere das Meeting sofort zu Ende, bevor man selbst waehlen kann.
+        if (FreeplayTest.IsFreeplay && __instance)
+        {
+            var o = GameOptionsManager.Instance?.CurrentGameOptions;
+            float discuss = o != null ? o.GetInt(AmongUs.GameOptions.Int32OptionNames.DiscussionTime) : 0f;
+            __instance.discussionTimer = Mathf.Max(0f, discuss);
+        }
+
         FirstDeathShield.OnMeetingStart();
         if (!RoleRegistry.HasAssignments) return;
         foreach (var role in RoleRegistry.Roles) role.OnMeetingStart();

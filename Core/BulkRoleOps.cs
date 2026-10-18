@@ -22,6 +22,7 @@ internal static class BulkRoleOps
             o.SetValue(o.Min + UnityEngine.Random.Range(0, steps + 1) * o.Step);
         }
         ForVanilla((role, opts) => opts.RoleOptions.SetRoleRate(role, opts.RoleOptions.GetNumPerGame(role), UnityEngine.Random.Range(0, 11) * 10));
+        ChatNote.Message(Lang.T("Alle Chancen: zufällig", "All chances: random"));
     }
 
     /// <summary>Alle Rollen auf dieselbe Chance setzen.</summary>
@@ -30,6 +31,7 @@ internal static class BulkRoleOps
         if (!SettingsWindow.CanEdit) return;
         foreach (var r in RoleRegistry.Roles) r.Chance.SetValue(percent);
         ForVanilla((role, opts) => opts.RoleOptions.SetRoleRate(role, opts.RoleOptions.GetNumPerGame(role), percent));
+        ChatNote.Message(Lang.T($"Alle Chancen: {percent}%", $"All chances: {percent}%"));
     }
 
     /// <summary>Alle Rollen auf dieselbe Anzahl setzen.</summary>
@@ -38,6 +40,7 @@ internal static class BulkRoleOps
         if (!SettingsWindow.CanEdit) return;
         foreach (var r in RoleRegistry.Roles) r.Count.SetValue(count);
         ForVanilla((role, opts) => opts.RoleOptions.SetRoleRate(role, count, opts.RoleOptions.GetChancePerGame(role)));
+        ChatNote.Message(Lang.T($"Alle Anzahl: {count}", $"All counts: {count}"));
     }
 
     /// <summary>Dieselbe Aktion auf alle Spiel-Rollen anwenden und danach an alle synchronisieren.</summary>
