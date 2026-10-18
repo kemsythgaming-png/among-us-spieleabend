@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
 using BepInEx.Configuration;
+using HarmonyLib;
 using InnerNet;
 using UnityEngine;
 
@@ -15,10 +16,15 @@ namespace Spieleabend.Core;
 internal static class FreeplayTest
 {
     private static ConfigEntry<string> testRole;
+    private static ConfigEntry<string> dummyRole;
     private static ConfigEntry<int> dummyImpostors;
+    private static ConfigEntry<bool> dummiesFollowVote;
 
     private static ShipStatus appliedFor;
     private static readonly HashSet<byte> fakeImpostors = new();
+
+    /// <summary>Dummy-PlayerId -> zugewiesene Testrolle.</summary>
+    private static readonly Dictionary<byte, byte> dummyRoles = new();
 
     public static bool IsFreeplay => AmongUsClient.Instance && AmongUsClient.Instance.NetworkMode == NetworkModes.FreePlay;
 
@@ -28,10 +34,56 @@ internal static class FreeplayTest
         RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == testRole.Value || r.Name == testRole.Value)?.Name ?? testRole.Value;
     public static int DummyImpostors => dummyImpostors.Value;
 
+    public static string DummyRoleName => dummyRole.Value;
+    public static string DummyRoleDisplay =>
+        RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == dummyRole.Value || r.Name == dummyRole.Value)?.Name ?? dummyRole.Value;
+    public static bool DummiesFollowVote => dummiesFollowVote.Value;
+    public static void ToggleDummiesFollowVote() => dummiesFollowVote.Value = !dummiesFollowVote.Value;
+
     public static void BindConfig(ConfigFile config)
     {
         testRole = config.Bind("Freeplay-Test", "Rolle", "Sheriff", "Rolle, die du im Freeplay bekommst (Name der Rolle, leer = keine).");
+        dummyRole = config.Bind("Freeplay-Test", "DummyRolle", "Jester", "Rolle, die ein Dummy per Knopf bekommt.");
         dummyImpostors = config.Bind("Freeplay-Test", "DummyImpostors", 2, "So viele Dummies gelten im Freeplay als Impostor.");
+        dummiesFollowVote = config.Bind("Freeplay-Test", "DummiesFollowVote", true, "Dummies stimmen im Meeting so ab wie du (zum Testen von Rausvote-Rollen).");
+    }
+
+    /// <summary>Andere Dummy-Testrolle waehlen (zum Durchblaettern).</summary>
+    public static void CycleDummyRole(int direction)
+    {
+        var names = new List<string> { "" };
+        names.AddRange(RoleRegistry.Roles.Where(r => !r.IsGhostRole).Select(r => r.ConfigSection));
+        int index = Mathf.Max(0, names.IndexOf(dummyRole.Value));
+        dummyRole.Value = names[(index + direction + names.Count) % names.Count];
+    }
+
+    /// <summary>Einem freien Dummy die gewaehlte Rolle geben.</summary>
+    public static void GiveDummyRole()
+    {
+        if (!IsFreeplay || !ShipStatus.Instance) return;
+        var role = RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == dummyRole.Value || r.Name == dummyRole.Value);
+        if (role == null) return;
+        var dummy = PlayerControl.AllPlayerControls.ToArray()
+            .FirstOrDefault(p => p && p.isDummy && p != PlayerControl.LocalPlayer && !dummyRoles.ContainsKey(p.PlayerId));
+        if (!dummy) return;
+        dummyRoles[dummy.PlayerId] = role.Id;
+        Apply();
+    }
+
+    /// <summary>Alle Dummy-Rollen wieder entfernen.</summary>
+    public static void ClearDummyRoles()
+    {
+        dummyRoles.Clear();
+        if (IsFreeplay && ShipStatus.Instance) Apply();
+    }
+
+    public static int DummyRoleCount => dummyRoles.Count;
+
+    /// <summary>Sich selbst umbringen (zum Testen, auch als Impostor).</summary>
+    public static void SelfKill()
+    {
+        var local = PlayerControl.LocalPlayer;
+        if (IsFreeplay && local && CustomRole.IsAlive(local)) local.RpcMurderPlayer(local, true);
     }
 
     public static bool IsFakeImpostor(PlayerControl player) => IsFreeplay && player && fakeImpostors.Contains(player.PlayerId);
@@ -46,6 +98,7 @@ internal static class FreeplayTest
     {
         appliedFor = null;
         fakeImpostors.Clear();
+        dummyRoles.Clear();
     }
 
     public static void Update()
@@ -111,6 +164,21 @@ internal static class FreeplayTest
                 if (partner) pairs.Add((partner.PlayerId, role.Id));
             }
         }
+
+        // Dummy-Rollen mit aufnehmen und die passende Vanilla-Grundrolle setzen
+        foreach (var kv in dummyRoles.ToArray())
+        {
+            var d = CustomRole.FindPlayer(kv.Key);
+            var dRole = RoleRegistry.Get(kv.Value);
+            if (!d || !d.isDummy || dRole == null) { dummyRoles.Remove(kv.Key); continue; }
+            bool wantImp = dRole.Team == RoleTeam.Impostor;
+            if (d.Data != null && d.Data.Role && d.Data.Role.IsImpostor != wantImp)
+            {
+                RoleManager.Instance.SetRole(d, wantImp ? RoleTypes.Impostor : RoleTypes.Crewmate);
+                if (wantImp) d.ClearTasks();
+            }
+            if (pairs.All(x => x.Item1 != d.PlayerId)) pairs.Add((d.PlayerId, dRole.Id));
+        }
         RoleRegistry.SetAssignments(pairs);
 
         Plugin.Logger.LogInfo($"Freeplay-Test: Rolle '{testRole.Value}', {fakeImpostors.Count} Dummy-Impostor(s)");
@@ -123,5 +191,31 @@ internal static class FreeplayTest
             if (p && p.cosmetics && fakeImpostors.Contains(p.PlayerId))
                 p.cosmetics.nameText.color = Palette.ImpostorRed;
         }
+    }
+}
+
+/// <summary>Freeplay: Dummies stimmen so ab wie du - zum Testen von Rollen, die rausgevotet werden sollen.</summary>
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.CastVote))]
+internal static class DummyFollowVotePatch
+{
+    private static bool busy;
+
+    public static void Postfix(MeetingHud __instance, byte srcPlayerId, byte suspectPlayerId)
+    {
+        if (busy || !FreeplayTest.IsFreeplay || !FreeplayTest.DummiesFollowVote) return;
+        var local = PlayerControl.LocalPlayer;
+        if (!local || srcPlayerId != local.PlayerId) return; // nur der eigenen Stimme folgen
+
+        busy = true;
+        try
+        {
+            foreach (var p in PlayerControl.AllPlayerControls)
+                if (p && p.isDummy && CustomRole.IsAlive(p))
+                    __instance.CastVote(p.PlayerId, suspectPlayerId);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"Dummy-Vote: {e.Message}"); }
+        busy = false;
+
+        try { __instance.CheckForEndVoting(); } catch { }
     }
 }

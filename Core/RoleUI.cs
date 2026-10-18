@@ -11,6 +11,9 @@ namespace Spieleabend.Core;
 /// </summary>
 internal static class RoleUI
 {
+    private static ImportantTextTask roleTask;
+    private static string roleTaskText;
+
     private static readonly Dictionary<byte, TextMeshPro> worldLabels = new();
     private static readonly Dictionary<byte, TextMeshPro> meetingLabels = new();
 
@@ -18,6 +21,7 @@ internal static class RoleUI
     {
         var local = PlayerControl.LocalPlayer;
         if (local && local.cosmetics) local.cosmetics.nameText.color = Color.white;
+        RemoveRoleTask(local);
         foreach (var label in worldLabels.Values.Concat(meetingLabels.Values))
             if (label) Object.Destroy(label.gameObject);
         worldLabels.Clear();
@@ -35,8 +39,7 @@ internal static class RoleUI
         var all = RoleRegistry.GetDisplayed(local).ToList();
         var main = RoleRegistry.GetGhostRole(local) ?? RoleRegistry.LocalRole;
 
-        // Rolle wird NICHT mehr in die Aufgabenliste geschrieben (das war ein nie fertiger Task = Dauer-Ausrufezeichen).
-        // Die Rolle steht im Intro, im Rollen-Info-Fenster (F2) und ueber dem eigenen Namen.
+        UpdateRoleTask(local, all); // Rolle(n) + Anpassungen links in der Aufgabenliste
         if (main != null)
         {
             local.cosmetics.nameText.color = main.NameColor;
@@ -221,6 +224,35 @@ internal static class RoleUI
         label.text = info;
         label.color = Color.white;
         label.alpha = nameText.alpha;
+    }
+
+    private static void UpdateRoleTask(PlayerControl local, List<CustomRole> roles)
+    {
+        if (roles.Count == 0)
+        {
+            RemoveRoleTask(local);
+            return;
+        }
+
+        // Rollenname in eigener Zeile, damit der Text oben links ordentlich umbricht
+        string text = string.Join("\n", roles.Select(r => $"<color={r.ColorHex}><b>{r.Name}:</b>\n{r.Description}</color>"));
+        if (roleTask && roleTaskText == text && local.myTasks.Contains(roleTask)) return;
+        RemoveRoleTask(local);
+
+        roleTask = new GameObject("CustomRoleTask").AddComponent<ImportantTextTask>();
+        roleTask.transform.SetParent(local.transform, false);
+        roleTask.Text = text;
+        roleTaskText = text;
+        local.myTasks.Insert(0, roleTask);
+    }
+
+    private static void RemoveRoleTask(PlayerControl local)
+    {
+        if (!roleTask) return;
+        if (local) local.myTasks.Remove(roleTask);
+        Object.Destroy(roleTask.gameObject);
+        roleTask = null;
+        roleTaskText = null;
     }
 
     private static void UpdateIntro(CustomRole main, List<CustomRole> all)
