@@ -57,11 +57,18 @@ internal static class FreeplayTest
         dummyRole.Value = names[(index + direction + names.Count) % names.Count];
     }
 
+    /// <summary>Deine Testrolle direkt setzen (aus der Liste gewaehlt).</summary>
+    public static void SetTestRole(string section)
+    {
+        testRole.Value = section ?? "";
+        if (IsFreeplay && ShipStatus.Instance) Apply();
+    }
+
     /// <summary>Einem freien Dummy die gewaehlte Rolle geben.</summary>
-    public static void GiveDummyRole()
+    public static void GiveDummyRole(string section)
     {
         if (!IsFreeplay || !ShipStatus.Instance) return;
-        var role = RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == dummyRole.Value || r.Name == dummyRole.Value);
+        var role = RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == section || r.Name == section);
         if (role == null) return;
         var dummy = PlayerControl.AllPlayerControls.ToArray()
             .FirstOrDefault(p => p && p.isDummy && p != PlayerControl.LocalPlayer && !dummyRoles.ContainsKey(p.PlayerId));
@@ -84,6 +91,33 @@ internal static class FreeplayTest
     {
         var local = PlayerControl.LocalPlayer;
         if (IsFreeplay && local && CustomRole.IsAlive(local)) local.RpcMurderPlayer(local, true);
+    }
+
+    /// <summary>Jedes Frame im Meeting: Hast du schon abgestimmt, stimmen alle Dummies sofort genauso ab (und das Meeting endet).</summary>
+    public static void MeetingVoteFollow(MeetingHud meeting)
+    {
+        if (!IsFreeplay || !dummiesFollowVote.Value || !meeting) return;
+        var local = PlayerControl.LocalPlayer;
+        if (!local) return;
+
+        PlayerVoteArea localState = null;
+        foreach (var s in meeting.playerStates)
+            if (s && (byte)s.PlayerId == local.PlayerId) { localState = s; break; }
+        if (localState == null || !localState.DidVote) return;
+
+        byte target = (byte)localState.VotedForId;
+        bool any = false;
+        foreach (var s in meeting.playerStates)
+        {
+            if (!s || s.DidVote) continue;
+            var p = CustomRole.FindPlayer((byte)s.PlayerId);
+            if (p && p.isDummy && CustomRole.IsAlive(p))
+            {
+                try { meeting.CastVote((byte)s.PlayerId, target); any = true; }
+                catch { }
+            }
+        }
+        if (any) { try { meeting.CheckForEndVoting(); } catch { } }
     }
 
     public static bool IsFakeImpostor(PlayerControl player) => IsFreeplay && player && fakeImpostors.Contains(player.PlayerId);
@@ -194,28 +228,3 @@ internal static class FreeplayTest
     }
 }
 
-/// <summary>Freeplay: Dummies stimmen so ab wie du - zum Testen von Rollen, die rausgevotet werden sollen.</summary>
-[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.CastVote))]
-internal static class DummyFollowVotePatch
-{
-    private static bool busy;
-
-    public static void Postfix(MeetingHud __instance, byte srcPlayerId, byte suspectPlayerId)
-    {
-        if (busy || !FreeplayTest.IsFreeplay || !FreeplayTest.DummiesFollowVote) return;
-        var local = PlayerControl.LocalPlayer;
-        if (!local || srcPlayerId != local.PlayerId) return; // nur der eigenen Stimme folgen
-
-        busy = true;
-        try
-        {
-            foreach (var p in PlayerControl.AllPlayerControls)
-                if (p && p.isDummy && CustomRole.IsAlive(p))
-                    __instance.CastVote(p.PlayerId, suspectPlayerId);
-        }
-        catch (System.Exception e) { Plugin.Logger.LogWarning($"Dummy-Vote: {e.Message}"); }
-        busy = false;
-
-        try { __instance.CheckForEndVoting(); } catch { }
-    }
-}

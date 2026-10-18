@@ -106,6 +106,10 @@ internal static class SettingsPanel
     // Schnell-Einstellung (Reiter "Allgemein"): Zielwerte fuer "alle Chancen"/"alle Anzahl"
     private static int bulkChance = 50, bulkCount = 1;
 
+    // Freeplay-Test: in der Liste gewaehlte Rolle + Scroll-Position
+    private static string freeplaySelected = "";
+    private static Vector2 freeplayScroll;
+
     /// <summary>Ein Eintrag in der Rollen-Liste: Mod-Rolle, Rolle aus dem Spiel, Zwischenueberschrift oder (bei der Suche) eine einzelne Einstellung.</summary>
     private sealed class Entry
     {
@@ -442,45 +446,54 @@ internal static class SettingsPanel
         GUI.enabled = guiBefore;
     }
 
-    /// <summary>Freeplay-Testbereich: eigene Rolle, Dummy-Rolle geben, Dummy-Impostor, selbst sterben, Dummies folgen der Stimme.</summary>
+    /// <summary>Freeplay-Testbereich: Rolle aus Liste waehlen (fuer dich oder einen Dummy), selbst sterben, Dummies folgen der Stimme.</summary>
     private static void DrawFreeplay(Rect area)
     {
         float x = area.x, w = area.width, y = area.y;
-        GUI.Label(new Rect(x, y, w, 30), Lang.T("<b>Freeplay-Test</b>", "<b>Freeplay test</b>"), Ui.Text);
-        y += 36;
+        GUI.Label(new Rect(x, y, w, 28), Lang.T("<b>Freeplay-Test</b>", "<b>Freeplay test</b>"), Ui.Text);
+        y += 30;
 
-        // Deine Rolle
-        GUI.Label(new Rect(x, y, w, 24), Lang.T("Deine Rolle:", "Your role:"), Ui.Small);
-        y += 26;
         string myRole = string.IsNullOrEmpty(FreeplayTest.TestRoleName) ? Lang.T("(keine)", "(none)") : FreeplayTest.TestRoleDisplayName;
-        if (Ui.Button(new Rect(x, y, 42, 40), "<")) FreeplayTest.CycleRole(-1);
-        GUI.Label(new Rect(x + 48, y + 6, w - 96, 30), myRole, Ui.Small);
-        if (Ui.Button(new Rect(x + w - 42, y, 42, 40), ">")) FreeplayTest.CycleRole(1);
+        GUI.Label(new Rect(x, y, w, 24),
+            Lang.T($"Du: <b>{myRole}</b>   Dummy-Rollen: <b>{FreeplayTest.DummyRoleCount}</b>", $"You: <b>{myRole}</b>   Dummy roles: <b>{FreeplayTest.DummyRoleCount}</b>"), Ui.Small);
+        y += 28;
+
+        // Klickbare Rollenliste
+        var roles = new List<(string Section, string Label)> { ("", Lang.T("(keine)", "(none)")) };
+        roles.AddRange(RoleRegistry.Roles.Where(r => !r.IsGhostRole).Select(r => (r.ConfigSection, r.ColoredName)));
+        const float rowH = 36f, listH = 188f;
+        var view = new Rect(x, y, w, listH);
+        GUI.Box(view, GUIContent.none, Ui.Inner);
+        freeplayScroll.y = Ui.Scroll(view, roles.Count * rowH, freeplayScroll.y);
+        float ry = 0;
+        foreach (var (section, label) in roles)
+        {
+            if (Ui.RowVisible(view, ry, rowH - 4, freeplayScroll.y))
+            {
+                float sy = view.y + ry - freeplayScroll.y;
+                bool sel = freeplaySelected == section;
+                if (GUI.Button(new Rect(view.x + 4, sy + 2, w - 18, rowH - 4), new GUIContent(label), sel ? Ui.Selected : Ui.ButtonStyle))
+                    freeplaySelected = section;
+            }
+            ry += rowH;
+        }
+        y += listH + 8;
+
+        // Gewaehlte Rolle zuweisen
+        if (Ui.Button(new Rect(x, y, w / 2f - 5, 40), Lang.T("Für dich", "For you"))) FreeplayTest.SetTestRole(freeplaySelected);
+        if (Ui.Button(new Rect(x + w / 2f + 5, y, w / 2f - 5, 40), Lang.T("An Dummy", "To dummy"))) FreeplayTest.GiveDummyRole(freeplaySelected);
         y += 48;
 
-        // Dummy-Rolle
-        GUI.Label(new Rect(x, y, w, 24), Lang.T("Dummy-Rolle:", "Dummy role:"), Ui.Small);
-        y += 26;
-        string dRole = string.IsNullOrEmpty(FreeplayTest.DummyRoleName) ? Lang.T("(keine)", "(none)") : FreeplayTest.DummyRoleDisplay;
-        if (Ui.Button(new Rect(x, y, 42, 40), "<")) FreeplayTest.CycleDummyRole(-1);
-        GUI.Label(new Rect(x + 48, y + 6, w - 96, 30), dRole, Ui.Small);
-        if (Ui.Button(new Rect(x + w - 42, y, 42, 40), ">")) FreeplayTest.CycleDummyRole(1);
-        y += 48;
-
-        if (Ui.Button(new Rect(x, y, w - 92, 40), Lang.T($"An Dummy geben ({FreeplayTest.DummyRoleCount})", $"Give to dummy ({FreeplayTest.DummyRoleCount})"))) FreeplayTest.GiveDummyRole();
-        if (Ui.Button(new Rect(x + w - 86, y, 86, 40), Lang.T("Reset", "Reset"))) FreeplayTest.ClearDummyRoles();
-        y += 50;
-
-        // Dummy-Impostor
+        // Dummy-Impostor + Reset
         if (Ui.Button(new Rect(x, y, 42, 40), "-")) FreeplayTest.ChangeDummyImpostors(-1);
-        GUI.Label(new Rect(x + 48, y + 6, w - 96, 30), $"{FreeplayTest.DummyImpostors} " + Lang.T("Dummy-Impostor", "dummy impostors"), Ui.Small);
-        if (Ui.Button(new Rect(x + w - 42, y, 42, 40), "+")) FreeplayTest.ChangeDummyImpostors(1);
-        y += 50;
+        GUI.Label(new Rect(x + 48, y + 6, 100, 30), $"{FreeplayTest.DummyImpostors} " + Lang.T("Dummy-Imp.", "dummy imp."), Ui.Small);
+        if (Ui.Button(new Rect(x + 132, y, 42, 40), "+")) FreeplayTest.ChangeDummyImpostors(1);
+        if (Ui.Button(new Rect(x + w - 86, y, 86, 40), Lang.T("Reset", "Reset"))) FreeplayTest.ClearDummyRoles();
+        y += 48;
 
         if (Ui.Button(new Rect(x, y, w, 40), Lang.T("Selbst sterben", "Kill yourself"))) FreeplayTest.SelfKill();
-        y += 50;
+        y += 48;
 
-        // Dummies folgen deiner Stimme
         GUI.Label(new Rect(x, y + 6, w - 118, 30), Lang.T("Dummies folgen Stimme:", "Dummies follow vote:"), Ui.Small);
         if (Ui.Button(new Rect(x + w - 110, y, 110, 40), FreeplayTest.DummiesFollowVote ? Lang.T("An", "On") : Lang.T("Aus", "Off"), FreeplayTest.DummiesFollowVote))
             FreeplayTest.ToggleDummiesFollowVote();

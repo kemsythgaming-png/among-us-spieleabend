@@ -33,7 +33,7 @@ internal static class HudButtons
             // sonst liegt der Knopf ueber dem Aufgabenfenster), nicht im Meeting (dort gibt es den IMGUI-Ersatzknopf),
             // nicht in der Kleiderkammer und nicht im Intro.
             bool hudUp = (LobbyBehaviour.Instance || ShipStatus.Instance) && !IntroCutscene.Instance
-                         && !PlayerCustomizationMenu.Instance && !Minigame.Instance && !MeetingHud.Instance;
+                         && !PlayerCustomizationMenu.Instance && !Minigame.Instance;
             infoButton.gameObject.SetActive(hudUp && RoleRegistry.Roles.Count > 0);
             settingsButton.gameObject.SetActive(hudUp && SettingsWindow.Available);
 
@@ -60,20 +60,26 @@ internal static class HudButtons
         button.OnClick = new Button.ButtonClickedEvent();
         button.OnClick.AddListener(onClick);
 
-        // Nur das INNERE Symbol ersetzen (kleinster Sprite) - der Rahmen des Original-Knopfs bleibt,
-        // sonst haette der Knopf einen doppelten Rahmen (Spiel-Rahmen + Symbol-Rahmen).
-        SpriteRenderer iconRenderer = null;
-        float smallest = float.MaxValue;
-        foreach (var sr in go.GetComponentsInChildren<SpriteRenderer>(true))
+        // Unser komplettes Icon (Rahmen + Symbol) in den groessten Sprite setzen und alle anderen Sprites ausblenden,
+        // damit nur EIN Rahmen zu sehen ist (kein doppelter aus Spiel-Rahmen + Symbol-Rahmen).
+        var renderers = go.GetComponentsInChildren<SpriteRenderer>(true);
+        SpriteRenderer main = null;
+        float largest = -1f;
+        foreach (var sr in renderers)
         {
             if (!sr || !sr.sprite) continue;
             float area = sr.sprite.bounds.size.x * sr.sprite.bounds.size.y;
-            if (area < smallest) { smallest = area; iconRenderer = sr; }
+            if (area > largest) { largest = area; main = sr; }
         }
-        if (iconRenderer)
+        foreach (var sr in renderers)
         {
-            var sprite = ButtonIcons.Get(icon, iconRenderer.sprite);
-            if (sprite) iconRenderer.sprite = sprite;
+            if (!sr) continue;
+            if (sr == main)
+            {
+                var sprite = ButtonIcons.Get(icon, sr.sprite);
+                if (sprite) sr.sprite = sprite;
+            }
+            else sr.enabled = false;
         }
 
         // Controller-Hinweise des Originals ausblenden

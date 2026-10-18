@@ -59,7 +59,11 @@ internal static class HudUpdatePatch
 [HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Update))]
 internal static class MeetingUpdatePatch
 {
-    public static void Postfix(MeetingHud __instance) => RoleUI.UpdateMeeting(__instance);
+    public static void Postfix(MeetingHud __instance)
+    {
+        RoleUI.UpdateMeeting(__instance);
+        FreeplayTest.MeetingVoteFollow(__instance);
+    }
 }
 
 [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnGameEnd))]
