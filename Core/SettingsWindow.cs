@@ -219,12 +219,11 @@ internal static class SettingsPanel
         // Rechte Spalte (neben den Optionen): kurzer Hinweis, dann die Schnell-Einstellung, dann (im Freeplay) der Test-Bereich.
         var side = new Rect(area.x + 760, area.y, area.width - 770, area.height);
         float sy = side.y;
-        GUI.Label(new Rect(side.x, sy, side.width, 86),
-            Lang.T("Mod-Rollen gehen nur an normale Crewmates/Impostor. Die Rollen aus dem Spiel (Reiter Crew/Impostor) bleiben unverändert.",
-                   "Mod roles only go to plain crewmates/impostors. The game's own roles (Crew/Impostor tabs) stay unchanged."), Ui.Small);
-        sy += 92;
+        GUI.Label(new Rect(side.x, sy, side.width, 56),
+            Lang.T("Mod-Rollen gehen nur an normale Crewmates/Impostor.", "Mod roles only go to plain crewmates/impostors."), Ui.Small);
+        sy += 66;
         DrawBulk(side.x, sy, side.width);
-        sy += 286;
+        sy += 300;
 
         if (FreeplayTest.IsFreeplay)
         {

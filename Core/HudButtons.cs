@@ -60,11 +60,20 @@ internal static class HudButtons
         button.OnClick = new Button.ButtonClickedEvent();
         button.OnClick.AddListener(onClick);
 
-        // Bild ersetzen (alle Zustaende: normal/hover/gedrueckt)
+        // Nur das INNERE Symbol ersetzen (kleinster Sprite) - der Rahmen des Original-Knopfs bleibt,
+        // sonst haette der Knopf einen doppelten Rahmen (Spiel-Rahmen + Symbol-Rahmen).
+        SpriteRenderer iconRenderer = null;
+        float smallest = float.MaxValue;
         foreach (var sr in go.GetComponentsInChildren<SpriteRenderer>(true))
         {
-            var sprite = ButtonIcons.Get(icon, sr.sprite);
-            if (sprite) sr.sprite = sprite;
+            if (!sr || !sr.sprite) continue;
+            float area = sr.sprite.bounds.size.x * sr.sprite.bounds.size.y;
+            if (area < smallest) { smallest = area; iconRenderer = sr; }
+        }
+        if (iconRenderer)
+        {
+            var sprite = ButtonIcons.Get(icon, iconRenderer.sprite);
+            if (sprite) iconRenderer.sprite = sprite;
         }
 
         // Controller-Hinweise des Originals ausblenden

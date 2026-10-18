@@ -293,8 +293,8 @@ def hud_glyph(img, draw_mask, details=None):
 
 
 def icon_hud_roleinfo():
-    """Crewmate mit Info-Abzeichen (Rollen-Info)."""
-    img = hud_button()
+    """Crewmate mit Info-Abzeichen (Rollen-Info). Ohne eigenen Knopfrahmen - der kommt vom Spiel-Knopf."""
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
 
     def shape(m):
         # Crewmate gross und zentriert (Koerper als Bohne, Rucksack links, Visier oben)
@@ -315,8 +315,8 @@ def icon_hud_roleinfo():
 
 
 def icon_hud_settings():
-    """Drei saubere Schieberegler (Rollen-Einstellungen)."""
-    img = hud_button()
+    """Drei saubere Schieberegler (Rollen-Einstellungen). Ohne eigenen Knopfrahmen - der kommt vom Spiel-Knopf."""
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     rows = ((176, 324), (256, 198), (336, 342))  # (Hoehe, Knopf-x)
 
     def shape(m):

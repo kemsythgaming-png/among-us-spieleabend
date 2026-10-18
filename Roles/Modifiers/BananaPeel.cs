@@ -15,7 +15,7 @@ namespace Spieleabend.Roles.Modifiers;
 public sealed class BananaPeel : CustomRole
 {
     public override string ConfigSection => "Bananenschale";
-    public override string Name => Lang.T("Bananenschale", "Banana Peel");
+    public override string Name => "Banana";
     public override Color Color => new Color32(245, 220, 70, 255);
     public override RoleTeam Team => RoleTeam.Modifier;
     public override string IntroText => Lang.T("Leg sie aufs Glatteis", "Lay a slippery trap");
@@ -25,11 +25,11 @@ public sealed class BananaPeel : CustomRole
         "Modifier for all teams: the button drops a banana peel at your spot. The next player who walks over it slips and is slowed for 2 seconds. Everyone sees the peel, but not who placed it.\n\nAt most 2 peels at once, old ones vanish after 15 seconds. No damage, no kills - just to sabotage escape routes.");
 
     private const byte ActionPlace = 0, ActionTrip = 1;
-    private const float PeelLife = 15f, SlipTime = 2f, SlipFactor = 0.45f, TripRadius = 0.45f, MaxPeels = 2;
+    private const float PeelLife = 15f, SlipTime = 2f, SlipFactor = 0.45f, TripRadius = 0.5f, MaxPeels = 2, ArmDelay = 2.5f;
 
     private RoleOption cooldown;
 
-    private sealed class Peel { public byte Placer; public byte Seq; public GameObject Obj; public float SpawnTime; }
+    private sealed class Peel { public byte Placer; public byte Seq; public GameObject Obj; public float SpawnTime; public float ArmAt; }
 
     // bei allen Clients: alle liegenden Schalen (Schluessel = Platzierer<<8 | Seq)
     private readonly Dictionary<int, Peel> peels = new();
@@ -102,10 +102,11 @@ public sealed class BananaPeel : CustomRole
         RemovePeel(key);
 
         var go = new GameObject("Spieleabend_BananaPeel");
-        go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f + 0.001f);
-        go.transform.localScale = Vector3.one * 0.5f;
+        if (ShipStatus.Instance) go.transform.SetParent(ShipStatus.Instance.transform, true);
+        go.transform.position = new Vector3(pos.x, pos.y - 0.1f, pos.y / 1000f - 0.01f); // vor dem Boden, leicht unter die Figur
+        go.transform.localScale = Vector3.one * 0.6f;
         go.AddComponent<SpriteRenderer>().sprite = PeelSprite();
-        peels[key] = new Peel { Placer = placer, Seq = seq, Obj = go, SpawnTime = Time.time };
+        peels[key] = new Peel { Placer = placer, Seq = seq, Obj = go, SpawnTime = Time.time, ArmAt = Time.time + ArmDelay };
 
         // Hoechstens 2 je Spieler: aelteste entfernen
         var mine = peels.Values.Where(p => p.Placer == placer).OrderBy(p => p.SpawnTime).ToList();
@@ -149,7 +150,7 @@ public sealed class BananaPeel : CustomRole
         Vector2 me = local.GetTruePosition();
         foreach (var p in peels.Values)
         {
-            if (!p.Obj) continue;
+            if (!p.Obj || t < p.ArmAt) continue; // erst nach kurzer Zeit "scharf" (Platzierer rutscht nicht sofort selbst)
             if (Vector2.Distance(me, p.Obj.transform.position) > TripRadius) continue;
             slipUntil = t + SlipTime;
             Sfx.Play(Sfx.Fail);
@@ -179,24 +180,30 @@ public sealed class BananaPeel : CustomRole
         catch (Exception e) { Plugin.Logger.LogWarning($"BANANA-Text: {e.Message}"); }
     }
 
-    /// <summary>Einfache Bananenschalen-Grafik (gelbe Sichel) - im Code erzeugt.</summary>
+    /// <summary>Banane (dicke gelbe Krumme mit braunen Enden) - im Code erzeugt.</summary>
     private static Sprite PeelSprite()
     {
         if (peelSprite) return peelSprite;
         const int S = 96;
         var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
-        var yellow = new Color(0.98f, 0.85f, 0.12f);
-        var darker = new Color(0.78f, 0.62f, 0.08f);
+        var yellow = new Color(0.98f, 0.84f, 0.12f);
+        var darker = new Color(0.80f, 0.63f, 0.07f);
+        var brown = new Color(0.42f, 0.28f, 0.10f);
         for (int y = 0; y < S; y++)
         for (int x = 0; x < S; x++)
         {
             var c = new Vector2(x - S / 2f, y - S / 2f) / (S / 2f);
-            // Sichel: grosser Kreis minus versetzter Kreis
-            float outer = c.magnitude;
-            float inner = (c - new Vector2(0.35f, 0.25f)).magnitude;
-            bool inside = outer < 0.92f && inner > 0.62f;
-            float edge = Mathf.Min(0.92f - outer, inner - 0.62f);
-            Color col = inside ? (edge < 0.08f ? darker : yellow) : Color.clear;
+            // Dicke untere Sichel = Bananenform (zwei versetzte Kreise, nur die untere Haelfte)
+            float outer = (c - new Vector2(0f, 0.15f)).magnitude;
+            float inner = (c - new Vector2(0f, 0.62f)).magnitude;
+            bool inside = outer < 0.9f && inner > 0.6f && c.y < 0.45f;
+            Color col = Color.clear;
+            if (inside)
+            {
+                float edge = Mathf.Min(Mathf.Min(0.9f - outer, inner - 0.6f), 0.45f - c.y);
+                bool tip = Mathf.Abs(c.x) > 0.46f;         // braune Enden
+                col = tip ? brown : (edge < 0.07f ? darker : yellow);
+            }
             tex.SetPixel(x, y, col);
         }
         tex.Apply();

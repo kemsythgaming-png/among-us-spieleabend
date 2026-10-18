@@ -1,15 +1,17 @@
+using System;
+using AmongUs.GameOptions;
 using UnityEngine;
 
 namespace Spieleabend.Core;
 
 /// <summary>
-/// Sammel-Aktionen fuer alle Mod-Rollen auf einmal (Schnell-Einstellung im Reiter "Allgemein"):
+/// Sammel-Aktionen fuer alle Rollen auf einmal (Schnell-Einstellung im Reiter "Allgemein"):
 /// alle Chancen zufaellig, alle Chancen auf denselben Wert, alle Anzahlen auf denselben Wert.
-/// Wirkt nur auf die Mod-Rollen; die Rollen aus dem Spiel bleiben unberuehrt. Nur Host/Freeplay.
+/// Wirkt auf die Mod-Rollen UND die Rollen aus dem Spiel (Engineer, Shapeshifter ...). Nur Host/Freeplay.
 /// </summary>
 internal static class BulkRoleOps
 {
-    /// <summary>Jeder Mod-Rolle eine zufaellige Chance geben (in Schritten ihrer Einstellung).</summary>
+    /// <summary>Jeder Rolle eine zufaellige Chance geben.</summary>
     public static void RandomizeChances()
     {
         if (!SettingsWindow.CanEdit) return;
@@ -17,21 +19,37 @@ internal static class BulkRoleOps
         {
             var o = r.Chance;
             int steps = Mathf.Max(1, Mathf.RoundToInt((o.Max - o.Min) / o.Step));
-            o.SetValue(o.Min + Random.Range(0, steps + 1) * o.Step);
+            o.SetValue(o.Min + UnityEngine.Random.Range(0, steps + 1) * o.Step);
         }
+        ForVanilla((role, opts) => opts.RoleOptions.SetRoleRate(role, opts.RoleOptions.GetNumPerGame(role), UnityEngine.Random.Range(0, 11) * 10));
     }
 
-    /// <summary>Alle Mod-Rollen auf dieselbe Chance setzen.</summary>
+    /// <summary>Alle Rollen auf dieselbe Chance setzen.</summary>
     public static void SetAllChances(int percent)
     {
         if (!SettingsWindow.CanEdit) return;
         foreach (var r in RoleRegistry.Roles) r.Chance.SetValue(percent);
+        ForVanilla((role, opts) => opts.RoleOptions.SetRoleRate(role, opts.RoleOptions.GetNumPerGame(role), percent));
     }
 
-    /// <summary>Alle Mod-Rollen auf dieselbe Anzahl setzen.</summary>
+    /// <summary>Alle Rollen auf dieselbe Anzahl setzen.</summary>
     public static void SetAllCounts(int count)
     {
         if (!SettingsWindow.CanEdit) return;
         foreach (var r in RoleRegistry.Roles) r.Count.SetValue(count);
+        ForVanilla((role, opts) => opts.RoleOptions.SetRoleRate(role, count, opts.RoleOptions.GetChancePerGame(role)));
+    }
+
+    /// <summary>Dieselbe Aktion auf alle Spiel-Rollen anwenden und danach an alle synchronisieren.</summary>
+    private static void ForVanilla(Action<RoleTypes, IGameOptions> apply)
+    {
+        var o = GameOptionsManager.Instance?.CurrentGameOptions;
+        if (o == null) return;
+        try
+        {
+            foreach (var v in VanillaRoleEntry.All) apply(v.Role, o);
+            if (GameManager.Instance && GameManager.Instance.LogicOptions != null) GameManager.Instance.LogicOptions.SyncOptions();
+        }
+        catch (Exception e) { Plugin.Logger.LogWarning($"Sammel-Einstellung (Spiel-Rollen): {e.Message}"); }
     }
 }

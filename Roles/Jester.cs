@@ -34,7 +34,6 @@ public sealed class Jester : CustomRole
         {
             Label = "Venten|Vent",
             Icon = "vent",
-            GameIcon = hud => hud.ImpostorVentButton && hud.ImpostorVentButton.graphic ? hud.ImpostorVentButton.graphic.sprite : null,
             NeedsTarget = false,
             UsableInVent = true,
             Cooldown = () => 0f,

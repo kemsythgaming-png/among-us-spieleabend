@@ -16,16 +16,16 @@ internal static class ChatNote
         RoleRpc.SendChatNote(text);               // alle anderen bekommen es per Nachricht
     }
 
-    /// <summary>Hinweis als Chat-Zeile des Absenders (Host) anzeigen - auf jedem Client.</summary>
+    /// <summary>Hinweis unten links anzeigen (wie die Standard-Meldung "# Impostors set to 2") - auf jedem Client.</summary>
     internal static void Display(PlayerControl source, string text)
     {
         try
         {
             var hud = HudManager.Instance;
-            if (!hud || !hud.Chat || !source || string.IsNullOrEmpty(text)) return;
-            hud.Chat.AddChat(source, text, false);
+            if (!hud || !hud.Notifier || string.IsNullOrEmpty(text)) return;
+            hud.Notifier.AddDisconnectMessage(text);
         }
-        catch { /* Chat evtl. noch nicht bereit - dann eben kein Hinweis */ }
+        catch { /* Notifier evtl. noch nicht bereit - dann eben kein Hinweis */ }
     }
 
     private static string Format(RoleOption option)
