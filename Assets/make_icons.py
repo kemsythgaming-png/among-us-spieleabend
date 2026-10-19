@@ -569,7 +569,127 @@ def icon_vent():
     return img
 
 
+def icon_web():
+    """Spinnennetz: Speichen + verbindende Faeden (Ecke)."""
+    img, d = canvas()
+    c = S / 2
+    white = (235, 238, 245, 255)
+    spokes = []
+    for k in range(8):
+        a = math.radians(k * 45)
+        ex, ey = c + math.cos(a) * 235, c + math.sin(a) * 235
+        d.line((c, c, ex, ey), fill=OUTLINE, width=26)
+        spokes.append((math.cos(a), math.sin(a)))
+    for k in range(8):
+        a = math.radians(k * 45)
+        d.line((c, c, c + math.cos(a) * 235, c + math.sin(a) * 235), fill=white, width=11)
+    for r in (80, 150, 215):
+        pts = [(c + cx * r, c + cy * r) for cx, cy in spokes] + [(c + spokes[0][0] * r, c + spokes[0][1] * r)]
+        d.line(pts, fill=OUTLINE, width=18, joint="curve")
+        d.line(pts, fill=white, width=8, joint="curve")
+    ellipse(d, (c - 20, c - 20, c + 20, c + 20), white, 10)
+    return img
+
+
+def icon_ebutton():
+    """Among-Us-Notfallknopf: roter Knopf auf Metallsockel."""
+    img, d = canvas()
+    c = S / 2
+    d.rounded_rectangle((70, 250, S - 70, 450), 40, fill=(80, 84, 92, 255), outline=OUTLINE, width=W)       # Sockel
+    d.rounded_rectangle((110, 290, S - 110, 360), 20, fill=(45, 47, 53, 255))                               # Schlitz
+    ellipse(d, (95, 70, S - 95, 330), (210, 45, 45, 255))                                                   # roter Knopf
+    d.ellipse((150, 110, 300, 210), fill=(255, 120, 120, 200))                                              # Glanz
+    return img
+
+
+def icon_tp():
+    """Klopapier-Rolle mit herabhaengendem Blatt (Mumie)."""
+    img, d = canvas()
+    white = (246, 246, 250, 255)
+    d.rectangle((120, 175, 392, 345), fill=white)                                                           # Koerper
+    ellipse(d, (120, 290, 392, 400), white)                                                                 # Unterkante
+    ellipse(d, (120, 120, 392, 230), white)                                                                 # Oberkante
+    d.rectangle((118, 230, 394, 290), fill=white, outline=None)
+    for y in (255, 300, 340):
+        d.line((150, y, 362, y), fill=(214, 214, 222, 255), width=6)
+    ellipse(d, (205, 150, 307, 200), (170, 125, 85, 255), 14)                                               # Pappkern
+    d.rounded_rectangle((300, 345, 374, 480), 10, fill=white, outline=OUTLINE, width=14)                    # Blatt
+    d.line((120, 175, 120, 345), fill=OUTLINE, width=16)
+    d.line((392, 175, 392, 345), fill=OUTLINE, width=16)
+    d.ellipse((120, 120, 392, 230), outline=OUTLINE, width=16)
+    return img
+
+
+def icon_cauldron():
+    """Hexenkessel mit grün blubberndem Trank (Trankbrauer)."""
+    img, d = canvas()
+    c = S / 2
+    black = (46, 42, 56, 255)
+    d.pieslice((70, 150, S - 70, S - 60), 0, 180, fill=black, outline=OUTLINE, width=W)                     # Topf
+    d.rectangle((72, 230, S - 72, 320), fill=black)
+    ellipse(d, (58, 150, S - 58, 255), (72, 67, 84, 255))                                                   # Rand
+    ellipse(d, (92, 168, S - 92, 242), (60, 170, 95, 255))                                                  # Trank
+    for bx, by, br in ((190, 150, 24), (255, 168, 16), (315, 150, 20)):
+        d.ellipse((bx - br, by - br, bx + br, by + br), fill=(140, 230, 140, 255), outline=OUTLINE, width=8)
+    for lx in (150, S - 150):
+        d.line((lx, S - 95, lx, S - 45), fill=black, width=30)
+    return img
+
+
+def icon_extinguish():
+    """Feuerlöscher mit Sprühwolke (Feuerwehrmann)."""
+    img, d = canvas()
+    c = S / 2
+    red = (205, 45, 40, 255)
+    d.rounded_rectangle((c - 85, 170, c + 85, 450), 44, fill=red, outline=OUTLINE, width=W)                 # Körper
+    d.rounded_rectangle((c - 68, 255, c + 68, 365), 14, fill=(245, 240, 230, 255), outline=OUTLINE, width=10)  # Etikett
+    d.rounded_rectangle((c - 28, 108, c + 28, 182), 10, fill=(64, 64, 70, 255), outline=OUTLINE, width=10)   # Ventil
+    d.rounded_rectangle((c - 12, 74, c + 72, 110), 10, fill=(44, 44, 50, 255), outline=OUTLINE, width=8)     # Griff
+    d.line((c + 72, 92, c + 150, 150), fill=OUTLINE, width=30)                                               # Schlauch
+    d.line((c + 72, 92, c + 150, 150), fill=(44, 44, 50, 255), width=18)
+    for bx, by, br in ((150, 180, 32), (195, 150, 24), (190, 215, 20)):                                      # Sprühwolke
+        d.ellipse((bx - br, by - br, bx + br, by + br), fill=(150, 210, 255, 230), outline=OUTLINE, width=6)
+    return img
+
+
+def icon_ghost():
+    """Heulender Geist (Heulgeist / Noisemaker-Stil)."""
+    img, d = canvas()
+    c = S / 2
+    white = (236, 240, 250, 255)
+    pts = []
+    for i in range(180, 361, 6):                       # Kopf (Halbkreis oben)
+        a = math.radians(i)
+        pts.append((c + math.cos(a) * 155, 235 + math.sin(a) * 155))
+    for k in range(0, 7):                              # gewellter Saum unten
+        x = c + 155 - k * (310 / 6)
+        pts.append((x, 440 if k % 2 == 0 else 385))
+    poly(d, pts, white)
+    d.ellipse((c - 82, 175, c - 26, 255), fill=OUTLINE)   # Augen
+    d.ellipse((c + 26, 175, c + 82, 255), fill=OUTLINE)
+    d.ellipse((c - 36, 285, c + 36, 375), fill=OUTLINE)   # heulender Mund
+    return img
+
+
+def icon_door():
+    """Offene Tür (Türgeist)."""
+    img, d = canvas()
+    d.rounded_rectangle((95, 60, 417, 452), 18, fill=(120, 92, 58, 255), outline=OUTLINE, width=W)   # Rahmen
+    d.rectangle((150, 100, 362, 452), fill=(52, 50, 66, 255))                                        # dunkler Durchgang
+    poly(d, [(150, 100), (258, 150), (258, 420), (150, 452)], (168, 125, 72, 255), 16)               # offener Türflügel
+    d.line((204, 150, 204, 420), fill=(130, 95, 52, 255), width=10)                                  # Füllung-Linie
+    d.ellipse((228, 262, 258, 300), fill=(238, 212, 120, 255), outline=OUTLINE, width=10)            # Knauf
+    return img
+
+
 ICONS = {
+    "extinguish": icon_extinguish,
+    "ghost": icon_ghost,
+    "door": icon_door,
+    "web": icon_web,
+    "ebutton": icon_ebutton,
+    "tp": icon_tp,
+    "cauldron": icon_cauldron,
     "candy": icon_candy,
     "phase": icon_phase,
     "guess": icon_guess,

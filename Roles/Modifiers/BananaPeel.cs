@@ -103,7 +103,9 @@ public sealed class BananaPeel : CustomRole
 
         var go = new GameObject("Spieleabend_BananaPeel");
         if (ShipStatus.Instance) go.transform.SetParent(ShipStatus.Instance.transform, true);
-        go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f - 0.01f); // genau an der Stelle, an der man steht
+        // Etwas nach oben versetzt, damit die Schale HINTER der Figur liegt (nicht auf ihr)
+        float py = pos.y + 0.35f;
+        go.transform.position = new Vector3(pos.x, py, py / 1000f + 0.02f);
         go.transform.localScale = Vector3.one * 0.6f;
         go.AddComponent<SpriteRenderer>().sprite = PeelSprite();
         peels[key] = new Peel { Placer = placer, Seq = seq, Obj = go, SpawnTime = Time.time, ArmAt = Time.time + ArmDelay };

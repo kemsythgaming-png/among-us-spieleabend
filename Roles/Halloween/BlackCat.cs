@@ -17,38 +17,58 @@ public sealed class BlackCat : CustomRole
     public override Color Color => new Color32(110, 70, 160, 255);
     public override RoleTeam Team => RoleTeam.Impostor;
     public override string IntroText => Lang.T("Pech für die anderen", "Bad luck for the others");
-    public override string Description => Lang.T("Im Meeting: eine Stimme gegen\neinen Spieler fällt weg (Pfote).", "In meetings: one vote against\na player is dropped (paw).");
+    public override string Description
+    {
+        get
+        {
+            var local = PlayerControl.LocalPlayer;
+            if (local && RoleRegistry.Has(local, this))
+                return Lang.T($"Im Meeting: Stimme streichen (Pfote).\nCounter: {Count(local.PlayerId)} - jeder eigene Kill +1.",
+                              $"In meetings: cancel a vote (paw).\nCounters: {Count(local.PlayerId)} - each own kill +1.");
+            return Lang.T("Im Meeting: eine Stimme gegen\neinen Spieler fällt weg (Pfote).", "In meetings: one vote against\na player is dropped (paw).");
+        }
+    }
     public override string LongDescription => Lang.T(
-        "Halloween-Impostor mit normalem Kill. Im Meeting tippst du einmal auf das Katzen-Symbol an einer Spielerkarte - auch an deiner eigenen.\n\nEine Stimme gegen diesen Spieler zählt dann nicht. Aber Vorsicht: In der Auswertung fehlt der Kopf dieses Wählers. Merken die Leute das, wissen sie, wen du schützen wolltest.",
-        "Halloween impostor with a normal kill. In meetings you tap the cat symbol on a player card once - your own works too.\n\nOne vote against that player then doesn't count. But careful: that voter's head is missing in the results. If people notice, they know whom you wanted to protect.");
+        "Halloween-Impostor mit normalem Kill. Im Meeting tippst du auf das Katzen-Symbol an einer Spielerkarte (auch an deiner eigenen) - eine Stimme gegen diesen Spieler zählt dann nicht.\n\nDu startest mit 1 Counter; jeder Kill, den du selbst machst, gibt dir einen weiteren. Deine Counter-Zahl steht oben links bei der Rolle. Aber Vorsicht: In der Auswertung fehlt der Kopf des gestrichenen Wählers.",
+        "Halloween impostor with a normal kill. In meetings you tap the cat symbol on a player card (your own works too) - one vote against that player then doesn't count.\n\nYou start with 1 counter; each kill you make yourself gives you one more. Your counter count shows with your role (top left). But careful: the dropped voter's head is missing in the results.");
 
     private const byte ActionMark = 0;
     private const byte None = byte.MaxValue;
 
     internal static BlackCat Instance { get; private set; }
 
-    // lokal bei der Katze
-    private bool usedThisMeeting;
+    // Counter je Katze (bei allen Clients gleich): Start 1, pro eigenem Kill +1, pro Streichung -1
+    private readonly Dictionary<byte, int> counters = new();
 
-    // beim Host: geschuetzte Spieler in diesem Meeting (eine Stimme weniger je Katze)
+    // beim Host: geschuetzte Spieler in diesem Meeting (eine Stimme weniger je Streichung)
     private readonly List<byte> protectedThisMeeting = new();
 
     protected override void Setup() => Instance = this;
 
+    private int Count(byte id) => counters.TryGetValue(id, out int n) ? n : 0;
+
+    public override void OnAssigned(PlayerControl player)
+    {
+        if (player) counters[player.PlayerId] = 1; // Start-Counter (auf allen Clients)
+    }
+
+    public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
+    {
+        // Nur selbst gemachte Kills geben einen Counter
+        if (cause != DeathCause.Kill || !killer || killer == victim || !RoleRegistry.Has(killer, this)) return;
+        counters[killer.PlayerId] = Count(killer.PlayerId) + 1;
+    }
+
     public override void ResetState()
     {
-        usedThisMeeting = false;
+        counters.Clear();
         protectedThisMeeting.Clear();
     }
 
-    public override void OnMeetingStart()
-    {
-        usedThisMeeting = false;
-        protectedThisMeeting.Clear();
-    }
+    public override void OnMeetingStart() => protectedThisMeeting.Clear();
 
     private bool CanUse(MeetingHud meeting) =>
-        meeting && IsAlive(PlayerControl.LocalPlayer) && !usedThisMeeting
+        meeting && IsAlive(PlayerControl.LocalPlayer) && Count(PlayerControl.LocalPlayer.PlayerId) > 0
         && meeting.state != MeetingHud.MeetingStates.Results && meeting.state != MeetingHud.MeetingStates.Proceeding;
 
     /// <summary>Katzen-Knopf auf jeder Karte eines lebenden Spielers.</summary>
@@ -95,18 +115,19 @@ public sealed class BlackCat : CustomRole
         if (!CanUse(MeetingHud.Instance)) return;
         if (!IsAlive(FindPlayer(targetId))) return;
 
-        // Ganz leise: keine Nachricht, kein Geraeusch - nur die Knoepfe verschwinden
-        usedThisMeeting = true;
+        // Counter-Abzug passiert in OnAction (bei allen gleich)
         SendToAll(ActionMark, targetId);
     }
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
-        // Alle Clients merken sich das Ziel (fuer die Anzeige), der Host zaehlt
+        // Alle Clients merken sich das Ziel (fuer die Anzeige), der Host zaehlt; Counter überall abziehen
         if (action != ActionMark || data.Length < 1) return;
         if (!RoleRegistry.Has(sender, this) || !IsAlive(sender) || !MeetingHud.Instance) return;
+        if (Count(sender.PlayerId) <= 0) return;
+        counters[sender.PlayerId] = Count(sender.PlayerId) - 1;
         protectedThisMeeting.Add(data[0]);
-        Plugin.Logger.LogInfo($"Schwarze Katze: eine Stimme gegen {data[0]} zählt nicht.");
+        Plugin.Logger.LogInfo($"Schwarze Katze: eine Stimme gegen {data[0]} zählt nicht ({Count(sender.PlayerId)} Counter übrig).");
     }
 
     /// <summary>Wie viele Stimmen gegen diesen Spieler wegfallen.</summary>

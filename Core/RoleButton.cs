@@ -19,6 +19,10 @@ public class RoleButton
     /// <summary>Optional: eigenes Symbol statt dem Messer des Kill-Buttons (Name aus Assets/Icons, z. B. "shield").</summary>
     public string Icon;
 
+    /// <summary>Optional: Symbol, das sich zur Laufzeit ändern kann (z. B. Joker). Wird jedes Frame geprüft.</summary>
+    public Func<string> IconFunc;
+    private string lastIcon;
+
     /// <summary>Optional: Symbol eines Original-Knopfs verwenden (z. B. den Vent-Knopf der Impostor).</summary>
     public Func<HudManager, Sprite> GameIcon;
 
@@ -132,6 +136,17 @@ public class RoleButton
         ui.gameObject.SetActive(true);
         if (ui.buttonLabelText && ui.buttonLabelText.text != ShownLabel) ui.OverrideText(ShownLabel); // falls das Spiel sie doch zuruecksetzt
         UpdateUses();
+
+        // Symbol zur Laufzeit wechseln (z. B. Joker: jedes Mal ein anderer Knopf)
+        if (IconFunc != null && ui.graphic)
+        {
+            string ic = IconFunc();
+            if (!string.IsNullOrEmpty(ic) && ic != lastIcon)
+            {
+                var sp = ButtonIcons.Get(ic, ui.graphic.sprite);
+                if (sp) { ui.graphic.sprite = sp; lastIcon = ic; }
+            }
+        }
 
         // Wirkungsdauer laeuft: Fuellbalken wie beim Shapeshifter, danach startet die Abklingzeit
         if (EffectActive)
@@ -247,7 +262,11 @@ public class RoleButton
         if (SharesKillCooldown && GameManager.Instance)
             local.SetKillTimer(Mathf.Max(local.killTimer, GameManager.Instance.LogicOptions.GetKillCooldown()));
         OnClick?.Invoke(target);
+        Used?.Invoke(Owner); // z. B. der Joker würfelt danach eine neue Fähigkeit
     }
+
+    /// <summary>Wird ausgelöst, nachdem ein Knopf benutzt wurde (mit der besitzenden Rolle).</summary>
+    public static Action<CustomRole> Used;
 
     private PlayerControl FindTarget(PlayerControl local)
     {

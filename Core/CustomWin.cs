@@ -21,20 +21,41 @@ public static class CustomWin
 
     private static float freeplayCooldownUntil;
 
-    /// <summary>Host: Sieg fuer eine Rolle ausloesen und das Spiel beenden.</summary>
+    // Mehrere Rollen koennen im SELBEN Moment gewinnen (z. B. Jester + Executioner, der den Jester als Ziel hatte).
+    // Wir sammeln alle Sieger dieses Moments und beenden das Spiel erst im naechsten Frame EINMAL mit allen.
+    private static CustomRole pendingRole;
+    private static readonly List<byte> pendingIds = new();
+    private static bool pending;
+
+    /// <summary>Host: Sieg fuer eine Rolle ausloesen. Wird (mit evtl. weiteren gleichzeitigen Siegern) gesammelt beendet.</summary>
     public static void Trigger(CustomRole role, IEnumerable<PlayerControl> winners)
     {
-        if (!AmongUsClient.Instance.AmHost || Active) return;
+        if (!AmongUsClient.Instance.AmHost || Active || role == null) return;
         var ids = winners.Where(p => p).Select(p => p.PlayerId).ToList();
 
         if (FreeplayTest.IsFreeplay)
         {
-            // Im Freeplay gibt es kein echtes Spielende - nur einmal kurz anzeigen
             if (Time.time < freeplayCooldownUntil) return;
             freeplayCooldownUntil = Time.time + 8f;
             Notifier.Show($"<color={role.ColorHex}>{role.Name} {Lang.T("gewinnt!", "wins!")}</color>  ({Lang.T("Freeplay: Spiel läuft weiter", "Freeplay: game continues")})", 6f);
             return;
         }
+
+        pendingRole ??= role;
+        foreach (var id in ids) if (!pendingIds.Contains(id)) pendingIds.Add(id);
+        pending = true;
+    }
+
+    /// <summary>Host, jedes Frame: gesammelte Sieger finalisieren und das Spiel beenden.</summary>
+    internal static void FinalizePending()
+    {
+        if (!pending || Active || !AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return;
+        pending = false;
+        var role = pendingRole;
+        var ids = pendingIds.ToList();
+        pendingRole = null;
+        pendingIds.Clear();
+        if (role == null || PlayerControl.LocalPlayer == null) return;
 
         var writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)RpcId.CustomWin, SendOption.Reliable, -1);
         writer.Write(role.Id);
@@ -43,7 +64,6 @@ public static class CustomWin
         AmongUsClient.Instance.FinishRpcImmediately(writer);
 
         Set(role, ids);
-        // Grund ist egal - die Siegerliste wird unten ersetzt
         GameManager.Instance.RpcEndGame(GameOverReason.ImpostorsByVote, false);
     }
 
@@ -69,6 +89,9 @@ public static class CustomWin
         WinningRole = null;
         winnerIds.Clear();
         cachedWinners = null;
+        pending = false;
+        pendingRole = null;
+        pendingIds.Clear();
     }
 
     /// <summary>Beim Spielende (GameData existiert noch): Siegerliste bauen.</summary>

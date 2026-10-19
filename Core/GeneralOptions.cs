@@ -37,6 +37,12 @@ public static class GeneralOptions
     /// <summary>Kamera-Wackeln (Screen Shake). Standard aus - in einer neuen Lobby wackelt die Kamera nicht.</summary>
     public static RoleOption CameraShake { get; private set; }
 
+    /// <summary>Prototyp: ein zusaetzlicher Raum wird in die Map gebaut (Test). Standard aus.</summary>
+    public static RoleOption TestRoom { get; private set; }
+
+    /// <summary>Prototyp: Map-Erweiterung fuer The Skeld (neuer Raum + echter Vent). Standard aus.</summary>
+    public static RoleOption MapExtension { get; private set; }
+
     /// <summary>Mod-Einstellungen, die im Reiter "Spiel" (statt "Allgemein") stehen. Werden trotzdem mit allen synchronisiert.</summary>
     internal static readonly System.Collections.Generic.List<RoleOption> GameTab = new();
 
@@ -62,6 +68,10 @@ public static class GeneralOptions
         PostGameRewards = Add(config, "PostGameRewards", "Belohnungen nach dem Spiel (XP/Pods/Cubes)|Post-game rewards (XP/Pods/Cubes)", 1, 0, 1, 1, "", true);
         GameTab.Add(PostGameRewards);
         CameraShake = Add(config, "CameraShake", "Kamera-Wackeln|Camera shake", 0, 0, 1, 1, "", true); // Standard aus
+        TestRoom = Add(config, "TestRoom", "Test-Raum (Prototyp)|Test room (prototype)", 0, 0, 1, 1, "", true);
+        GameTab.Add(TestRoom);
+        MapExtension = Add(config, "MapExtension", "Map-Erweiterung (Skeld, Test)|Map extension (Skeld, test)", 0, 0, 1, 1, "", true);
+        GameTab.Add(MapExtension);
     }
 
     public static int MaxFor(RoleTeam team)

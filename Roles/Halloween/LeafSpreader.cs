@@ -112,9 +112,8 @@ public sealed class LeafSpreader : CustomRole
     /// </summary>
     internal bool CanReport(PlayerControl reporter, DeadBody body)
     {
-        if (!body) return true;
-        var pile = PileAtPos(body.TruePosition);
-        return pile == null || PileAt(reporter) == pile;
+        // Eine Leiche, die für mich gerade im Laub versteckt ist, kann ich nicht melden
+        return body == null || !hiddenBodies.Contains(body.ParentId);
     }
 
     private void UpdateBodies(Pile localPile)
@@ -127,7 +126,9 @@ public sealed class LeafSpreader : CustomRole
             bool hide = pile != null && pile != localPile;
             if (hide) stillHidden.Add(body.ParentId);
             if (hide == hiddenBodies.Contains(body.ParentId)) continue;
+            // Unsichtbar UND nicht anklickbar (sonst wäre der Melden-Knopf trotzdem aktiv)
             foreach (var r in body.GetComponentsInChildren<SpriteRenderer>(true)) r.enabled = !hide;
+            foreach (var col in body.GetComponentsInChildren<Collider2D>(true)) col.enabled = !hide;
         }
         hiddenBodies.Clear();
         foreach (var id in stillHidden) hiddenBodies.Add(id);
@@ -160,7 +161,8 @@ public sealed class LeafSpreader : CustomRole
             piles.RemoveAt(i);
         }
 
-        if (piles.Count == 0 && hiddenByUs.Count == 0 && hiddenBodies.Count == 0) return;
+        // auch wenn gerade nichts mehr versteckt ist: solange ich noch selbst durchsichtig bin, weiterlaufen (sonst bleibe ich es)
+        if (piles.Count == 0 && hiddenByUs.Count == 0 && hiddenBodies.Count == 0 && !localFaded) return;
         var localPile = PileAt(local);
         UpdateBodies(localPile);
         if (InMeeting)

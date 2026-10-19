@@ -44,7 +44,7 @@ internal static class FreeplayTest
     {
         testRole = config.Bind("Freeplay-Test", "Rolle", "Sheriff", "Rolle, die du im Freeplay bekommst (Name der Rolle, leer = keine).");
         dummyRole = config.Bind("Freeplay-Test", "DummyRolle", "Jester", "Rolle, die ein Dummy per Knopf bekommt.");
-        dummyImpostors = config.Bind("Freeplay-Test", "DummyImpostors", 2, "So viele Dummies gelten im Freeplay als Impostor.");
+        dummyImpostors = config.Bind("Freeplay-Test", "DummyImpostors", 0, "So viele Dummies gelten im Freeplay als Impostor (rot). Standard 0 = normale Namen.");
         dummiesFollowVote = config.Bind("Freeplay-Test", "DummiesFollowVote", true, "Dummies stimmen im Meeting so ab wie du (zum Testen von Rausvote-Rollen).");
     }
 

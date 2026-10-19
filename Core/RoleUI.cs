@@ -163,7 +163,8 @@ internal static class RoleUI
 
         bool deadView = !CustomRole.IsAlive(viewer) && GeneralOptions.DeadSeeRoles.Bool
                         && !(Roles.Halloween.Undead.Instance?.HidesRoles(viewer) ?? false) // toter Untoter steht wieder auf
-                        && !(Roles.Modifiers.SecondLife.Instance?.WillRise(viewer) ?? false); // toter Survivor auch
+                        && !(Roles.Modifiers.SecondLife.Instance?.WillRise(viewer) ?? false) // toter Survivor auch
+                        && !(Roles.Ghosts.WailingSpirit.Instance?.HidesRoles(viewer) ?? false); // toter Heulgeist sieht keine Rollen
         bool self = target == viewer && GeneralOptions.ShowOwnRole.Bool;
         if (deadView || self)
         {
@@ -186,6 +187,14 @@ internal static class RoleUI
     {
         var ghost = RoleRegistry.GetGhostRole(player);
         if (ghost != null) return ghost.ColoredName; // Geist: nur noch die Geisterrolle
+
+        // Joker: über dem Kopf steht immer "Joker", auch wenn die aktuelle Fähigkeit eine andere Rolle ist
+        if (Spieleabend.Roles.Joker.IsJoker(player.PlayerId))
+        {
+            string joker = "<color=#FF1919>Joker</color>";
+            foreach (var mod in RoleRegistry.GetModifiers(player).Where(m => !m.IsSecret(player))) joker += " " + mod.ColoredName;
+            return joker.Trim();
+        }
 
         var main = RoleRegistry.GetRole(player);
         string text;

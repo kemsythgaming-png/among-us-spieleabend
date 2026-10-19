@@ -18,6 +18,7 @@ internal static class IntroBeginPatch
 {
     public static void Prefix()
     {
+        Spieleabend.Roles.TaskTracker.Reset();
         if (AmongUsClient.Instance.AmHost && !FreeplayTest.IsFreeplay)
         {
             RoleRegistry.AssignAsHost();
@@ -32,11 +33,14 @@ internal static class HudUpdatePatch
     public static void Postfix(HudManager __instance)
     {
         if (!PlayerControl.LocalPlayer) return;
+        CustomWin.FinalizePending(); // gesammelte Sieger (mehrere gleichzeitig) beenden das Spiel einmal
         RoleRpc.UpdateOptionSync();
         FreeplayTest.Update();
         ButtonManager.Update(__instance);
         RoleUI.Update();
         HalloweenTheme.Update();
+        PrototypeRoom.Update();
+        MapExtension.Update();
         ProtectionVisuals.Update();
         FireEffect.Update();
         HudButtons.Update(__instance);

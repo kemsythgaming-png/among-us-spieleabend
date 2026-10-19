@@ -48,8 +48,8 @@ public sealed class Undead : CustomRole
     protected override void Setup()
     {
         Instance = this;
-        souls = AddOption("Souls", "Benötigte Seelen|Souls needed", 2f, 1f, 5f, 1f);
-        soulTime = AddOption("SoulTime", "Zeit an der Leiche|Time at the body", 5f, 1f, 15f, 1f, "s");
+        souls = AddOption("Souls", "Benötigte Seelen|Souls needed", 20f, 1f, 40f, 1f);
+        soulTime = AddOption("SoulTime", "Zeit je Seele an der Leiche|Time per soul at a body", 5f, 1f, 15f, 1f, "s");
     }
 
     public override void ResetState()
@@ -142,7 +142,7 @@ public sealed class Undead : CustomRole
         var near = new HashSet<byte>();
         foreach (var body in Object.FindObjectsOfType<DeadBody>())
         {
-            if (!body || body.ParentId == local.PlayerId || harvested.Contains(body.ParentId)) continue;
+            if (!body || body.ParentId == local.PlayerId) continue;
             if (Vector2.Distance(me, body.TruePosition) > 1.2f) continue;
             near.Add(body.ParentId);
         }
@@ -154,17 +154,16 @@ public sealed class Undead : CustomRole
         {
             standing.TryGetValue(id, out float t);
             t += Time.deltaTime;
-            standing[id] = t;
-            if (t < soulTime.Value) continue;
+            if (t < soulTime.Value) { standing[id] = t; continue; }
 
-            standing.Remove(id);
-            harvested.Add(id);
+            // Seele geerntet - am selben Körper geht es weiter (alle soulTime Sekunden +1)
+            standing[id] = t - soulTime.Value;
             SendToAll(ActionSoul, local.PlayerId);
             if (SoulsOf(local) >= souls.Int) SendToAll(ActionRestore, local.PlayerId);
             else
             {
                 Sfx.Play(Sfx.TaskUpdate);
-                Notifier.Show($"<color={ColorHex}>{Lang.T("Seele", "Soul")} {SoulsOf(local)}/{souls.Int}</color>", 3f);
+                Notifier.Show($"<color={ColorHex}>{Lang.T("Seele", "Soul")} {SoulsOf(local)}/{souls.Int}</color>", 2f);
             }
         }
     }

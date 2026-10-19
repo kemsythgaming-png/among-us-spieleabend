@@ -46,18 +46,27 @@ internal static class DrunkKeyboardPatch
     public static void Postfix(KeyboardJoystick __instance)
     {
         raw = __instance.del;
-        if (!IsDrunk()) return;
-        var drunk = Drunk.Instance;
-        __instance.del = new Vector2(-raw.x, drunk.SwapVertical.Bool ? -raw.y : raw.y);
-        flipped = true;
-    }
-
-    private static bool IsDrunk()
-    {
-        var drunk = Drunk.Instance;
-        if (drunk == null || !RoleRegistry.HasAssignments || !drunk.IsLocalRole || !ShipStatus.Instance) return false;
         var local = PlayerControl.LocalPlayer;
-        return local && local.Data != null && !local.Data.IsDead;
+        if (!local || local.Data == null || local.Data.IsDead || !ShipStatus.Instance) return;
+
+        var drunk = Drunk.Instance;
+        bool byRole = drunk != null && RoleRegistry.HasAssignments && drunk.IsLocalRole;
+        bool byBierdalf = Bierdalf.Instance?.DrunkNow(local) ?? false; // Bierdalf macht kurzzeitig betrunken
+        bool byPotion = Spieleabend.Roles.PotionBrewer.Instance?.ReverseNow(local) ?? false; // Kopfueber-Trank
+        bool byRotate = Spieleabend.Roles.PotionBrewer.Instance?.RotateNow(local) ?? false; // Zappeltrank: um 90° gedreht
+        if (!byRole && !byBierdalf && !byPotion && !byRotate) return;
+
+        // Zappeltrank hat Vorrang und dreht die Steuerung um 90° (statt nur zu spiegeln)
+        if (byRotate && !byRole && !byBierdalf && !byPotion)
+        {
+            __instance.del = new Vector2(-raw.y, raw.x);
+            flipped = true;
+            return;
+        }
+
+        bool vert = byRole && drunk.SwapVertical.Bool;
+        __instance.del = new Vector2(-raw.x, vert ? -raw.y : raw.y);
+        flipped = true;
     }
 }
 

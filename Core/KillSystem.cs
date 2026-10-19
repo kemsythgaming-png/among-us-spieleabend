@@ -165,9 +165,11 @@ internal static class MeetingStartPatch
         // sonst waere das Meeting sofort zu Ende, bevor man selbst waehlen kann.
         if (FreeplayTest.IsFreeplay && __instance)
         {
+            // Nur ~3s Diskussion stehen lassen, dann abstimmen. NICHT genau auf DiscussionTime setzen,
+            // sonst endet bei "Abstimmzeit = ewig" das Voting sofort.
             var o = GameOptionsManager.Instance?.CurrentGameOptions;
             float discuss = o != null ? o.GetInt(AmongUs.GameOptions.Int32OptionNames.DiscussionTime) : 0f;
-            __instance.discussionTimer = Mathf.Max(0f, discuss);
+            if (discuss > 3f) __instance.discussionTimer = discuss - 3f;
         }
 
         FirstDeathShield.OnMeetingStart();
