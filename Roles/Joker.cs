@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using AmongUs.GameOptions;
 using Spieleabend.Core;
 using UnityEngine;
 
@@ -88,6 +89,15 @@ public sealed class Joker : CustomRole
                     local.Collider.enabled = true;
             }
         }
+
+        // Sicherheitsnetz (Host): ein Joker bleibt immer echter Impostor (Kill/Vent/Sabotage)
+        if (AmHost)
+            foreach (var id in jokers)
+            {
+                var p = FindPlayer(id);
+                if (IsAlive(p) && p.Data != null && p.Data.Role && !p.Data.Role.IsImpostor)
+                    p.RpcSetRole(RoleTypes.Impostor, true);
+            }
 
         if (!pendingReroll) return;
         if (!local || !jokers.Contains(local.PlayerId)) { pendingReroll = false; return; }

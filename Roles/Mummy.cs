@@ -1,13 +1,15 @@
 using System.Collections.Generic;
+using System.Linq;
+using HarmonyLib;
 using Spieleabend.Core;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace Spieleabend.Roles;
 
 /// <summary>
-/// Neutral: wickelt einen Spieler ein. Das Opfer stirbt (wird Geist), seine Leiche wird versteckt und an seiner
-/// Stelle bleibt eine graue Camouflage-Figur stehen - so verschwindet das Opfer unauffällig.
+/// Neutral: wickelt einen Spieler ein. Er bekommt die echte Camouflage-Optik (grau, ohne Namen - genau wie beim
+/// Camouflager) auf seinem eigenen Körper, kann sich nicht mehr bewegen und nichts melden. So steht er wie eine
+/// leblose Tarn-Figur herum.
 /// </summary>
 public sealed class Mummy : CustomRole
 {
@@ -16,17 +18,16 @@ public sealed class Mummy : CustomRole
     public override Color Color => new Color32(220, 210, 180, 255);
     public override RoleTeam Team => RoleTeam.Neutral;
     public override string IntroText => Lang.T("Wickel sie ein", "Wrap them up");
-    public override string Description => Lang.T("Wickle einen Spieler ein (F):\nKill ohne Leiche.", "Wrap a player (F):\na kill without a body.");
+    public override string Description => Lang.T("Wickle einen Spieler ein (F):\ngetarnt + bewegungslos.", "Wrap a player (F):\ncamouflaged + frozen.");
     public override string LongDescription => Lang.T(
-        "Neutral: Mit dem Knopf wickelst du einen Spieler in der Nähe ein. Er stirbt (wird Geist), seine Leiche wird versteckt und an seiner Stelle steht eine graue Camouflage-Figur. So fällt der Tod erst spät auf.",
-        "Neutral: the button wraps a nearby player. They die (become a ghost), their body is hidden and a gray camouflage figure stands where they were. The death stays unnoticed for a while.");
+        "Neutral: Mit dem Knopf wickelst du einen Spieler in der Nähe ein. Er sieht dann aus wie beim Camouflager (grau, ohne Namen), kann sich nicht mehr bewegen und nichts melden oder abstimmen - er steht wie eine leblose Tarn-Figur herum.",
+        "Neutral: the button wraps a nearby player. They look like the Camouflager's effect (gray, nameless), can't move and can't report or vote - they stand around like a lifeless camouflage figure.");
 
     internal static Mummy Instance { get; private set; }
 
-    private const byte ActionWrap = 0, ActionWrapped = 1;
+    private const byte ActionWrap = 0;
     private RoleOption cooldown;
-    private readonly HashSet<byte> wrappedDead = new(); // deren Leiche versteckt wird
-    private readonly List<GameObject> decoys = new();
+    private readonly Dictionary<byte, PlayerOutfitType> wrapped = new(); // Id -> gespeicherte Outfit-Art
 
     protected override void Setup()
     {
@@ -42,72 +43,138 @@ public sealed class Mummy : CustomRole
             Cooldown = () => cooldown.Value,
             StartCooldown = 10f,
             Hotkey = KeyCode.F,
-            OnClick = target => { if (target) SendToHost(ActionWrap, target.PlayerId); },
+            OnClick = target => { if (target) SendToAll(ActionWrap, target.PlayerId); },
         });
     }
 
-    public override void ResetState()
-    {
-        wrappedDead.Clear();
-        ClearDecoys();
-    }
-
-    public override void OnMeetingStart()
-    {
-        wrappedDead.Clear();
-        ClearDecoys(); // beim Meeting sind die Toten eh aufgedeckt
-    }
-
-    private void ClearDecoys()
-    {
-        foreach (var d in decoys) if (d) Object.Destroy(d);
-        decoys.Clear();
-    }
+    public override void ResetState() => RestoreAll();
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
-        if (action == ActionWrap && AmHost && data.Length >= 1)
+        if (action != ActionWrap || data.Length < 1 || !RoleRegistry.Has(sender, this)) return;
+        var target = FindPlayer(data[0]);
+        if (!IsAlive(target) || target.Data == null) return;
+
+        if (!wrapped.ContainsKey(data[0])) wrapped[data[0]] = target.CurrentOutfitType;
+        target.RawSetOutfit(GrayOutfit(), PlayerOutfitType.MushroomMixup);
+
+        var local = PlayerControl.LocalPlayer;
+        if (local && local.PlayerId == data[0])
         {
-            var target = FindPlayer(data[0]);
-            if (IsAlive(target))
-            {
-                Vector2 pos = target.GetTruePosition();
-                KillSystem.ForceKill(target, target);                            // zuverlässiger Kill (Selbst-Kill, kein Teleport)
-                SendToAll(ActionWrapped, WorldMarker.Concat(data[0], WorldMarker.Encode(pos)));
-            }
-        }
-        else if (action == ActionWrapped && data.Length >= 5)
-        {
-            wrappedDead.Add(data[0]);
-            SpawnDecoy(WorldMarker.Decode(data, 1));
+            Sfx.Play(Sfx.Creepy, 0.6f);
+            Notifier.Show($"<color={ColorHex}>{Lang.T("Du bist eingewickelt - keine Bewegung, kein Melden!", "You are wrapped up - no moving, no reporting!")}</color>", 6f);
         }
     }
 
     public override void Update()
     {
-        // Die Leichen der Eingewickelten verstecken (unsichtbar + nicht anklickbar)
-        if (wrappedDead.Count == 0) return;
-        foreach (var body in Object.FindObjectsOfType<DeadBody>())
+        // Tarnung erzwingen (falls das Spiel das Outfit zwischendurch zurücksetzt) + Namen der Eingewickelten ausblenden
+        foreach (var id in wrapped.Keys.ToArray())
         {
-            if (!body || !wrappedDead.Contains(body.ParentId)) continue;
-            foreach (var r in body.GetComponentsInChildren<SpriteRenderer>(true)) r.enabled = false;
-            foreach (var col in body.GetComponentsInChildren<Collider2D>(true)) col.enabled = false;
+            var p = FindPlayer(id);
+            if (!IsAlive(p) || p.Data == null) { wrapped.Remove(id); continue; }
+            if (p.CurrentOutfitType != PlayerOutfitType.MushroomMixup)
+                p.RawSetOutfit(GrayOutfit(), PlayerOutfitType.MushroomMixup);
+            if (p.cosmetics && p.cosmetics.nameText && p.cosmetics.nameText.text.Length > 0)
+                p.cosmetics.nameText.text = ""; // namenlos (auch wenn das Spiel den Namen neu setzt)
+        }
+
+        // Die Mumie selbst hat keinen Kill- und keinen Vent-Knopf
+        var local = PlayerControl.LocalPlayer;
+        if (IsLocalRole && IsAlive(local))
+        {
+            var hud = HudManager.InstanceExists ? HudManager.Instance : null;
+            if (hud)
+            {
+                if (hud.KillButton) hud.KillButton.ToggleVisible(false);
+                if (hud.ImpostorVentButton) hud.ImpostorVentButton.ToggleVisible(false);
+            }
+        }
+
+        // Host: Sieg, wenn alle anderen eingewickelt (oder tot) sind
+        if (AmHost && RoleRegistry.HasAssignments && !InMeeting)
+        {
+            var contenders = PlayerControl.AllPlayerControls.ToArray()
+                .Where(p => IsAlive(p) && !RoleRegistry.Has(p, this) && !wrapped.ContainsKey(p.PlayerId)).ToList();
+            var mummies = Players.Where(IsAlive).ToList();
+            if (contenders.Count == 0 && mummies.Count > 0) CustomWin.Trigger(this, mummies);
         }
     }
 
-    /// <summary>Graue Camouflage-Figur an der Stelle des Opfers.</summary>
-    private void SpawnDecoy(Vector2 pos)
-    {
-        var src = PlayerControl.LocalPlayer ? PlayerControl.LocalPlayer.cosmetics?.currentBodySprite?.BodySprite : null;
-        if (!src || !src.sprite) return;
+    public override float SpeedMultiplier(PlayerControl local) =>
+        IsWrapped(local) && IsAlive(local) && !InMeeting ? 0f : 1f;
 
-        var go = new GameObject("Spieleabend_MummyDecoy");
-        if (ShipStatus.Instance) go.transform.SetParent(ShipStatus.Instance.transform, true);
-        go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f);
-        go.transform.localScale = src.transform.lossyScale; // echte Welt-Größe des Körpers
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = src.sprite;
-        try { sr.color = Palette.PlayerColors[15]; } catch { sr.color = new Color(0.5f, 0.5f, 0.56f, 1f); } // echtes Camouflage-Grau
-        decoys.Add(go);
+    internal bool IsWrapped(PlayerControl p) => p && wrapped.ContainsKey(p.PlayerId);
+
+    private void RestoreAll()
+    {
+        foreach (var pair in wrapped)
+        {
+            var p = FindPlayer(pair.Key);
+            if (p) RestoreOutfit(p, pair.Value);
+        }
+        wrapped.Clear();
+    }
+
+    private static void RestoreOutfit(PlayerControl p, PlayerOutfitType type)
+    {
+        if (!p || p.Data == null) return;
+        NetworkedPlayerInfo.PlayerOutfit outfit = null;
+        if (p.Data.Outfits.ContainsKey(type)) outfit = p.Data.Outfits[type];
+        if (outfit == null) { outfit = p.Data.DefaultOutfit; type = PlayerOutfitType.Default; }
+        p.RawSetOutfit(outfit, type);
+    }
+
+    private static NetworkedPlayerInfo.PlayerOutfit GrayOutfit() => new()
+    {
+        ColorId = 15,
+        HatId = "hat_NoHat",
+        SkinId = "skin_None",
+        VisorId = "visor_EmptyVisor",
+        PetId = "pet_EmptyPet",
+        NamePlateId = "nameplate_NoPlate",
+        PlayerName = "",
+    };
+}
+
+/// <summary>Eingewickelte Spieler können kein Meeting einberufen / keine Leiche melden.</summary>
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.CmdReportDeadBody))]
+internal static class MummyNoReportPatch
+{
+    public static bool Prefix(PlayerControl __instance)
+    {
+        var m = Mummy.Instance;
+        if (m == null || !m.IsWrapped(__instance)) return true;
+        if (__instance == PlayerControl.LocalPlayer)
+            Notifier.Show($"<color={m.ColorHex}>{Lang.T("Eingewickelt - du kannst nichts melden.", "Wrapped up - you can't report.")}</color>", 2f);
+        return false;
+    }
+}
+
+/// <summary>Im Meeting gelten eingewickelte Spieler als tot (durchgestrichen, keine Stimme).</summary>
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Start))]
+internal static class MummyMeetingDeadPatch
+{
+    public static void Postfix(MeetingHud __instance)
+    {
+        var m = Mummy.Instance;
+        if (m == null) return;
+        foreach (var state in __instance.playerStates)
+        {
+            if (!state) continue;
+            var p = CustomRole.FindPlayer((byte)state.PlayerId);
+            if (m.IsWrapped(p)) state.SetDead(true);
+        }
+    }
+}
+
+/// <summary>Eingewickelte Spieler können nicht abstimmen.</summary>
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.CmdCastVote))]
+internal static class MummyVotePatch
+{
+    public static bool Prefix(byte playerId)
+    {
+        var m = Mummy.Instance;
+        return m == null || !m.IsWrapped(CustomRole.FindPlayer(playerId));
     }
 }

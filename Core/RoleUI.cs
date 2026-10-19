@@ -243,8 +243,13 @@ internal static class RoleUI
             return;
         }
 
-        // Rollenname in eigener Zeile, damit der Text oben links ordentlich umbricht
-        string text = string.Join("\n", roles.Select(r => $"<color={r.ColorHex}><b>{r.Name}:</b>\n{r.Description}</color>"));
+        // Rollenname in eigener Zeile, damit der Text oben links ordentlich umbricht.
+        // Joker: Die Hauptrolle bleibt immer als "Joker" mit Joker-Erklärung stehen (nicht die geliehene Rolle).
+        bool joker = Spieleabend.Roles.Joker.IsJoker(local.PlayerId) && Spieleabend.Roles.Joker.Instance != null;
+        string text = string.Join("\n", roles.Select(r =>
+            joker && !r.IsModifier
+                ? $"<color={Spieleabend.Roles.Joker.Instance.ColorHex}><b>Joker:</b>\n{Spieleabend.Roles.Joker.Instance.Description}</color>"
+                : $"<color={r.ColorHex}><b>{r.Name}:</b>\n{r.Description}</color>"));
         if (roleTask && roleTaskText == text && local.myTasks.Contains(roleTask)) return;
         RemoveRoleTask(local);
 
