@@ -12,6 +12,9 @@ internal static class ButtonIcons
 {
     private static readonly Dictionary<string, Texture2D> cache = new();
 
+    /// <summary>Rohe Textur eines Symbols (z. B. fuer IMGUI-Anzeigen wie den Slot-Automaten).</summary>
+    public static Texture2D Texture(string name) => Load(name);
+
     public static Sprite Get(string name, Sprite reference)
     {
         var tex = Load(name);

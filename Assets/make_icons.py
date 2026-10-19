@@ -636,6 +636,30 @@ def icon_cauldron():
     return img
 
 
+def icon_slot():
+    """Slot-Machine / Spielautomat (Gambler)."""
+    img, d = canvas()
+    c = S / 2
+    d.rounded_rectangle((90, 120, S - 90, S - 60), 32, fill=(210, 60, 60, 255), outline=OUTLINE, width=W)   # Gehäuse
+    d.rounded_rectangle((128, 165, S - 128, 330), 16, fill=(245, 245, 235, 255), outline=OUTLINE, width=12)  # Fenster
+    cols = [(230, 60, 50, 255), (250, 200, 60, 255), (90, 180, 230, 255)]
+    for i in range(3):
+        x = 150 + i * 72
+        d.rounded_rectangle((x, 182, x + 56, 312), 8, fill=(255, 255, 255, 255), outline=OUTLINE, width=8)
+        d.ellipse((x + 12, 218, x + 44, 276), fill=cols[i], outline=OUTLINE, width=6)                        # Walzen-Symbol
+    d.line((S - 92, 205, S - 50, 205), fill=OUTLINE, width=16)                                               # Hebel
+    d.ellipse((S - 74, 150, S - 30, 194), fill=(230, 60, 50, 255), outline=OUTLINE, width=10)
+    d.rounded_rectangle((c - 48, 360, c + 48, 392), 8, fill=(60, 60, 66, 255), outline=OUTLINE, width=8)     # Münzschlitz
+    return img
+
+
+def icon_bolt():
+    """Blitz (Tempo-Boost)."""
+    img, d = canvas()
+    poly(d, [(300, 40), (150, 285), (255, 285), (200, 470), (380, 225), (278, 225)], (250, 210, 60, 255))
+    return img
+
+
 def icon_extinguish():
     """Feuerlöscher mit Sprühwolke (Feuerwehrmann)."""
     img, d = canvas()
@@ -683,6 +707,8 @@ def icon_door():
 
 
 ICONS = {
+    "slot": icon_slot,
+    "bolt": icon_bolt,
     "extinguish": icon_extinguish,
     "ghost": icon_ghost,
     "door": icon_door,
