@@ -35,7 +35,9 @@ internal static class ChatNote
         {
             var hud = HudManager.Instance;
             if (!hud || !hud.Notifier || string.IsNullOrEmpty(text)) return;
-            hud.Notifier.AddSettingsChangeMessage(StringNames.None, text, true, RoleTypes.Crewmate);
+            // Reiner Text unten links. AddSettingsChangeMessage(StringNames.None, ...) rendert das Spiel inzwischen
+            // als "STRMISS set to ..." - deshalb den fertigen Text direkt anzeigen.
+            hud.Notifier.AddDisconnectMessage(text);
         }
         catch { /* Notifier evtl. noch nicht bereit - dann eben kein Hinweis */ }
     }

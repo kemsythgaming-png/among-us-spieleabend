@@ -252,7 +252,7 @@ internal static class SettingsPanel
     // ---------- Reiter "Sets" ----------
     private static string setName = "";
     private static float setsScroll;
-    private static bool testModeTested; // false = aktuell sind die UNGETESTETEN an
+    private static bool testModeTested = true; // Standard: die GETESTETEN sind an
 
     private static void DrawSets(Rect area)
     {

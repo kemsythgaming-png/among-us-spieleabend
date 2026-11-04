@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BepInEx.Configuration;
 using UnityEngine;
 
 namespace Spieleabend.Core;
@@ -38,6 +39,23 @@ internal static class TestStatus
         // Noch offen (gemeldet + gefixt, aber noch nicht erneut getestet):
         "Bait",          // Köder
     };
+
+    // Einmaliger Standard: beim ersten Mal nur die GETESTETEN Rollen anschalten.
+    private static ConfigEntry<bool> defaultApplied;
+
+    public static void Bind(ConfigFile config)
+    {
+        defaultApplied = config.Bind("Allgemein", "StandardNurGetestet", false,
+            "Intern: wurde der Standard \"nur getestete Rollen an\" schon einmal angewandt?");
+    }
+
+    /// <summary>Beim ersten Mal (Host in der Lobby): nur getestete Rollen anschalten - danach nie wieder von selbst.</summary>
+    public static void ApplyDefaultOnce()
+    {
+        if (defaultApplied == null || defaultApplied.Value || !SettingsWindow.CanEdit) return;
+        defaultApplied.Value = true;
+        Apply(true); // nur getestete an
+    }
 
     public static bool IsTested(CustomRole r)
     {

@@ -131,6 +131,8 @@ internal sealed class VanillaSetting : ISetting
                     break;
             }
             Sync();
+            // Wie bei den Mod-Rollen: die Änderung allen im Chat/unten links melden (vorher kam für den Reiter "Spiel" nichts).
+            ChatNote.Message($"{Name}: {Display}");
         }
         catch (Exception e)
         {

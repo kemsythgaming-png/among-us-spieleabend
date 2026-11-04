@@ -50,6 +50,8 @@ internal static class RoleRpc
 
     public static void SendRoles(List<(byte Player, byte Role)> pairs)
     {
+        // Nur die (kleine) Rollenverteilung in EINEM Paket - die vielen Optionswerte kommen separat in Chunks,
+        // sonst wird das Paket >1500 Bytes und der offizielle Server wirft einen raus ("packet not ack'd").
         var writer = Start(RpcId.SetRoles, -1);
         writer.Write((byte)pairs.Count);
         foreach (var (player, role) in pairs)
@@ -57,8 +59,9 @@ internal static class RoleRpc
             writer.Write(player);
             writer.Write(role);
         }
-        WriteOptions(writer);
         AmongUsClient.Instance.FinishRpcImmediately(writer);
+
+        SendOptionsChunked(); // Optionswerte in mehreren kleinen Paketen hinterher
     }
 
     public static void SendAddRole(byte playerId, byte roleId)
@@ -160,6 +163,9 @@ internal static class RoleRpc
         var client = AmongUsClient.Instance;
         if (!client || !client.AmHost || !client.AmConnected || !LobbyBehaviour.Instance || !PlayerControl.LocalPlayer) return;
 
+        // Beim allerersten Mal (Host in der Lobby): Standard "nur getestete Rollen an" setzen.
+        TestStatus.ApplyDefaultOnce();
+
         // Zusaetzlich regelmaessig neu senden: so bekommen auch verspaetet beigetretene Spieler die aktiven Rollen,
         // selbst wenn sie den einmaligen Sync beim Beitritt (Spielerzahl-Aenderung) verpasst haben.
         int count = PlayerControl.AllPlayerControls.Count;
@@ -169,9 +175,28 @@ internal static class RoleRpc
         lastPlayerCount = count;
         nextPeriodicSync = UnityEngine.Time.time + 2f;
 
-        var writer = Start(RpcId.SyncOptions, -1);
-        WriteOptions(writer);
-        client.FinishRpcImmediately(writer);
+        SendOptionsChunked();
+    }
+
+    // Wie viele Options-Werte (je 4 Byte Float) pro Paket - bewusst klein, damit jedes Paket deutlich unter der
+    // UDP-Grenze (~1500 Byte) bleibt. 200 * 4 = 800 Byte + bisschen Overhead.
+    private const int OptionsPerChunk = 200;
+
+    /// <summary>Alle Optionswerte in mehreren kleinen Paketen senden (gegen "Reliable packet not ack'd"-Disconnects).</summary>
+    private static void SendOptionsChunked()
+    {
+        var client = AmongUsClient.Instance;
+        if (!client || !PlayerControl.LocalPlayer) return;
+        var all = AllOptions.ToList();
+        for (int start = 0; start < all.Count; start += OptionsPerChunk)
+        {
+            int n = System.Math.Min(OptionsPerChunk, all.Count - start);
+            var writer = Start(RpcId.SyncOptions, -1);
+            writer.Write((ushort)start);
+            writer.Write((byte)n);
+            for (int i = 0; i < n; i++) writer.Write(all[start + i].Value);
+            client.FinishRpcImmediately(writer);
+        }
     }
 
     public static void Handle(PlayerControl sender, byte callId, MessageReader reader)
@@ -183,7 +208,6 @@ internal static class RoleRpc
                 int count = reader.ReadByte();
                 var pairs = new List<(byte, byte)>();
                 for (int i = 0; i < count; i++) pairs.Add((reader.ReadByte(), reader.ReadByte()));
-                ReadOptions(reader);
                 RoleRegistry.SetAssignments(pairs);
                 break;
             }
@@ -199,7 +223,7 @@ internal static class RoleRpc
                 CustomWin.Handle(reader);
                 break;
             case RpcId.SyncOptions:
-                ReadOptions(reader);
+                ReadOptionsChunk(reader);
                 break;
             case RpcId.ChangeRole:
                 RoleRegistry.ApplyChangeRole(reader.ReadByte(), reader.ReadByte());
@@ -231,14 +255,18 @@ internal static class RoleRpc
     private static IEnumerable<RoleOption> AllOptions =>
         GeneralOptions.Options.Concat(RoleRegistry.Roles.SelectMany(r => r.Options));
 
-    private static void WriteOptions(MessageWriter writer)
+    /// <summary>Einen Options-Chunk anwenden: [startIndex: ushort][count: byte][floats...].</summary>
+    private static void ReadOptionsChunk(MessageReader reader)
     {
-        foreach (var option in AllOptions) writer.Write(option.Value);
-    }
-
-    private static void ReadOptions(MessageReader reader)
-    {
-        foreach (var option in AllOptions) option.Synced = reader.ReadSingle();
+        var all = AllOptions.ToList();
+        int start = reader.ReadUInt16();
+        int n = reader.ReadByte();
+        for (int i = 0; i < n; i++)
+        {
+            float v = reader.ReadSingle();
+            int idx = start + i;
+            if (idx >= 0 && idx < all.Count) all[idx].Synced = v;
+        }
     }
 
     /// <summary>Beim Verlassen einer Lobby: wieder die eigenen Werte anzeigen.</summary>

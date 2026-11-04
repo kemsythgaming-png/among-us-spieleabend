@@ -23,15 +23,27 @@ internal static class UpdateNotes
     // Neueste Version zuerst.
     private static readonly Entry[] History =
     {
+        new Entry("4.9.15",
+            new[]
+            {
+                Lang.T("<b>Keine neue Rolle</b>\nNetzwerk-Fix, bessere Einstellungs-Meldungen und ein neuer Standard: nur getestete Rollen an.",
+                       "<b>No new role</b>\nNetwork fix, better settings messages and a new default: only tested roles on."),
+            },
+            new[]
+            {
+                Lang.T("<b>Verbindungsabbruch behoben:</b> die Einstellungs-Synchronisation wird in kleine Pakete aufgeteilt. Vorher konnte bei vielen aktiven Rollen ein zu großes Paket (>1500 Byte) vom Server verworfen werden - das führte zum Rauswurf (\"Reliable packet not ack'd\"). Alle Mitspieler brauchen dieses Update.",
+                       "<b>Disconnect fixed:</b> the settings sync is split into small packets. Before, with many active roles a too-large packet (>1500 bytes) could be dropped by the server, causing a disconnect (\"Reliable packet not ack'd\"). All players need this update."),
+                Lang.T("<b>Einstellungs-Meldungen:</b> Änderungen im Reiter \"Spiel\" (Kill-Abklingzeit, Tempo ...) werden jetzt wie Rollen-Änderungen unten links angezeigt. Die Rollen-Meldung zeigt nicht mehr \"STRMISS\".",
+                       "<b>Settings messages:</b> changes in the \"Game\" tab (kill cooldown, speed ...) now show at the bottom left like role changes. The role message no longer shows \"STRMISS\"."),
+                Lang.T("<b>Standard: nur getestete Rollen an.</b> Beim ersten Start sind nur geprüfte Rollen aktiv. Im Reiter \"Spiel\" schaltet der Test-Umschalter zwischen getesteten und ungetesteten Rollen um.",
+                       "<b>Default: only tested roles on.</b> On first start only verified roles are active. In the \"Game\" tab the test toggle switches between tested and untested roles."),
+            }),
+
         new Entry("4.9.14",
             new[]
             {
                 Lang.T("<b>Orakel</b> (Neutral)\nRät im Meeting Rollen - wählt jetzt erst Crew/Impostor/Neutral, dann A-Z. Genug Treffer = Sieg.",
                        "<b>Oracle</b> (Neutral)\nGuesses roles in meetings - now pick Crew/Impostor/Neutral first, then A-Z. Enough hits = win."),
-                Lang.T("<b>Spinne</b> überarbeitet\nBiss vergiftet (stirbt nach 8 s), die Leiche löst sich auf und hinterlässt ein Netz - auch bei der Viper.",
-                       "<b>Spider</b> reworked\nBite poisons (dies after 8s); the body dissolves and leaves a web - also for the Viper."),
-                Lang.T("<b>Voodoo-Puppe</b> überarbeitet\nDu bleibst während der Übernahme sichtbar und angreifbar an deinem Platz - nur die Kamera sitzt auf dem Ziel.",
-                       "<b>Voodoo Doll</b> reworked\nYou stay visible and vulnerable in place while possessing - only the camera follows the target."),
                 Lang.T("<b>Mumie / Zombie / Spukgestalt</b>\nFeinschliff an Symbolen, Aufgaben und Sieg (Spukgestalt-Sieg jetzt auch im Freeplay sichtbar).",
                        "<b>Mummy / Zombie / Haunting</b>\nPolish on icons, tasks and winning (Haunting win now also shown in Freeplay)."),
             },
@@ -39,12 +51,10 @@ internal static class UpdateNotes
             {
                 Lang.T("<b>Rater-Fenster:</b> die Rollenliste bleibt immer im Bildschirm (Rand oben/unten) und ist bei vielen Rollen mit dem Mausrad scrollbar.",
                        "<b>Guesser window:</b> the role list always stays on screen (top/bottom margin) and scrolls with the mouse wheel when there are many roles."),
-                Lang.T("<b>Türgeist:</b> schließt/öffnet jetzt nur die eine Tür, an der du stehst - kein Flackern mehr, Aufmachen klappt zuverlässig.",
-                       "<b>Door Spirit:</b> now closes/opens only the single door you stand in - no more flicker, reopening works reliably."),
                 Lang.T("<b>Mumie:</b> eigenes Symbol (Papierrolle) statt des Teleport-Pfeils.",
                        "<b>Mummy:</b> own icon (paper roll) instead of the teleport arrow."),
-                Lang.T("<b>Viele Rollen-Feinschliffe</b> aus den Testrunden (Zauberer, Thor, Sniper, Werwolf, Störsender, Falscher Weihnachtsmann, Vogelscheuche, Leichenschlepper u. v. m.).",
-                       "<b>Many role tweaks</b> from the test rounds (Wizard, Thor, Sniper, Werewolf, Jammer, False Santa, Scarecrow, Body Dragger and many more)."),
+                Lang.T("<b>Viele Rollen-Feinschliffe</b> aus den Testrunden (Zauberer, Thor, Sniper, Werwolf, Falscher Weihnachtsmann, Vogelscheuche, Leichenschlepper u. v. m.).",
+                       "<b>Many role tweaks</b> from the test rounds (Wizard, Thor, Sniper, Werewolf, False Santa, Scarecrow, Body Dragger and many more)."),
             }),
 
         new Entry("4.9.13",
