@@ -468,6 +468,24 @@ internal static class SettingsPanel
             GUI.enabled = true;
         }));
 
+        // ----- Vorgefertigte Sets (immer da) -----
+        rows.Add((34f, (yy, w) => GUI.Label(new Rect(area.x + 10, yy + 4, w, 28), Lang.T("<b>Vorlagen</b> (online erprobte Rollen)", "<b>Templates</b> (online-proven roles)"), Ui.Small)));
+        foreach (var presetItem in RoleSets.BuiltIns)
+        {
+            var p = presetItem;
+            rows.Add((54f, (yy, w) =>
+            {
+                bool ce = SettingsWindow.CanEdit;
+                GUI.Label(new Rect(area.x + 10, yy + 10, 320, 36), $"<b>{p.Name}</b>  <color=#9AA0AE>({p.Roles.Count} {Lang.T("Rollen", "roles")})</color>", Ui.Text);
+                GUI.enabled = ce;
+                if (Ui.Button(new Rect(area.x + 340, yy + 4, 200, 46), Lang.T("Aktivieren", "Activate")) && ce) RoleSets.ApplyBuiltIn(p);
+                GUI.enabled = true;
+            }));
+        }
+
+        rows.Add((24f, (yy, w) => { }));
+        rows.Add((30f, (yy, w) => GUI.Label(new Rect(area.x + 10, yy, w, 26), Lang.T("<b>Eigene Sets</b>", "<b>Your sets</b>"), Ui.Small)));
+
         rows.Add((52f, (yy, w) =>
         {
             GUI.Label(new Rect(area.x + 10, yy + 6, 110, 36), Lang.T("Set-Name:", "Set name:"), Ui.Text);

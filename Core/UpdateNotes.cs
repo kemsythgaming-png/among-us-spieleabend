@@ -23,6 +23,18 @@ internal static class UpdateNotes
     // Neueste Version zuerst.
     private static readonly Entry[] History =
     {
+        new Entry("4.9.17",
+            new[]
+            {
+                Lang.T("<b>Keine neue Rolle</b>\nVorgefertigte Rollen-Sets zum schnellen Einstellen.",
+                       "<b>No new role</b>\nBuilt-in role sets for quick setup."),
+            },
+            new[]
+            {
+                Lang.T("<b>Vorlagen-Sets:</b> im Reiter \"Spiel\" gibt es jetzt fertige Sets (Standard, Starke Crew, Halloween) – nur mit online erprobten Rollen. Ein Klick auf \"Aktivieren\" stellt die Rollen passend ein, der Rest geht aus. Halloween schaltet zusätzlich das Halloween-Design an.",
+                       "<b>Template sets:</b> the \"Game\" tab now has ready-made sets (Standard, Strong Crew, Halloween) – only online-proven roles. One click on \"Activate\" sets the roles up and turns the rest off. Halloween also enables the Halloween theme."),
+            }),
+
         new Entry("4.9.16",
             new[]
             {
