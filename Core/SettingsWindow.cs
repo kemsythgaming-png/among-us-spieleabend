@@ -124,6 +124,7 @@ internal static class SettingsPanel
         public string Description = "";
         public List<ISetting> Settings = new();
         public bool IsHeader;
+        public bool Locked; // ungetestete Rolle bei ausgeschaltetem Schalter -> nicht einstellbar
     }
 
     /// <summary>Fenster auf/zu (Knopf oben rechts oder F1).</summary>
@@ -252,23 +253,23 @@ internal static class SettingsPanel
     // ---------- Reiter "Sets" ----------
     private static string setName = "";
     private static float setsScroll;
-    private static bool testModeTested = true; // Standard: die GETESTETEN sind an
 
     private static void DrawSets(Rect area)
     {
         bool canEdit = SettingsWindow.CanEdit;
         float x = area.x, y = area.y, w = area.width;
 
-        // Test-Umschalter: mit einem Klick alle ungetesteten bzw. alle getesteten Rollen einschalten
+        // Ungetestete Rollen: An/Aus. Aus = alle ungetesteten aus und nicht einstellbar.
         GUI.Label(new Rect(x, y, w, 30), Lang.T(
-            $"<b>Test-Umschalter</b>  <color=#9AA0AE>({TestStatus.UntestedCount} {Lang.T("ungetestet", "untested")})</color>",
-            $"<b>Test toggle</b>  <color=#9AA0AE>({TestStatus.UntestedCount} untested)</color>"), Ui.Text);
+            $"<b>Ungetestete Rollen</b>  <color=#9AA0AE>({TestStatus.UntestedCount} {Lang.T("ungetestet", "untested")})</color>",
+            $"<b>Untested roles</b>  <color=#9AA0AE>({TestStatus.UntestedCount} untested)</color>"), Ui.Text);
         y += 36;
         GUI.enabled = canEdit;
-        string toggleLbl = testModeTested
-            ? Lang.T("Aktiv: GETESTETE Rollen  -  klicken: ungetestete einschalten", "Active: TESTED roles  -  click: enable untested")
-            : Lang.T("Aktiv: UNGETESTETE Rollen  -  klicken: getestete einschalten", "Active: UNTESTED roles  -  click: enable tested");
-        if (Ui.Button(new Rect(x, y, 935, 46), toggleLbl) && canEdit) { testModeTested = !testModeTested; TestStatus.Apply(testModeTested); }
+        bool allow = TestStatus.AllowUntested;
+        string toggleLbl = allow
+            ? Lang.T("Ungetestete Rollen: AN  (klicken zum Sperren)", "Untested roles: ON  (click to lock)")
+            : Lang.T("Ungetestete Rollen: AUS  (klicken zum Freischalten)", "Untested roles: OFF  (click to unlock)");
+        if (Ui.Button(new Rect(x, y, 935, 46), toggleLbl, allow) && canEdit) TestStatus.SetAllowUntested(!allow);
         GUI.enabled = true;
         y += 64;
 
@@ -457,12 +458,13 @@ internal static class SettingsPanel
         rows.Add((52f, (yy, w) =>
         {
             bool ce = SettingsWindow.CanEdit;
-            GUI.Label(new Rect(area.x + 10, yy + 8, 360, 32), Lang.T($"Test-Umschalter  ({TestStatus.UntestedCount} ungetestet)", $"Test toggle  ({TestStatus.UntestedCount} untested)"), Ui.Small);
+            GUI.Label(new Rect(area.x + 10, yy + 8, 360, 32), Lang.T($"Ungetestete Rollen  ({TestStatus.UntestedCount} ungetestet)", $"Untested roles  ({TestStatus.UntestedCount} untested)"), Ui.Small);
             GUI.enabled = ce;
-            string lbl = testModeTested
-                ? Lang.T("Aktiv: GETESTETE  –  klicken: ungetestete", "Active: TESTED  –  click: untested")
-                : Lang.T("Aktiv: UNGETESTETE  –  klicken: getestete", "Active: UNTESTED  –  click: tested");
-            if (Ui.Button(new Rect(area.x + 380, yy, Mathf.Min(620f, w - 380f), 46), lbl) && ce) { testModeTested = !testModeTested; TestStatus.Apply(testModeTested); }
+            bool allow = TestStatus.AllowUntested;
+            string lbl = allow
+                ? Lang.T("AN  –  klicken zum Sperren", "ON  –  click to lock")
+                : Lang.T("AUS  –  klicken zum Freischalten", "OFF  –  click to unlock");
+            if (Ui.Button(new Rect(area.x + 380, yy, Mathf.Min(620f, w - 380f), 46), lbl, allow) && ce) TestStatus.SetAllowUntested(!allow);
             GUI.enabled = true;
         }));
 
@@ -506,7 +508,8 @@ internal static class SettingsPanel
     /// <summary>Rollen eines Teams: zuerst die Mod-Rollen, darunter die Rollen aus dem Spiel.</summary>
     private static List<Entry> TeamEntries(RoleTeam team)
     {
-        var list = RoleRegistry.Roles.Where(r => r.Team == team).Select(FromRole).ToList();
+        // Ungetestete Rollen nur zeigen, wenn der Schalter "Ungetestete Rollen" AN ist.
+        var list = RoleRegistry.Roles.Where(r => r.Team == team && (TestStatus.AllowUntested || TestStatus.IsTested(r))).Select(FromRole).ToList();
         if (team is RoleTeam.Crewmate or RoleTeam.Impostor)
         {
             var vanilla = VanillaRoleEntry.All.Where(v => v.IsImpostor == (team == RoleTeam.Impostor)).ToList();
@@ -524,7 +527,7 @@ internal static class SettingsPanel
     {
         bool Match(string s) => !string.IsNullOrEmpty(s) && s.IndexOf(text, System.StringComparison.OrdinalIgnoreCase) >= 0;
         var list = new List<Entry>();
-        list.AddRange(RoleRegistry.Roles.Where(r => Match(r.Name) || Match(r.Description)).Select(FromRole));
+        list.AddRange(RoleRegistry.Roles.Where(r => (Match(r.Name) || Match(r.Description)) && (TestStatus.AllowUntested || TestStatus.IsTested(r))).Select(FromRole));
         list.AddRange(VanillaRoleEntry.All.Where(v => Match(v.Name) || Match(v.Description)).Select(FromVanilla));
 
         var settings = new List<(ISetting Setting, string Where)> { (Lang.LanguageSetting, Lang.T("Allgemein", "General")) };
@@ -541,14 +544,19 @@ internal static class SettingsPanel
         return list;
     }
 
-    private static Entry FromRole(CustomRole r) => new()
+    private static Entry FromRole(CustomRole r)
     {
-        Label = $"{r.ColoredName}  <color=#9AA0AE>({r.Count.Int}x, {r.Chance.Int}%)</color>",
-        Name = r.Name,
-        Color = r.NameColor,
-        Description = r.Description,
-        Settings = r.Options.Cast<ISetting>().ToList(),
-    };
+        bool locked = TestStatus.IsLocked(r);
+        return new()
+        {
+            Label = (locked ? "<color=#6A6F7A>🔒 </color>" : "") + $"{r.ColoredName}  <color=#9AA0AE>({r.Count.Int}x, {r.Chance.Int}%)</color>",
+            Name = r.Name,
+            Color = r.NameColor,
+            Description = r.Description,
+            Settings = r.Options.Cast<ISetting>().ToList(),
+            Locked = locked,
+        };
+    }
 
     private static Entry FromVanilla(VanillaRoleEntry v) => new()
     {
@@ -599,13 +607,21 @@ internal static class SettingsPanel
         float dx = area.x + listWidth + 24, dw = area.xMax - dx;
         DrawDetailHeader(new Rect(dx, area.y, dw, 110), entry.Name, entry.Color, entry.Description);
 
-        var detailView = new Rect(dx, area.y + 112, dw, area.height - 112);
+        float settingsTop = area.y + 112;
+        if (entry.Locked)
+        {
+            GUI.Label(new Rect(dx, settingsTop, dw, 30),
+                Lang.T("<color=#D19A3A>Ungetestete Rolle – erst „Ungetestete Rollen“ einschalten (Reiter Spiel), dann einstellbar.</color>",
+                       "<color=#D19A3A>Untested role – enable \"Untested roles\" first (Game tab) to configure it.</color>"), Ui.Small);
+            settingsTop += 34;
+        }
+        var detailView = new Rect(dx, settingsTop, dw, area.yMax - settingsTop);
         detailScroll.y = Ui.Scroll(detailView, entry.Settings.Count * Row, detailScroll.y);
         float sy = 0;
         foreach (var setting in entry.Settings)
         {
             if (Ui.RowVisible(detailView, sy, 44, detailScroll.y))
-                DrawSetting(setting, detailView.x, detailView.y + sy - detailScroll.y, dw - 16 - ControlWidth - 20);
+                DrawSetting(setting, detailView.x, detailView.y + sy - detailScroll.y, dw - 16 - ControlWidth - 20, entry.Locked);
             sy += Row;
         }
     }
@@ -621,14 +637,14 @@ internal static class SettingsPanel
     }
 
     /// <summary>Eine Einstellung: Name links (bei langen Namen kleiner und umgebrochen), rechts -/Wert/+ oder ein An/Aus-Knopf.</summary>
-    private static void DrawSetting(ISetting setting, float x, float y, float labelWidth)
+    private static void DrawSetting(ISetting setting, float x, float y, float labelWidth, bool locked = false)
     {
         var name = new GUIContent(setting.Name);
         if (Ui.Width(Ui.Text, name) <= labelWidth) GUI.Label(new Rect(x, y + 7, labelWidth, 40), name, Ui.Text);
         else GUI.Label(new Rect(x, y - 2, labelWidth, 50), name, Ui.LabelWrap);
 
         float cx = x + labelWidth + 10;
-        bool canEdit = SettingsWindow.CanEdit || setting.AlwaysEditable;
+        bool canEdit = (SettingsWindow.CanEdit || setting.AlwaysEditable) && !locked; // gesperrte (ungetestete) Rollen nicht einstellbar
 
         // Gaeste (nicht Host) sehen die Werte, koennen sie aber nicht aendern -> Knoepfe ausgegraut
         bool guiBefore = GUI.enabled;

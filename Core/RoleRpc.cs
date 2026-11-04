@@ -163,8 +163,8 @@ internal static class RoleRpc
         var client = AmongUsClient.Instance;
         if (!client || !client.AmHost || !client.AmConnected || !LobbyBehaviour.Instance || !PlayerControl.LocalPlayer) return;
 
-        // Beim allerersten Mal (Host in der Lobby): Standard "nur getestete Rollen an" setzen.
-        TestStatus.ApplyDefaultOnce();
+        // Solange "ungetestete Rollen" AUS ist, deren Anzahl auf 0 halten.
+        TestStatus.EnforceUntestedOff();
 
         // Zusaetzlich regelmaessig neu senden: so bekommen auch verspaetet beigetretene Spieler die aktiven Rollen,
         // selbst wenn sie den einmaligen Sync beim Beitritt (Spielerzahl-Aenderung) verpasst haben.

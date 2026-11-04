@@ -40,22 +40,47 @@ internal static class TestStatus
         "Bait",          // Köder
     };
 
-    // Einmaliger Standard: beim ersten Mal nur die GETESTETEN Rollen anschalten.
-    private static ConfigEntry<bool> defaultApplied;
+    // An/Aus-Schalter: dürfen ungetestete Rollen benutzt/eingestellt werden? Standard: AUS.
+    private static ConfigEntry<bool> allowUntested;
 
     public static void Bind(ConfigFile config)
     {
-        defaultApplied = config.Bind("Allgemein", "StandardNurGetestet", false,
-            "Intern: wurde der Standard \"nur getestete Rollen an\" schon einmal angewandt?");
+        allowUntested = config.Bind("Allgemein", "UngetesteteRollen", false,
+            "Ungetestete Rollen zulassen (An) oder sperren und ausschalten (Aus). Standard: Aus.");
     }
 
-    /// <summary>Beim ersten Mal (Host in der Lobby): nur getestete Rollen anschalten - danach nie wieder von selbst.</summary>
-    public static void ApplyDefaultOnce()
+    /// <summary>Dürfen ungetestete Rollen gerade benutzt/eingestellt werden?</summary>
+    public static bool AllowUntested => allowUntested != null && allowUntested.Value;
+
+    /// <summary>An/Aus umschalten. Beim Ausschalten werden alle ungetesteten Rollen abgeschaltet.</summary>
+    public static void SetAllowUntested(bool on)
     {
-        if (defaultApplied == null || defaultApplied.Value || !SettingsWindow.CanEdit) return;
-        defaultApplied.Value = true;
-        Apply(true); // nur getestete an
+        if (!SettingsWindow.CanEdit || allowUntested == null) return;
+        allowUntested.Value = on;
+        if (!on) DisableUntested();
+        RoleRpc.MarkOptionsDirty();
+        ChatNote.Message(on
+            ? Lang.T("Ungetestete Rollen: AN", "Untested roles: ON")
+            : Lang.T("Ungetestete Rollen: AUS", "Untested roles: OFF"));
     }
+
+    /// <summary>Alle ungetesteten Rollen ausschalten (Anzahl 0).</summary>
+    private static void DisableUntested()
+    {
+        foreach (var r in RoleRegistry.Roles)
+            if (!IsTested(r)) r.Count.SetValue(0);
+    }
+
+    /// <summary>Host in der Lobby: solange "ungetestet" AUS ist, deren Anzahl auf 0 halten (auch nach Sets/Sammelaktionen).</summary>
+    public static void EnforceUntestedOff()
+    {
+        if (AllowUntested || !SettingsWindow.CanEdit) return;
+        foreach (var r in RoleRegistry.Roles)
+            if (!IsTested(r) && r.Count.Int > 0) r.Count.SetValue(0);
+    }
+
+    /// <summary>UI: ist diese Rolle gerade gesperrt (ungetestet + Schalter AUS)?</summary>
+    public static bool IsLocked(CustomRole r) => !AllowUntested && !IsTested(r);
 
     public static bool IsTested(CustomRole r)
     {
@@ -68,20 +93,5 @@ internal static class TestStatus
     public static int UntestedCount
     {
         get { int n = 0; foreach (var r in RoleRegistry.Roles) if (!IsTested(r)) n++; return n; }
-    }
-
-    /// <summary>Alle Rollen der gewaehlten Gruppe einschalten (Anzahl 1, Chance 100 %), den Rest aus.</summary>
-    public static void Apply(bool testedGroup)
-    {
-        if (!SettingsWindow.CanEdit) return;
-        foreach (var r in RoleRegistry.Roles)
-        {
-            bool on = IsTested(r) == testedGroup;
-            r.Count.SetValue(on ? Mathf.Max(1, r.Count.Int) : 0);
-            if (on) r.Chance.SetValue(100);
-        }
-        ChatNote.Message(testedGroup
-            ? Lang.T("Test-Umschalter: getestete Rollen an", "Test toggle: tested roles on")
-            : Lang.T("Test-Umschalter: ungetestete Rollen an", "Test toggle: untested roles on"));
     }
 }

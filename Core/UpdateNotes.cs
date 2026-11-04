@@ -23,6 +23,18 @@ internal static class UpdateNotes
     // Neueste Version zuerst.
     private static readonly Entry[] History =
     {
+        new Entry("4.9.16",
+            new[]
+            {
+                Lang.T("<b>Keine neue Rolle</b>\nUngetestete Rollen jetzt als einfacher An/Aus-Schalter.",
+                       "<b>No new role</b>\nUntested roles are now a simple on/off switch."),
+            },
+            new[]
+            {
+                Lang.T("<b>Ungetestete Rollen: An/Aus.</b> Im Reiter \"Spiel\" (und \"Sets\") schaltest du ungetestete Rollen mit einem Knopf an oder aus. Ist der Schalter AUS, sind alle ungetesteten Rollen aus und lassen sich auch nicht einstellen (gesperrt, mit Schloss-Symbol). Standard: AUS.",
+                       "<b>Untested roles: on/off.</b> In the \"Game\" (and \"Sets\") tab you switch untested roles on or off with one button. When OFF, all untested roles are off and cannot be configured (locked, with a lock icon). Default: OFF."),
+            }),
+
         new Entry("4.9.15",
             new[]
             {
