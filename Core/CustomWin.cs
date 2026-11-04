@@ -21,6 +21,22 @@ public static class CustomWin
 
     private static float freeplayCooldownUntil;
 
+    // Freeplay: sichtbares Sieg-Popup (die normalen Hinweis-Banner sind abgeschaltet)
+    private static string freeplayWinText;
+    private static float freeplayWinUntil;
+    private static GUIStyle winStyle;
+
+    /// <summary>Wird aus SettingsWindow.OnGUI gezeichnet: großes Sieg-Popup im Freeplay.</summary>
+    public static void DrawWinBanner()
+    {
+        if (freeplayWinText == null || Time.time > freeplayWinUntil) return;
+        winStyle ??= new GUIStyle(Ui.Title) { alignment = TextAnchor.MiddleCenter, wordWrap = true, richText = true, fontSize = 40 };
+        float w = 900f, h = 180f;
+        var rect = new Rect(Ui.ScreenWidth / 2f - w / 2f, Screen.height * 0.32f, w, h);
+        GUI.Box(rect, GUIContent.none, Ui.Panel);
+        GUI.Label(rect, freeplayWinText, winStyle);
+    }
+
     // Mehrere Rollen koennen im SELBEN Moment gewinnen (z. B. Jester + Executioner, der den Jester als Ziel hatte).
     // Wir sammeln alle Sieger dieses Moments und beenden das Spiel erst im naechsten Frame EINMAL mit allen.
     private static CustomRole pendingRole;
@@ -37,7 +53,11 @@ public static class CustomWin
         {
             if (Time.time < freeplayCooldownUntil) return;
             freeplayCooldownUntil = Time.time + 8f;
-            Notifier.Show($"<color={role.ColorHex}>{role.Name} {Lang.T("gewinnt!", "wins!")}</color>  ({Lang.T("Freeplay: Spiel läuft weiter", "Freeplay: game continues")})", 6f);
+            // Deutliches Sieg-Popup in der Bildmitte (die normalen Hinweis-Banner sind abgeschaltet).
+            freeplayWinText = $"<color={role.ColorHex}>{role.Name} {Lang.T("gewinnt!", "wins!")}</color>\n<size=22>{Lang.T("Freeplay: Spiel läuft weiter", "Freeplay: game continues")}</size>";
+            freeplayWinUntil = Time.time + 6f;
+            Sfx.Play(Sfx.TaskComplete, 0.8f);
+            Plugin.Logger.LogInfo($"Freeplay-Sieg: {role.Name}");
             return;
         }
 
@@ -65,6 +85,29 @@ public static class CustomWin
 
         Set(role, ids);
         GameManager.Instance.RpcEndGame(GameOverReason.ImpostorsByVote, false);
+    }
+
+    /// <summary>
+    /// Host: Sind nur noch Impostor + Neutrale übrig (keine Crew), gewinnen die Impostor NICHT sofort - das Spiel
+    /// läuft weiter, bis eine der beiden Seiten wirklich tot ist. Neutrale mit eigener Sieg-Regel (Jester per
+    /// Rauswurf, Arsonist per Zündung ...) lösen ihren Sieg weiterhin selbst aus.
+    /// true = nur Impostor + Neutrale leben noch -> das Vanilla-Spielende unterdrücken.
+    /// </summary>
+    internal static bool NeutralVsImpostorOngoing()
+    {
+        if (Active || FreeplayTest.IsFreeplay) return false;
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !RoleRegistry.HasAssignments) return false;
+        if (!GameManager.Instance || !ShipStatus.Instance) return false;
+
+        int imp = 0, crew = 0, neutral = 0;
+        foreach (var p in PlayerControl.AllPlayerControls)
+        {
+            if (!CustomRole.IsAlive(p)) continue;
+            if (CustomRole.IsImpostor(p)) imp++;
+            else if (RoleRegistry.GetRole(p)?.Team == RoleTeam.Neutral) neutral++;
+            else crew++;
+        }
+        return imp > 0 && crew == 0 && neutral > 0;
     }
 
     internal static void Handle(MessageReader reader)
@@ -205,4 +248,14 @@ internal static class TaskCountPatch
             }
         }
     }
+}
+
+/// <summary>
+/// Endphase nur Impostor + Neutrale: das Vanilla-Spielende unterdrücken, damit das Spiel erst endet, wenn eine
+/// Seite wirklich tot ist (statt sofortigem Impostor-Sieg, weil keine Crew mehr lebt).
+/// </summary>
+[HarmonyPatch(typeof(LogicGameFlowNormal), nameof(LogicGameFlowNormal.CheckEndCriteria))]
+internal static class NeutralImpostorEndPatch
+{
+    public static bool Prefix() => !CustomWin.NeutralVsImpostorOngoing();
 }

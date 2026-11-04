@@ -90,12 +90,23 @@ public static class FirstDeathShield
         Plugin.Logger.LogInfo($"Schutz fuer die ersten Toten: {ids.Count} Spieler");
     }
 
-    /// <summary>Host: Angriff auf einen geschuetzten Spieler abfangen.</summary>
+    /// <summary>Host: Angriff auf einen geschuetzten Spieler abfangen - der Tod wird sicher blockiert.</summary>
     internal static bool Intercept(PlayerControl killer, PlayerControl target)
     {
         if (!IsShielded(target) || killer == target) return false;
+        // Bewährte Blockade (wie Guardian-Angel-Schutz): der Angreifer zuckt zurück, das Ziel lebt.
+        // (Die vorherige lautlose Variante ohne RpcMurderPlayer hat den Kill nicht zuverlässig verhindert.)
         killer.RpcMurderPlayer(target, false);
         return true;
+    }
+
+    /// <summary>Freeplay-Test: dem lokalen Spieler sofort den Schutz geben (bis zum ersten Meeting).</summary>
+    internal static void GiveLocalForTest()
+    {
+        var local = PlayerControl.LocalPlayer;
+        if (!local) return;
+        shielded.Add(local.PlayerId);
+        Notifier.Show($"<color=#FFD23C>{Lang.T("Erst-Tod-Schutz an - bis zum ersten Meeting unverwundbar.", "First-death shield on - invulnerable until the first meeting.")}</color>", 5f);
     }
 
     /// <summary>Erstes Meeting: Schutz endet.</summary>

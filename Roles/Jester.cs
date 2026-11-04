@@ -74,10 +74,14 @@ public sealed class Jester : CustomRole
         var local = PlayerControl.LocalPlayer;
         if (!local || !ShipStatus.Instance) return null;
         Vector2 me = local.GetTruePosition();
-        var vent = ShipStatus.Instance.AllVents.Where(v => v).OrderBy(v => Vector2.Distance(me, v.transform.position)).FirstOrDefault();
-        if (!vent) return null;
-        vent.CanUse(local.Data, out bool canUse, out _);
-        return canUse ? vent : null;
+        // Das nächste NUTZBARE Vent nehmen (nicht nur das allernächste) - sonst blockiert ein ungünstig
+        // liegendes Nachbar-Vent den Knopf, obwohl ein anderes in Reichweite ist.
+        foreach (var vent in ShipStatus.Instance.AllVents.Where(v => v).OrderBy(v => Vector2.Distance(me, v.transform.position)))
+        {
+            vent.CanUse(local.Data, out bool canUse, out _);
+            if (canUse) return vent;
+        }
+        return null;
     }
 
     public override string GetExileText(PlayerControl player) =>
@@ -103,8 +107,9 @@ internal static class JesterVentPatch
         Vector2 vent = __instance.transform.position;
         float dist = Vector2.Distance(me, vent);
         couldUse = player.CanMove || player.inVent;
-        canUse = couldUse && dist <= __instance.UsableDistance
-                 && !PhysicsHelpers.AnythingBetween(player.Collider, me, vent, Constants.ShipOnlyMask, false);
+        // Nur die Reichweite prüfen - KEINE Sichtlinien-Prüfung (AnythingBetween): bei Vents in Wand-Ecken
+        // (z. B. Electrical auf der Skeld) traf der Strahl sonst die Wand, obwohl man direkt draufsteht.
+        canUse = couldUse && dist <= __instance.UsableDistance;
         __result = dist;
     }
 }

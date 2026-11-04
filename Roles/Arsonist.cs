@@ -20,8 +20,8 @@ public sealed class Arsonist : CustomRole
     public override string Description =>
         Lang.T("Übergieße Spieler (F),\nzünde sie an (G).", "Douse players (F),\nignite them (G).");
     public override string LongDescription =>
-        Lang.T("Du bist neutral. Mit Taste F übergießt du Spieler mit Benzin - sie merken nichts ([Benzin] am Namen, nur du siehst es).\n\nMit Taste G zündest du an: Alle Übergossenen gehen in Flammen auf und sterben. Sind danach alle anderen tot, gewinnst du allein. Du hast nur wenige Zündungen.",
-               "You are neutral. Press F to douse players with fuel - they don't notice ([Doused] next to their name, only you see it).\n\nPress G to ignite: everyone doused bursts into flames and dies. If everyone else is dead afterwards, you win alone. You only have a few ignitions.");
+        Lang.T("Du bist neutral. Mit Taste F übergießt du Spieler mit Benzin - sie merken nichts. Du musst dir selbst merken, wen du schon hattest!\n\nMit Taste G zündest du an: Alle Übergossenen gehen in Flammen auf und sterben. Sind danach alle anderen tot, gewinnst du allein. Du hast nur wenige Zündungen.",
+               "You are neutral. Press F to douse players with fuel - they don't notice. You have to remember who you already doused!\n\nPress G to ignite: everyone doused bursts into flames and dies. If everyone else is dead afterwards, you win alone. You only have a few ignitions.");
 
     private const byte ActionDouse = 0, ActionIgnite = 1, ActionBurn = 2;
     private const float BurnTime = 1.6f;
@@ -94,7 +94,7 @@ public sealed class Arsonist : CustomRole
             {
                 if (!doused.TryGetValue(sender.PlayerId, out var set)) doused[sender.PlayerId] = set = new HashSet<byte>();
                 set.Add(data[0]);
-                if (sender == PlayerControl.LocalPlayer) Sfx.Play(Sfx.Splash);
+                if (sender == PlayerControl.LocalPlayer) Sfx.Play(DouseClip(), 0.7f);
                 break;
             }
 
@@ -147,7 +147,7 @@ public sealed class Arsonist : CustomRole
         {
             var victim = FindPlayer(id);
             if (!IsAlive(victim)) continue;
-            if (victim.protectedByGuardianId >= 0 || KillSystem.Intercept(arsonist, victim)) continue; // Schild/Schutz
+            if (victim.protectedByGuardianId >= 0) continue; // Guardian Angel; Schild/Schutz fängt KillNoBody selbst ab
             KillSystem.KillNoBody(victim, arsonist);
         }
 
@@ -156,6 +156,30 @@ public sealed class Arsonist : CustomRole
             CustomWin.Trigger(this, new[] { arsonist });
     }
 
-    public override string GetNameMark(PlayerControl viewer, PlayerControl target) =>
-        RoleRegistry.Has(viewer, this) && IsDoused(viewer, target) ? $"<color={ColorHex}>{Lang.T("[Benzin]", "[Doused]")}</color>" : null;
+    // Kein Hinweis am Namen - der Arsonist muss sich selbst merken, wen er schon übergossen hat.
+
+    /// <summary>Gieß-/Zisch-Geräusch (selbst erzeugt): gefiltertes Rauschen mit weicher Hüllkurve - wie fließendes Benzin.</summary>
+    private static AudioClip douseClip;
+    private static AudioClip DouseClip()
+    {
+        if (douseClip) return douseClip;
+        const int rate = 44100;
+        int length = (int)(rate * 0.7f);
+        var samples = new float[length];
+        var rng = new System.Random(911);
+        float low = 0f, band = 0f;
+        for (int i = 0; i < length; i++)
+        {
+            float noise = (float)rng.NextDouble() * 2f - 1f;
+            low += (noise - low) * 0.08f;          // Tiefpass
+            band = (noise - low) - band * 0.0f;    // Höhen für das "Zischen"
+            float t = i / (float)length;
+            float env = Mathf.Min(1f, t / 0.12f) * Mathf.Min(1f, (1f - t) / 0.3f); // weich rein/raus
+            samples[i] = Mathf.Clamp(band * env * 0.5f, -1f, 1f);
+        }
+        douseClip = AudioClip.Create("Spieleabend_Douse", length, 1, rate, false);
+        douseClip.SetData(samples, 0);
+        douseClip.hideFlags = HideFlags.HideAndDontSave;
+        return douseClip;
+    }
 }

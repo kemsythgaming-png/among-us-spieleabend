@@ -63,12 +63,13 @@ public sealed class Radar : CustomRole
     private GameObject arrow;
     private static Sprite arrowSprite;
     private RoleButton button;
-    private RoleOption cooldown, duration;
+    private RoleOption cooldown, duration, showColor;
 
     protected override void Setup()
     {
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 25f, 5f, 60f, 2.5f, "s");
         duration = AddOption("Duration", "Radar-Dauer|Radar duration", 8f, 2f, 20f, 1f, "s");
+        showColor = AddToggle("ShowColor", "Spielerfarbe am Pfeil|Player color on arrow", true);
         button = AddButton(new RoleButton
         {
             Label = "Radar|Radar",
@@ -109,6 +110,16 @@ public sealed class Radar : CustomRole
         if (!arrow) arrow = CreateArrow(local);
         arrow.SetActive(true);
 
+        // Pfeil in der Farbe des nächsten Spielers (abschaltbar) - sonst Radar-Grün.
+        var sr = arrow.GetComponent<SpriteRenderer>();
+        if (sr)
+        {
+            Color col = Color;
+            if (showColor.Bool && nearest.Data != null && Palette.PlayerColors != null)
+                col = Palette.PlayerColors[nearest.Data.DefaultOutfit.ColorId % Palette.PlayerColors.Length];
+            sr.color = col;
+        }
+
         Vector2 dir = nearest.GetTruePosition() - local.GetTruePosition();
         float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
         arrow.transform.localPosition = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad) * 0.75f, Mathf.Sin(angle * Mathf.Deg2Rad) * 0.75f + 0.1f, -0.05f);
@@ -147,26 +158,104 @@ public sealed class Radar : CustomRole
     }
 }
 
-/// <summary>Crew: bekommt eine Warnung, wenn ganz in der Naehe jemand getoetet wird.</summary>
+/// <summary>
+/// Crew (Paranoid): schaltet seinen Spuersinn ein (Knopf). Solange er laeuft, leuchtet sein Bildschirm kurz hellblau
+/// auf, wenn irgendwo auf der Karte jemand getoetet wird - aber nie wer oder wo. Danach Abklingzeit.
+/// </summary>
 public sealed class Paranoid : CustomRole
 {
     public override string Name => Lang.T("Paranoid", "Paranoid");
     public override Color Color => new Color32(200, 90, 90, 255);
     public override RoleTeam Team => RoleTeam.Crewmate; // eigene Crew-Rolle (war frueher eine Anpassung)
     public override string IntroText => Lang.T("Hast du das gehört?", "Did you hear that?");
-    public override string Description => Lang.T("Du merkst, wenn jemand getötet wird.", "You notice when someone is killed.");
+    public override string Description => Lang.T("Spürsinn an (F): dein Bildschirm\nblitzt, wenn jemand stirbt.", "Senses on (F): your screen\nflashes when someone dies.");
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Wird jemand getötet, bekommst du eine Warnung - aber nicht, wer oder wo.",
-        "You are crew. When someone is killed, you get a warning - but not who or where.");
+        "Du bist Crew. Mit Taste F schaltest du für einige Sekunden deinen Spürsinn ein. Solange er läuft und irgendwo auf der ganzen Karte jemand getötet wird, leuchtet dein Bildschirm kurz hellblau auf - aber du erfährst nie, wer oder wo. Danach läuft eine Abklingzeit.",
+        "You are crew. Press F to switch on your senses for a few seconds. While active and someone is killed anywhere on the map, your screen briefly flashes light blue - but you never learn who or where. Then a cooldown runs.");
 
-    protected override void Setup() { }
+    private RoleButton button;
+    private RoleOption cooldown;
+    private float flashUntil = -1f;
+    private static Texture2D flashTex;
+    private GUIStyle flashStyle;
+
+    protected override void Setup()
+    {
+        cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 45f, 10f, 90f, 5f, "s");
+
+        button = AddButton(new RoleButton
+        {
+            Label = "Spürsinn|Senses",
+            GameIcon = _ => AlertSprite(),
+            Icon = "radar",
+            NeedsTarget = false,
+            Cooldown = () => cooldown.Value,
+            // Aktiv-Dauer bei jeder Nutzung zufaellig 10-15 s
+            Duration = () => Random.Range(10f, 15f),
+            StartCooldown = 10f,
+            Hotkey = KeyCode.F,
+            CanUse = () => !InMeeting && IsAlive(PlayerControl.LocalPlayer),
+            OnClick = _ => Sfx.Play(Sfx.Investigate, 0.6f),
+        });
+    }
+
+    public override void ResetState() => flashUntil = -1f;
+    public override void OnMeetingStart() => flashUntil = -1f;
 
     public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
     {
         var local = PlayerControl.LocalPlayer;
-        // Immer bei jedem Kill warnen (egal wie weit weg)
         if (cause != DeathCause.Kill || !IsLocalRole || !IsAlive(local) || victim == local) return;
-        Notifier.Show($"<color={ColorHex}>{Lang.T("Du hast etwas gehört ... jemand wurde getötet!", "You heard something ... someone was killed!")}</color>", 4f);
-        Sfx.Play(Sfx.Warning);
+        if (button == null || !button.EffectActive) return; // nur solange der Spürsinn läuft
+        flashUntil = Time.time + 0.7f;
+        Sfx.Play(Sfx.Warning, 0.7f);
+    }
+
+    public override void DrawGUI()
+    {
+        if (!IsLocalRole || flashUntil < 0f) return;
+        float left = flashUntil - Time.time;
+        if (left <= 0f) { flashUntil = -1f; return; }
+
+        float a = Mathf.Clamp01(left / 0.7f) * 0.45f; // weich ausblenden
+        EnsureFlashTex(a);
+        if (flashStyle == null) flashStyle = new GUIStyle();
+        flashStyle.normal.background = flashTex;
+        GUI.Box(new Rect(0f, 0f, Ui.ScreenWidth, 1080f), GUIContent.none, flashStyle);
+    }
+
+    /// <summary>Kleine, einfarbige Hellblau-Textur mit der gewuenschten Deckkraft (jeden Frame aktualisiert).</summary>
+    private static void EnsureFlashTex(float alpha)
+    {
+        if (!flashTex)
+            flashTex = new Texture2D(4, 4, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+        var col = new Color(0.45f, 0.75f, 1f, alpha);
+        var px = new Color[16];
+        for (int i = 0; i < px.Length; i++) px[i] = col;
+        flashTex.SetPixels(px);
+        flashTex.Apply();
+    }
+
+    // ---------- Eigenes Alarm-Symbol (Ausrufezeichen) ----------
+    private static Sprite alertSprite;
+    private static Sprite AlertSprite()
+    {
+        if (alertSprite) return alertSprite;
+        const int S = 96;
+        var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+        var col = new Color(0.95f, 0.85f, 0.25f, 1f);
+        for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++)
+        {
+            var c = new Vector2(x - S / 2f, y - S / 2f) / (S / 2f);
+            // senkrechter Balken + Punkt = Ausrufezeichen
+            bool bar = Mathf.Abs(c.x) < 0.12f && c.y > -0.15f && c.y < 0.72f;
+            bool dot = (c - new Vector2(0f, -0.5f)).magnitude < 0.15f;
+            tex.SetPixel(x, y, bar || dot ? col : Color.clear);
+        }
+        tex.Apply();
+        alertSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f);
+        alertSprite.hideFlags = HideFlags.HideAndDontSave;
+        return alertSprite;
     }
 }

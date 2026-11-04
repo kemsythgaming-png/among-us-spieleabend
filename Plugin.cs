@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Id = "de.spieleabend.amongus";
     public const string Name = "Among Us Spieleabend";
-    public const string Version = "4.9.2";
+    public const string Version = "4.9.14";
 
     internal static ManualLogSource Logger;
 
@@ -29,8 +29,10 @@ public class Plugin : BasePlugin
         FreeplayTest.BindConfig(Config);
         GeneralOptions.Init(Config);
         RoleRegistry.DiscoverRoles(Config);
+        RoleSets.Bind(Config);
 
         Harmony.PatchAll();
+        try { Il2CppInterop.Runtime.Injection.ClassInjector.RegisterTypeInIl2Cpp<Spieleabend.Roles.CamBlink>(); } catch { }
         AddComponent<SettingsWindow>();
 
         Logger.LogInfo($"{Name} {Version} geladen, {RoleRegistry.Roles.Count} Rolle(n): {string.Join(", ", RoleRegistry.Roles.ConvertAll(r => r.Name))}");

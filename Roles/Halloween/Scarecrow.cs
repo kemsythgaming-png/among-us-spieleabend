@@ -21,16 +21,17 @@ public sealed class Scarecrow : CustomRole
         "Halloween-Impostor mit normalem Kill. Mit Taste F öffnet sich die Auswahl wie beim Shapeshifter: Wähl einen Spieler (oder dich selbst) - eine täuschend echte Kopie mit Name steht dann dort, wo du stehst.\n\nWer der Kopie zu nahe kommt, erstarrt ein paar Sekunden vor Angst. So kannst du auch Alibis kaputtmachen. Die Kopie verschwindet beim nächsten Meeting.",
         "Halloween impostor with a normal kill. Press F to open the Shapeshifter-style selection: pick a player (or yourself) - a deceptively real copy with name then stands where you are.\n\nWhoever gets too close to the copy freezes in fear for a few seconds. You can also ruin alibis this way. The copy disappears at the next meeting.");
 
-    private const byte ActionPlace = 0;
+    private const byte ActionPlace = 0, ActionSwap = 1;
     private const float FearRange = 1.2f;
 
-    private RoleOption cooldown, fearTime, maxCopies;
-    private RoleButton button;
+    private RoleOption cooldown, fearTime, swapCooldown;
+    private RoleButton button, swapButton;
 
     private sealed class Copy
     {
         public int Id;
         public Vector2 Pos;
+        public Vector2 FootOffset;
         public GameObject Visual;
     }
 
@@ -47,7 +48,7 @@ public sealed class Scarecrow : CustomRole
     {
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 25f, 10f, 60f, 2.5f, "s");
         fearTime = AddOption("FearTime", "Erstarren|Freeze time", 3f, 1f, 8f, 0.5f, "s");
-        maxCopies = AddOption("MaxCopies", "Kopien gleichzeitig|Copies at once", 1f, 1f, 3f, 1f);
+        swapCooldown = AddOption("SwapCooldown", "Abklingzeit Platztausch|Swap cooldown", 35f, 5f, 90f, 5f, "s");
 
         button = AddButton(new RoleButton
         {
@@ -64,6 +65,45 @@ public sealed class Scarecrow : CustomRole
                 if (!OpenShapeshifterMenu()) choosing = true; // Notfall: eigenes Fenster
             },
         });
+
+        // Zweiter Knopf: mit einer eigenen Vogelscheuche den Platz tauschen
+        swapButton = AddButton(new RoleButton
+        {
+            Label = "Platztausch|Swap",
+            GameIcon = _ => Spieleabend.Roles.Swapper.SwapSprite(),
+            Icon = "scarecrow",
+            NeedsTarget = false,
+            Cooldown = () => swapCooldown.Value,
+            StartCooldown = 10f,
+            Hotkey = KeyCode.G,
+            Visible = () => MyNearestCopy() != null,
+            CanUse = () => !InMeeting && IsAlive(PlayerControl.LocalPlayer) && !PlayerControl.LocalPlayer.inVent && MyNearestCopy() != null,
+            OnClick = _ => SwapWithCopy(),
+        });
+    }
+
+    /// <summary>Die (räumlich) nächste eigene Vogelscheuche-Kopie, oder null.</summary>
+    private Copy MyNearestCopy()
+    {
+        var local = PlayerControl.LocalPlayer;
+        if (!local) return null;
+        Vector2 me = local.GetTruePosition();
+        return copies.Where(c => c.Id >> 8 == local.PlayerId)
+            .OrderBy(c => Vector2.Distance(me, c.Pos)).FirstOrDefault();
+    }
+
+    private void SwapWithCopy()
+    {
+        var local = PlayerControl.LocalPlayer;
+        var copy = MyNearestCopy();
+        if (!local || copy == null || !local.NetTransform) return;
+        Vector2 myOld = local.GetTruePosition();
+        local.NetTransform.SnapTo(copy.Pos);                 // Spieler zur Kopie (netzwerk-synchron)
+        var data = new byte[12];
+        System.BitConverter.GetBytes(copy.Id).CopyTo(data, 0);
+        WorldMarker.Encode(myOld).CopyTo(data, 4);
+        SendToAll(ActionSwap, data);                          // Kopie an die alte Spielerposition (bei allen)
+        Sfx.Play(Sfx.Shapeshift, 0.7f);
     }
 
     public override void ResetState()
@@ -93,13 +133,29 @@ public sealed class Scarecrow : CustomRole
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
-        if (action != ActionPlace || data.Length < 5 || !RoleRegistry.Has(sender, this)) return;
+        if (!RoleRegistry.Has(sender, this)) return;
+
+        if (action == ActionSwap && data.Length >= 12)
+        {
+            int id = System.BitConverter.ToInt32(data, 0);
+            var newPos = WorldMarker.Decode(data, 4);
+            var c = copies.FirstOrDefault(x => x.Id == id);
+            if (c != null)
+            {
+                c.Pos = newPos;
+                if (c.Visual)
+                    c.Visual.transform.position = new Vector3(newPos.x + c.FootOffset.x, newPos.y + c.FootOffset.y, (newPos.y + c.FootOffset.y) / 1000f);
+            }
+            return;
+        }
+
+        if (action != ActionPlace || data.Length < 5) return;
         var model = FindPlayer(data[0]);
         if (!model || model.Data == null) return;
 
-        // Pro Vogelscheuche nur so viele Kopien wie erlaubt - die aelteste verschwindet
+        // Nur eine Kopie pro Vogelscheuche - die alte verschwindet
         var mine = copies.Where(c => c.Id >> 8 == sender.PlayerId).ToList();
-        while (mine.Count >= maxCopies.Int)
+        while (mine.Count >= 1)
         {
             var old = mine[0];
             mine.RemoveAt(0);
@@ -108,7 +164,8 @@ public sealed class Scarecrow : CustomRole
         }
 
         var pos = WorldMarker.Decode(data, 1);
-        var copy = new Copy { Id = sender.PlayerId << 8 | (nextId++ & 0xFF), Pos = pos };
+        var foot = (Vector2)(model.transform.position - (Vector3)model.GetTruePosition());
+        var copy = new Copy { Id = sender.PlayerId << 8 | (nextId++ & 0xFF), Pos = pos, FootOffset = foot };
         copy.Visual = CreateCopy(model, pos);
         copies.Add(copy);
         if (sender == PlayerControl.LocalPlayer) Sfx.Play(Sfx.Shapeshift);

@@ -34,7 +34,10 @@ public class SettingsWindow : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.F2) && !Ui.IsTyping) RoleGuide.Toggle();
         if (Input.GetKeyDown(KeyCode.F3) && !Ui.IsTyping) FreeplayPanel.Toggle();
+        if (Input.GetKeyDown(KeyCode.F4) && !Ui.IsTyping) UpdateNotes.Toggle();
+        if (Input.GetKeyDown(KeyCode.T) && !Ui.IsTyping) Emotes.ToggleWheel();
         SettingsPanel.UpdateInput();
+        try { SurveillanceFeeds.Tick(); } catch { }
 
         // Laeuft immer (auch waehrend der Rollen-Enthuellung, wenn der HUD noch nicht da ist):
         // im Intro die echte Mod-Rolle schreiben statt "Crewmate/Impostor"
@@ -58,11 +61,15 @@ public class SettingsWindow : MonoBehaviour
         }
 
         // Jedes Fenster einzeln absichern: ein Fehler in einem darf die anderen nicht mitnehmen
+        Safe("Kameras", SurveillanceFeeds.Draw); // Pfeile der Überwachung (für jeden Zuschauer)
         Safe("BOO-Kleckse", Spieleabend.Roles.BooOverlay.Draw); // zuerst - liegt hinter den Fenstern
         Safe("Hinweise", Notifier.Draw);
+        Safe("Sieg", CustomWin.DrawWinBanner);
         Safe("Rollen-Info", RoleGuide.Draw);
         Safe("Einstellungen", SettingsPanel.Draw);
         Safe("Freeplay", FreeplayPanel.Draw);
+        Safe("Update-Notes", UpdateNotes.Draw);
+        Safe("Emotes", Emotes.Draw);
     }
 
     private static readonly System.Collections.Generic.HashSet<string> reported = new();
@@ -87,7 +94,7 @@ internal static class SettingsPanel
 {
     private const float W = 1160f, H = 800f, Row = 50f, ControlWidth = 280f, ValueWidth = 170f;
 
-    private enum TabKind { General, Game, Roles }
+    private enum TabKind { General, Game, Roles, Sets }
 
     private static readonly (string Label, TabKind Kind, RoleTeam Team)[] Tabs =
     {
@@ -163,7 +170,7 @@ internal static class SettingsPanel
         var win = new Rect((Ui.ScreenWidth - W) / 2f, (1080 - H) / 2f, W, H);
         GUI.Box(win, new GUIContent(""), Ui.Panel);
         Ui.Block(win);
-        GUI.Label(new Rect(win.x + 30, win.y + 18, W - 520, 44), $"{Plugin.Name} - {Lang.T("Einstellungen", "Settings")}", Ui.Title);
+        GUI.Label(new Rect(win.x + 30, win.y + 16, W - 160, 56), $"{Plugin.Name} - {Lang.T("Einstellungen", "Settings")}", Ui.Title);
         if (GUI.Button(new Rect(win.xMax - 74, win.y + 18, 52, 52), new GUIContent("X"), Ui.CloseButton))
         {
             Close();
@@ -174,18 +181,19 @@ internal static class SettingsPanel
             GUI.Label(new Rect(win.x + 30, win.y + 60, W - 520, 30), Lang.T("Nur der Host kann die Einstellungen ändern.", "Only the host can change the settings."), Ui.Small);
 
         float tx = win.x + 30;
+        float tabW = (W - 60f - 6f * (Tabs.Length - 1)) / Tabs.Length; // Reiter gleichmäßig auf die Breite verteilen
         for (int i = 0; i < Tabs.Length; i++)
         {
             bool active = i == tab && search.Length == 0;
-            if (GUI.Button(new Rect(tx, win.y + 92, 176, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), active ? Ui.TabSelected : Ui.Tab))
+            if (GUI.Button(new Rect(tx, win.y + 92, tabW, 46), new GUIContent(Lang.Pick(Tabs[i].Label)), active ? Ui.TabSelected : Ui.Tab))
             {
                 tab = i;
                 selected = 0;
                 search = "";
                 Ui.StopTyping();
-                listScroll = detailScroll = Vector2.zero;
+                listScroll = detailScroll = generalScroll = gameScroll = Vector2.zero;
             }
-            tx += 182;
+            tx += tabW + 6f;
         }
 
         GUI.Box(new Rect(win.x + 20, win.y + 150, W - 40, H - 170), new GUIContent(""), Ui.Inner);
@@ -200,31 +208,187 @@ internal static class SettingsPanel
         {
             case TabKind.General: DrawGeneral(area); break;
             case TabKind.Game: DrawGame(area); break;
-            default: DrawEntries(area, TeamEntries(Tabs[tab].Team)); break;
+            default:
+                var team = Tabs[tab].Team;
+                DrawTeamBulk(new Rect(area.x, area.y, area.width, 52), team);
+                DrawEntries(new Rect(area.x, area.y + 60, area.width, area.height - 60), TeamEntries(team));
+                break;
+        }
+    }
+
+    /// <summary>Schmale Leiste oben in einem Rollen-Reiter: Chance bzw. Anzahl NUR für dieses Team setzen.</summary>
+    private static void DrawTeamBulk(Rect r, RoleTeam team)
+    {
+        bool canEdit = SettingsWindow.CanEdit;
+        bool guiBefore = GUI.enabled;
+        float x = r.x, y = r.y;
+
+        GUI.Label(new Rect(x, y + 8, 220, 36), Lang.T("<b>Nur dieses Team setzen:</b>", "<b>Set this team only:</b>"), Ui.Small);
+        x += 230;
+
+        GUI.Label(new Rect(x, y + 8, 70, 36), Lang.T("Chance", "Chance"), Ui.Small); x += 72;
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(x, y, 40, 44), "-") && canEdit) bulkChance = Mathf.Clamp(bulkChance - 10, 0, 100);
+        GUI.enabled = guiBefore;
+        GUI.Label(new Rect(x + 44, y, 60, 44), $"{bulkChance}%", Ui.ValueMid);
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(x + 108, y, 40, 44), "+") && canEdit) bulkChance = Mathf.Clamp(bulkChance + 10, 0, 100);
+        if (Ui.Button(new Rect(x + 154, y, 90, 44), Lang.T("Setzen", "Apply")) && canEdit) BulkRoleOps.SetTeamChances(team, bulkChance);
+        x += 260;
+
+        GUI.enabled = guiBefore;
+        GUI.Label(new Rect(x, y + 8, 70, 36), Lang.T("Anzahl", "Count"), Ui.Small); x += 72;
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(x, y, 40, 44), "-") && canEdit) bulkCount = Mathf.Clamp(bulkCount - 1, 0, 15);
+        GUI.enabled = guiBefore;
+        GUI.Label(new Rect(x + 44, y, 50, 44), $"{bulkCount}", Ui.ValueMid);
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(x + 98, y, 40, 44), "+") && canEdit) bulkCount = Mathf.Clamp(bulkCount + 1, 0, 15);
+        if (Ui.Button(new Rect(x + 144, y, 90, 44), Lang.T("Setzen", "Apply")) && canEdit) BulkRoleOps.SetTeamCounts(team, bulkCount);
+
+        GUI.enabled = guiBefore;
+    }
+
+    // ---------- Reiter "Sets" ----------
+    private static string setName = "";
+    private static float setsScroll;
+    private static bool testModeTested; // false = aktuell sind die UNGETESTETEN an
+
+    private static void DrawSets(Rect area)
+    {
+        bool canEdit = SettingsWindow.CanEdit;
+        float x = area.x, y = area.y, w = area.width;
+
+        // Test-Umschalter: mit einem Klick alle ungetesteten bzw. alle getesteten Rollen einschalten
+        GUI.Label(new Rect(x, y, w, 30), Lang.T(
+            $"<b>Test-Umschalter</b>  <color=#9AA0AE>({TestStatus.UntestedCount} {Lang.T("ungetestet", "untested")})</color>",
+            $"<b>Test toggle</b>  <color=#9AA0AE>({TestStatus.UntestedCount} untested)</color>"), Ui.Text);
+        y += 36;
+        GUI.enabled = canEdit;
+        string toggleLbl = testModeTested
+            ? Lang.T("Aktiv: GETESTETE Rollen  -  klicken: ungetestete einschalten", "Active: TESTED roles  -  click: enable untested")
+            : Lang.T("Aktiv: UNGETESTETE Rollen  -  klicken: getestete einschalten", "Active: UNTESTED roles  -  click: enable tested");
+        if (Ui.Button(new Rect(x, y, 935, 46), toggleLbl) && canEdit) { testModeTested = !testModeTested; TestStatus.Apply(testModeTested); }
+        GUI.enabled = true;
+        y += 64;
+
+        // Name eingeben + aktuelle Einstellung als Set speichern
+        GUI.Label(new Rect(x, y + 6, 170, 36), Lang.T("Set-Name:", "Set name:"), Ui.Text);
+        setName = Ui.SearchField(new Rect(x + 150, y, 340, 44), setName, Lang.T("z. B. Halloween", "e.g. Halloween"));
+        bool nameOk = setName.Trim().Length > 0;
+        GUI.enabled = canEdit && nameOk;
+        if (Ui.Button(new Rect(x + 505, y, 430, 44), Lang.T("Aktuelle Einstellung als Set speichern", "Save current config as set")) && canEdit && nameOk)
+            RoleSets.SaveCurrent(setName);
+        GUI.enabled = true;
+        y += 58;
+
+        GUI.Label(new Rect(x, y, w, 30), Lang.T("Set wählen und Aktivieren = nur diese Rollen an, der Rest aus.", "Pick a set and Activate = only these roles on, the rest off."), Ui.Small);
+        y += 40;
+
+        var sets = RoleSets.Sets;
+        if (sets.Count == 0)
+        {
+            GUI.Label(new Rect(x, y, w, 36), Lang.T("Noch keine Sets. Stell die Rollen ein und speichere oben ein Set.", "No sets yet. Configure the roles and save a set above."), Ui.Text);
+            return;
+        }
+
+        var view = new Rect(x, y, w, area.yMax - y);
+        const float rowH = 56f;
+        setsScroll = Ui.Scroll(view, sets.Count * rowH, setsScroll);
+        float ry = 0;
+        foreach (var s in sets.ToList())
+        {
+            if (Ui.RowVisible(view, ry, rowH - 6, setsScroll))
+            {
+                float sy = view.y + ry - setsScroll;
+                int roleCount = s.Roles.Count(kv => kv.Value.Count > 0);
+                GUI.Label(new Rect(x + 10, sy + 12, 340, 36), $"<b>{s.Name}</b>  <color=#9AA0AE>({roleCount} {Lang.T("Rollen", "roles")})</color>", Ui.Text);
+
+                GUI.enabled = canEdit;
+                if (Ui.Button(new Rect(x + 380, sy + 6, 170, 46), Lang.T("Aktivieren", "Activate")) && canEdit) RoleSets.Apply(s.Name);
+                bool canRename = canEdit && setName.Trim().Length > 0;
+                GUI.enabled = canRename;
+                if (Ui.Button(new Rect(x + 560, sy + 6, 230, 46), Lang.T("Auf Namen umbenennen", "Rename to name")) && canRename) RoleSets.Rename(s.Name, setName);
+                GUI.enabled = canEdit;
+                if (Ui.Button(new Rect(x + 800, sy + 6, 130, 46), Lang.T("Löschen", "Delete")) && canEdit) RoleSets.Delete(s.Name);
+                GUI.enabled = true;
+            }
+            ry += rowH;
         }
     }
 
     // ---------- Reiter ----------
 
+    private static Vector2 generalScroll, gameScroll;
+
+    /// <summary>Eine einspaltige, scrollbare Liste aus Zeilen (Kategorie-Überschriften + Einstellungen + Sonder-Widgets).</summary>
+    private static void DrawColumn(Rect area, List<(float H, System.Action<float, float> Draw)> rows, ref Vector2 scroll)
+    {
+        float total = 0f;
+        foreach (var r in rows) total += r.H;
+        scroll.y = Ui.Scroll(area, total, scroll.y);
+        float y = 0f;
+        foreach (var r in rows)
+        {
+            if (Ui.RowVisible(area, y, r.H - 4f, scroll.y)) r.Draw(area.y + y - scroll.y, area.width - 16f);
+            y += r.H;
+        }
+    }
+
+    /// <summary>Schnell-Einstellung in EINER Zeile: Beschriftung, [-] Wert [+] und ein "Setzen"-Knopf.</summary>
+    private static void DrawBulkLine(float x, float y, float width, string label, string value, System.Action minus, System.Action plus, System.Action apply)
+    {
+        bool canEdit = SettingsWindow.CanEdit;
+        bool guiBefore = GUI.enabled;
+        GUI.Label(new Rect(x, y + 8, 150, 32), label + ":", Ui.Small);
+        float bx = x + 160;
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(bx, y, 44, 46), "-") && canEdit) minus();
+        GUI.enabled = guiBefore;
+        GUI.Label(new Rect(bx + 48, y, 70, 46), value, Ui.ValueMid);
+        GUI.enabled = canEdit;
+        if (Ui.Button(new Rect(bx + 122, y, 44, 46), "+") && canEdit) plus();
+        if (Ui.Button(new Rect(bx + 176, y, Mathf.Max(120f, width - 176f - 160f), 46), Lang.T("Setzen", "Apply")) && canEdit) apply();
+        GUI.enabled = guiBefore;
+    }
+
     private static void DrawGeneral(Rect area)
     {
-        float y = area.y;
-        DrawSetting(Lang.LanguageSetting, area.x + 10, y, 440);
-        y += Row;
-        foreach (var option in GeneralOptions.Options)
-        {
-            if (GeneralOptions.GameTab.Contains(option)) continue; // steht im Reiter "Spiel"
-            DrawSetting(option, area.x + 10, y, 440);
-            y += Row;
-        }
+        var rows = new List<(float H, System.Action<float, float> Draw)>();
+        void Head(string t) => rows.Add((58f, (yy, w) => GUI.Label(new Rect(area.x + 4, yy + 20, w, 34), $"<b>{t}</b>", Ui.Header)));
+        void Set(ISetting s) => rows.Add((Row, (yy, w) => DrawSetting(s, area.x + 10, yy, w - ControlWidth - 30f)));
 
-        // Rechte Spalte (neben den Optionen): kurzer Hinweis, dann die Schnell-Einstellung, dann (im Freeplay) der Test-Bereich.
-        var side = new Rect(area.x + 760, area.y, area.width - 770, area.height);
-        float sy = side.y;
-        GUI.Label(new Rect(side.x, sy, side.width, 56),
-            Lang.T("Mod-Rollen gehen nur an normale Crewmates/Impostor.", "Mod roles only go to plain crewmates/impostors."), Ui.Small);
-        sy += 66;
-        DrawBulk(side.x, sy, side.width); // Freeplay-Test ist ein eigenes Fenster (dritter HUD-Knopf / F3)
+        Head(Lang.T("Sprache & Anzeige", "Language & display"));
+        Set(Lang.LanguageSetting);
+        Set(GeneralOptions.DeadSeeRoles);
+        Set(GeneralOptions.ShowOwnRole);
+        Set(GeneralOptions.Halloween);
+        Set(GeneralOptions.CameraShake);
+
+        Head(Lang.T("Rollen-Verteilung", "Role distribution"));
+        Set(GeneralOptions.ModRolesChance);
+        Set(GeneralOptions.MaxCrewRoles);
+        Set(GeneralOptions.MaxImpostorRoles);
+        Set(GeneralOptions.MaxNeutralRoles);
+        Set(GeneralOptions.MaxModifiers);
+        Set(GeneralOptions.TaskSheriffChance);
+
+        Head(Lang.T("Spielregeln", "Game rules"));
+        Set(GeneralOptions.FirstDeathShield);
+
+        Head(Lang.T("Schnell einstellen (alle Mod-Rollen)", "Quick set (all mod roles)"));
+        rows.Add((56f, (yy, w) =>
+        {
+            bool guiBefore = GUI.enabled; GUI.enabled = SettingsWindow.CanEdit;
+            if (Ui.Button(new Rect(area.x + 10, yy, Mathf.Min(560f, w), 46), Lang.T("Alle Chancen zufällig", "Randomize all chances")) && SettingsWindow.CanEdit) BulkRoleOps.RandomizeChances();
+            GUI.enabled = guiBefore;
+        }));
+        rows.Add((62f, (yy, w) => DrawBulkLine(area.x + 10, yy, Mathf.Min(560f, w), Lang.T("Alle Chancen", "All chances"), $"{bulkChance}%",
+            () => bulkChance = Mathf.Clamp(bulkChance - 10, 0, 100), () => bulkChance = Mathf.Clamp(bulkChance + 10, 0, 100), () => BulkRoleOps.SetAllChances(bulkChance))));
+        rows.Add((62f, (yy, w) => DrawBulkLine(area.x + 10, yy, Mathf.Min(560f, w), Lang.T("Alle Anzahl", "All counts"), $"{bulkCount}",
+            () => bulkCount = Mathf.Clamp(bulkCount - 1, 0, 15), () => bulkCount = Mathf.Clamp(bulkCount + 1, 0, 15), () => BulkRoleOps.SetAllCounts(bulkCount))));
+
+        DrawColumn(area, rows, ref generalScroll);
     }
 
     /// <summary>Schnell-Einstellung: alle Mod-Rollen-Chancen/-Anzahlen auf einmal setzen (nur Host/Freeplay).</summary>
@@ -234,14 +398,14 @@ internal static class SettingsPanel
         bool guiBefore = GUI.enabled;
 
         // Ueberschrift
-        GUI.Label(new Rect(x, y, width, 30), Lang.T("<b>Schnell einstellen</b>  <size=80%>(alle Mod-Rollen)</size>", "<b>Quick set</b>  <size=80%>(all mod roles)</size>"), Ui.Text);
-        y += 38;
+        GUI.Label(new Rect(x, y, width, 30), Lang.T("<b>Schnell einstellen</b>", "<b>Quick set</b>"), Ui.Text);
+        y += 46;
 
         // Alle Chancen zufaellig
         GUI.enabled = canEdit;
         if (Ui.Button(new Rect(x, y, width, 44), Lang.T("Alle Chancen zufällig", "Randomize all chances")) && canEdit)
             BulkRoleOps.RandomizeChances();
-        y += 56;
+        y += 66;
 
         // Alle Chancen auf denselben Wert
         y = DrawBulkRow(x, y, width, Lang.T("Alle Chancen", "All chances"), $"{bulkChance}%",
@@ -264,7 +428,7 @@ internal static class SettingsPanel
     {
         GUI.enabled = guiBefore;
         GUI.Label(new Rect(x, y, width, 26), label + ":", Ui.Small);
-        y += 28;
+        y += 34;
         GUI.enabled = canEdit;
         if (Ui.Button(new Rect(x, y, 44, 44), "-") && canEdit) minus();
         GUI.enabled = guiBefore;
@@ -272,22 +436,71 @@ internal static class SettingsPanel
         GUI.enabled = canEdit;
         if (Ui.Button(new Rect(x + 118, y, 44, 44), "+") && canEdit) plus();
         if (Ui.Button(new Rect(x + 170, y, width - 170, 44), Lang.T("Setzen", "Apply")) && canEdit) apply();
-        return y + 56;
+        return y + 60;
     }
 
     private static void DrawGame(Rect area)
     {
-        // Zwei Spalten: Spiel-Einstellungen, danach die Mod-Hilfen fuer das Spiel (z. B. Karte durchziehen)
-        var settings = new List<ISetting>(VanillaGameSettings.All);
-        settings.AddRange(GeneralOptions.GameTab);
-        int perColumn = (settings.Count + 1) / 2;
-        float columnWidth = area.width / 2f;
-        for (int i = 0; i < settings.Count; i++)
+        var rows = new List<(float H, System.Action<float, float> Draw)>();
+        void Head(string t) => rows.Add((58f, (yy, w) => GUI.Label(new Rect(area.x + 4, yy + 20, w, 34), $"<b>{t}</b>", Ui.Header)));
+        void Set(ISetting s) => rows.Add((Row, (yy, w) => DrawSetting(s, area.x + 10, yy, w - ControlWidth - 30f)));
+
+        Head(Lang.T("Spiel-Einstellungen", "Game settings"));
+        foreach (var s in VanillaGameSettings.All) Set(s);
+
+        Head(Lang.T("Mod-Zusätze fürs Spiel", "Mod game extras"));
+        foreach (var o in GeneralOptions.GameTab) Set(o);
+
+        // ----- Rollen-Sets & Test-Umschalter (früher eigener Reiter) -----
+        Head(Lang.T("Rollen-Sets & Test-Umschalter", "Role sets & test toggle"));
+
+        rows.Add((52f, (yy, w) =>
         {
-            float x = area.x + (i < perColumn ? 0 : columnWidth + 10);
-            float y = area.y + (i % perColumn) * Row;
-            DrawSetting(settings[i], x, y, columnWidth - ControlWidth - 30);
-        }
+            bool ce = SettingsWindow.CanEdit;
+            GUI.Label(new Rect(area.x + 10, yy + 8, 360, 32), Lang.T($"Test-Umschalter  ({TestStatus.UntestedCount} ungetestet)", $"Test toggle  ({TestStatus.UntestedCount} untested)"), Ui.Small);
+            GUI.enabled = ce;
+            string lbl = testModeTested
+                ? Lang.T("Aktiv: GETESTETE  –  klicken: ungetestete", "Active: TESTED  –  click: untested")
+                : Lang.T("Aktiv: UNGETESTETE  –  klicken: getestete", "Active: UNTESTED  –  click: tested");
+            if (Ui.Button(new Rect(area.x + 380, yy, Mathf.Min(620f, w - 380f), 46), lbl) && ce) { testModeTested = !testModeTested; TestStatus.Apply(testModeTested); }
+            GUI.enabled = true;
+        }));
+
+        rows.Add((52f, (yy, w) =>
+        {
+            GUI.Label(new Rect(area.x + 10, yy + 6, 110, 36), Lang.T("Set-Name:", "Set name:"), Ui.Text);
+            setName = Ui.SearchField(new Rect(area.x + 120, yy, 300, 46), setName, Lang.T("z. B. Halloween", "e.g. Halloween"));
+            bool ok = SettingsWindow.CanEdit && setName.Trim().Length > 0;
+            GUI.enabled = ok;
+            if (Ui.Button(new Rect(area.x + 430, yy, Mathf.Min(460f, w - 430f), 46), Lang.T("Aktuelle Einstellung als Set speichern", "Save current config as set")) && ok) RoleSets.SaveCurrent(setName);
+            GUI.enabled = true;
+        }));
+
+        rows.Add((34f, (yy, w) => GUI.Label(new Rect(area.x + 10, yy, w, 28), Lang.T("Set wählen und Aktivieren = nur diese Rollen an, der Rest aus.", "Pick a set and Activate = only these roles on, the rest off."), Ui.Small)));
+
+        if (RoleSets.Sets.Count == 0)
+            rows.Add((40f, (yy, w) => GUI.Label(new Rect(area.x + 10, yy, w, 32), Lang.T("Noch keine Sets gespeichert.", "No sets saved yet."), Ui.Small)));
+        else
+            foreach (var setItem in RoleSets.Sets.ToList())
+            {
+                var s = setItem;
+                rows.Add((56f, (yy, w) =>
+                {
+                    bool ce = SettingsWindow.CanEdit;
+                    int rc = s.Roles.Count(kv => kv.Value.Count > 0);
+                    GUI.Label(new Rect(area.x + 10, yy + 10, 320, 36), $"<b>{s.Name}</b>  <color=#9AA0AE>({rc} {Lang.T("Rollen", "roles")})</color>", Ui.Text);
+                    GUI.enabled = ce;
+                    if (Ui.Button(new Rect(area.x + 340, yy + 4, 160, 46), Lang.T("Aktivieren", "Activate")) && ce) RoleSets.Apply(s.Name);
+                    bool canRename = ce && setName.Trim().Length > 0;
+                    GUI.enabled = canRename;
+                    if (Ui.Button(new Rect(area.x + 510, yy + 4, 230, 46), Lang.T("Auf Namen umbenennen", "Rename to name")) && canRename) RoleSets.Rename(s.Name, setName);
+                    GUI.enabled = ce;
+                    if (Ui.Button(new Rect(area.x + 750, yy + 4, 130, 46), Lang.T("Löschen", "Delete")) && ce) RoleSets.Delete(s.Name);
+                    GUI.enabled = true;
+                }));
+            }
+
+        DrawColumn(area, rows, ref gameScroll);
     }
 
     /// <summary>Rollen eines Teams: zuerst die Mod-Rollen, darunter die Rollen aus dem Spiel.</summary>
@@ -603,8 +816,10 @@ public static class Ui
         Inner = new GUIStyle(GUI.skin.box) { border = Offset(18), padding = Offset(0) };
         Inner.normal.background = innerTex;
 
-        Title = MakeLabel(34, FontStyle.Bold);
-        Header = MakeLabel(28, FontStyle.Bold);
+        Title = MakeLabel(32, FontStyle.Bold);
+        Title.alignment = TextAnchor.MiddleLeft;   // vertikal zentriert -> Oberkante wird nicht abgeschnitten
+        Header = MakeLabel(26, FontStyle.Bold);
+        Header.alignment = TextAnchor.MiddleLeft;
         Text = MakeLabel(24, FontStyle.Normal);
         Small = MakeLabel(20, FontStyle.Normal);
         Small.wordWrap = true;

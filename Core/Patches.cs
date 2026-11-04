@@ -23,6 +23,15 @@ internal static class IntroBeginPatch
         {
             RoleRegistry.AssignAsHost();
             FirstDeathShield.AssignAsHost();
+
+            // Neutrale Rollen bekommen keine Aufgaben
+            foreach (var p in PlayerControl.AllPlayerControls)
+            {
+                if (!p || p.Data == null) continue;
+                var r = RoleRegistry.GetRole(p);
+                if (r != null && r.Team == RoleTeam.Neutral)
+                    try { p.Data.RpcSetTasks(new byte[0]); } catch { }
+            }
         }
     }
 }
@@ -41,8 +50,10 @@ internal static class HudUpdatePatch
         HalloweenTheme.Update();
         PrototypeRoom.Update();
         MapExtension.Update();
+        ExtraVents.Update();
         ProtectionVisuals.Update();
         FireEffect.Update();
+        Emotes.Update();
         HudButtons.Update(__instance);
 
         if (ShipStatus.Instance) // auch ohne Mod-Rollen (z. B. Sheriff-Chance nach Aufgaben)
@@ -55,6 +66,15 @@ internal static class HudUpdatePatch
             {
                 try { role.Update(); }
                 catch (System.Exception e) { Plugin.Logger.LogError($"{role.Name}.Update: {e.Message}"); }
+            }
+
+            // Crew-/Neutral-Mod-Rollen haben nie den Vanilla-Kill/Vent-Knopf (falls die Impostor-Basis aus der Vorrunde haengt)
+            var lp = PlayerControl.LocalPlayer;
+            var mr = RoleRegistry.HasAssignments ? RoleRegistry.GetRole(lp) : null;
+            if (mr != null && mr.Team != RoleTeam.Impostor)
+            {
+                if (__instance.KillButton) __instance.KillButton.ToggleVisible(false);
+                if (__instance.ImpostorVentButton) __instance.ImpostorVentButton.ToggleVisible(false);
             }
         }
     }

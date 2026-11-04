@@ -62,20 +62,42 @@ public abstract class GuesserBase : CustomRole
     // Lokal (beim Guesser)
     private int shotsLeft;
     private bool shotThisMeeting;
+    private int guessesThisMeeting;
     private bool open;
     private byte selectedTarget = None;
 
     // Beim Host: verbrauchte Schuesse je Guesser
     private readonly Dictionary<byte, int> shotsUsed = new();
 
+    // ---------- Haken für Varianten (z. B. Orakel) ----------
+    protected virtual float DefaultShots => 2f;
+    protected virtual float MaxShots => 5f;
+    protected virtual bool HasMultiToggle => true;
+    protected virtual bool AllowMultiPerMeeting => multiPerMeeting != null && multiPerMeeting.Bool;
+    protected virtual int PerMeetingCap => int.MaxValue;
+    /// <summary>Orakel: erst Crew/Impostor/Neutral wählen, dann nur diese Rollen (A-Z). Andere Rater: flache Liste.</summary>
+    protected virtual bool UseCategoryMenu => false;
+    protected virtual void SetupExtra() { }
+    /// <summary>Gesamtzahl der Schüsse (für Unterklassen).</summary>
+    protected int TotalShots => shots != null ? shots.Int : 0;
+    /// <summary>Verbleibende Schüsse/Versuche des lokalen Guessers (für Unterklassen).</summary>
+    protected int ShotsLeftValue => shotsLeft;
+    protected void AnnounceDeath(PlayerControl who) { if (who) SendToAll(ActionAnnounce, who.PlayerId, 1); }
+    protected void AnnounceMiss(PlayerControl who) { if (who) SendToAll(ActionAnnounce, who.PlayerId, 2); }
+    /// <summary>Hinweistext im Rate-Fenster. Standard: falsch = du stirbst.</summary>
+    protected virtual string GuessHint() =>
+        Lang.T($"Schüsse übrig: {shotsLeft}  -  falsch geraten = du stirbst!", $"Shots left: {shotsLeft}  -  wrong guess = you die!");
+
     protected override void Setup()
     {
-        shots = AddOption("Shots", "Schüsse pro Spiel|Shots per game", 2f, 1f, 5f, 1f);
-        multiPerMeeting = AddToggle("MultiPerMeeting", "Mehrere Schüsse pro Meeting|Multiple shots per meeting", false);
+        shots = AddOption("Shots", "Schüsse pro Spiel|Shots per game", DefaultShots, 1f, MaxShots, 1f);
+        if (HasMultiToggle)
+            multiPerMeeting = AddToggle("MultiPerMeeting", "Mehrere Schüsse pro Meeting|Multiple shots per meeting", false);
         canGuessCrewRoles = IsEvil
             ? AddToggle("CanGuessCrewRoles", "Spiel-Crewrollen ratbar|Game crew roles guessable", true)
             : AddToggle("CanGuessCrewRoles", "Crew-Rollen ratbar|Crew roles guessable", true);
         if (IsEvil) canGuessCrewmate = AddToggle("CanGuessCrewmate", "\"Crewmate\" ratbar (ohne Rolle)|\"Crewmate\" guessable (no role)", true);
+        SetupExtra();
     }
 
     public override void ResetState()
@@ -93,13 +115,22 @@ public abstract class GuesserBase : CustomRole
     public override void OnMeetingStart()
     {
         shotThisMeeting = false;
+        guessesThisMeeting = 0;
         open = false;
         selectedTarget = None;
     }
 
-    /// <summary>Wen darf man anvisieren? Der Boese Guesser keine anderen Impostor.</summary>
+    /// <summary>Wen darf man anvisieren? Der Boese Guesser keine echten/Mod-Impostor (Fake-Impostor-Dummys im Freeplay schon).</summary>
     private bool CanTarget(PlayerControl p, PlayerControl local) =>
-        IsAlive(p) && p != local && !(IsEvil && IsImpostor(p));
+        IsAlive(p) && p != local && !(IsEvil && IsRealImpostorTeam(p));
+
+    private static bool IsRealImpostorTeam(PlayerControl p)
+    {
+        if (!p || p.Data == null) return false;
+        if (p.Data.Role && p.Data.Role.IsImpostor) return true;     // echter Impostor (ohne Fake)
+        var r = RoleRegistry.GetRole(p);
+        return r != null && r.Team == RoleTeam.Impostor;            // Mod-Impostor-Rolle
+    }
 
     // ---------- Meeting: Knopf auf jeder Spielerkarte + Rollen-Menue ----------
 
@@ -108,7 +139,8 @@ public abstract class GuesserBase : CustomRole
         get
         {
             var meeting = MeetingHud.Instance;
-            return meeting && IsAlive(PlayerControl.LocalPlayer) && shotsLeft > 0 && (!shotThisMeeting || multiPerMeeting.Bool)
+            return meeting && IsAlive(PlayerControl.LocalPlayer) && shotsLeft > 0
+                   && (!shotThisMeeting || AllowMultiPerMeeting) && guessesThisMeeting < PerMeetingCap
                    && meeting.state != MeetingHud.MeetingStates.Results && meeting.state != MeetingHud.MeetingStates.Proceeding;
         }
     }
@@ -225,12 +257,46 @@ public abstract class GuesserBase : CustomRole
         {
             selectedTarget = targetId;
             open = true;
+            guessScroll = 0;   // Liste oben beginnen
+            guessCategory = -1; // Orakel: wieder mit der Kategorie-Auswahl starten
             Sfx.Play(Sfx.Investigate);
         }));
     }
 
+    private GUIStyle meetingStatusStyle;
+
+    /// <summary>Wie viele Schüsse in DIESEM Meeting noch möglich sind (Pro-Meeting-Limit UND Gesamtschüsse berücksichtigt).</summary>
+    protected int ShotsPossibleThisMeeting
+    {
+        get
+        {
+            int perMeeting = AllowMultiPerMeeting ? PerMeetingCap : 1;
+            int leftThisMeeting = Mathf.Max(0, perMeeting - guessesThisMeeting);
+            return Mathf.Min(leftThisMeeting, shotsLeft);
+        }
+    }
+
+    /// <summary>Dauer-Anzeige im Meeting (Standard: mögliche Schüsse). Guter/Böser Guesser zeigen nur das.</summary>
+    protected virtual string MeetingStatusText() =>
+        Lang.T($"Schüsse möglich: {ShotsPossibleThisMeeting}", $"Shots available: {ShotsPossibleThisMeeting}");
+
     public override void DrawGUI()
     {
+        var localPlayer = PlayerControl.LocalPlayer;
+
+        // Anzeige erst, wenn die Meeting-Animation vorbei ist und die Besprechung/Abstimmung läuft (nicht während Animating/Results).
+        var mh = MeetingHud.Instance;
+        bool meetingReady = mh && (mh.state == MeetingHud.MeetingStates.Discussion
+                                   || mh.state == MeetingHud.MeetingStates.NotVoted
+                                   || mh.state == MeetingHud.MeetingStates.Voted);
+        if (IsLocalRole && meetingReady && localPlayer && IsAlive(localPlayer))
+        {
+            meetingStatusStyle ??= new GUIStyle(Ui.Header) { alignment = TextAnchor.MiddleCenter, fontSize = 30, fontStyle = FontStyle.Bold };
+            // auf Höhe der "Voting Ends In"-Zeit (unten).
+            GUI.Label(new Rect(Ui.ScreenWidth / 2f - 420f, 892f, 840f, 44f),
+                $"<color={NameHex}>{MeetingStatusText()}</color>", meetingStatusStyle);
+        }
+
         if (!CanShoot || !open || selectedTarget == None)
         {
             if (!CanShoot) open = false;
@@ -246,17 +312,38 @@ public abstract class GuesserBase : CustomRole
             return;
         }
 
-        var options = Guessables().ToList();
         const int columns = 3;
+        const float rowH = 52f, headerH = 100f, footerH = 70f, margin = 50f;
+
+        // Orakel: erst Crew/Impostor/Neutral wählen; dann nur diese Rollen (A-Z).
+        List<(string Label, byte Kind, byte Id)> options;
+        if (UseCategoryMenu)
+        {
+            var all = GuessablesCat().ToList();
+            if (guessCategory < 0)
+            {
+                DrawCategoryPicker(target, all);
+                return;
+            }
+            options = all.Where(o => o.Cat == guessCategory)
+                         .OrderBy(o => PlainName(o.Label), System.StringComparer.CurrentCultureIgnoreCase)
+                         .Select(o => (o.Label, o.Kind, o.Id)).ToList();
+        }
+        else options = Guessables().ToList();
         int rows = (options.Count + columns - 1) / columns;
-        float w = 3 * 230 + 60, h = 150 + rows * 52 + 70;
-        var panel = new Rect((Ui.ScreenWidth - w) / 2f, (1080 - h) / 2f, w, h);
+        float w = 3 * 230 + 60;
+
+        // Wunschhöhe; aber nie über den Bildschirm hinaus (Rand oben/unten), Rest wird scrollbar.
+        float wantH = headerH + rows * rowH + footerH;
+        float maxH = 1080f - 2f * margin;
+        bool scroll = wantH > maxH;
+        float h = scroll ? maxH : wantH;
+        var panel = new Rect((Ui.ScreenWidth - w) / 2f, (1080f - h) / 2f, w, h);
         Ui.Block(panel);
         GUI.Box(panel, new GUIContent(""), Ui.Panel);
 
         GUI.Label(new Rect(panel.x + 30, panel.y + 18, w - 120, 40), target.Data.PlayerName + Lang.T(" ist ...", " is ..."), Ui.Header);
-        GUI.Label(new Rect(panel.x + 30, panel.y + 58, w - 60, 30),
-            Lang.T($"Schüsse übrig: {shotsLeft}  -  falsch geraten = du stirbst!", $"Shots left: {shotsLeft}  -  wrong guess = you die!"), Ui.Small);
+        GUI.Label(new Rect(panel.x + 30, panel.y + 58, w - 60, 30), GuessHint(), Ui.Small);
         if (Ui.Button(new Rect(panel.xMax - 70, panel.y + 15, 50, 50), "X"))
         {
             open = false;
@@ -264,19 +351,50 @@ public abstract class GuesserBase : CustomRole
             return;
         }
 
-        for (int i = 0; i < options.Count; i++)
+        // Sichtbarer Listenbereich zwischen Kopf und Fußzeile.
+        float viewTop = panel.y + headerH;
+        float viewBottom = panel.yMax - footerH;
+        float viewH = viewBottom - viewTop;
+        int rowsVisible = Mathf.Max(1, Mathf.FloorToInt(viewH / rowH));
+        int maxScroll = Mathf.Max(0, rows - rowsVisible);
+
+        // Mausrad über dem Fenster scrollt die Liste.
+        var ev = Event.current;
+        if (scroll && ev != null && ev.type == EventType.ScrollWheel && panel.Contains(ev.mousePosition))
+        {
+            guessScroll += ev.delta.y > 0f ? 1 : -1;
+            ev.Use();
+        }
+        guessScroll = Mathf.Clamp(guessScroll, 0, maxScroll);
+
+        int startRow = guessScroll;
+        int startIndex = startRow * columns;
+        int endIndex = Mathf.Min(options.Count, (startRow + rowsVisible) * columns);
+        for (int i = startIndex; i < endIndex; i++)
         {
             var (label, kind, id) = options[i];
-            var rect = new Rect(panel.x + 30 + (i % columns) * 230, panel.y + 100 + (i / columns) * 52, 220, 46);
+            int displayRow = (i / columns) - startRow;
+            var rect = new Rect(panel.x + 30 + (i % columns) * 230, viewTop + displayRow * rowH, 220, 46);
             if (GUI.Button(rect, new GUIContent(label), Ui.ButtonStyle))
             {
                 SendToHost(ActionGuess, target.PlayerId, kind, id);
                 shotsLeft--;
                 shotThisMeeting = true;
+                guessesThisMeeting++;
                 open = false;
                 selectedTarget = None;
                 return;
             }
+        }
+
+        // Scroll-Hinweis (mehr Rollen ober-/unterhalb).
+        if (scroll)
+        {
+            scrollHintStyle ??= new GUIStyle(Ui.Small) { alignment = TextAnchor.MiddleCenter };
+            if (startRow > 0)
+                GUI.Label(new Rect(panel.xMax - 190, viewTop - 26, 160, 24), "▲ " + Lang.T("mehr", "more"), scrollHintStyle);
+            if (startRow < maxScroll)
+                GUI.Label(new Rect(panel.xMax - 190, viewBottom + 2, 160, 24), "▼ " + Lang.T("mehr", "more"), scrollHintStyle);
         }
 
         if (Ui.Button(new Rect(panel.x + 30, panel.yMax - 62, 220, 46), Lang.T("Abbrechen", "Cancel")))
@@ -284,28 +402,123 @@ public abstract class GuesserBase : CustomRole
             open = false;
             selectedTarget = None;
         }
+
+        // Orakel: zurück zur Kategorie-Auswahl (Menü wechseln)
+        if (UseCategoryMenu && Ui.Button(new Rect(panel.x + 30 + 240, panel.yMax - 62, 260, 46), "◀ " + Lang.T("Kategorie", "Category")))
+        {
+            guessCategory = -1;
+            guessScroll = 0;
+        }
     }
+
+    /// <summary>Orakel: kleines Fenster zur Wahl von Crew / Impostor / Neutral (nur vorhandene Kategorien).</summary>
+    private void DrawCategoryPicker(PlayerControl target, List<(string Label, byte Kind, byte Id, int Cat)> all)
+    {
+        var cats = new List<(int Cat, string Label, string Hex)>();
+        if (all.Any(o => o.Cat == CatCrew)) cats.Add((CatCrew, Lang.T("Crew", "Crew"), "#8CFFFF"));
+        if (all.Any(o => o.Cat == CatImpostor)) cats.Add((CatImpostor, "Impostor", "#FF1919"));
+        if (all.Any(o => o.Cat == CatNeutral)) cats.Add((CatNeutral, Lang.T("Neutral", "Neutral"), "#C8A0FF"));
+
+        float w = 3 * 230 + 60;
+        float h = 120f + cats.Count * 64f + 30f;
+        var panel = new Rect((Ui.ScreenWidth - w) / 2f, (1080f - h) / 2f, w, h);
+        Ui.Block(panel);
+        GUI.Box(panel, new GUIContent(""), Ui.Panel);
+
+        GUI.Label(new Rect(panel.x + 30, panel.y + 18, w - 120, 40), target.Data.PlayerName + Lang.T(" ist ...", " is ..."), Ui.Header);
+        GUI.Label(new Rect(panel.x + 30, panel.y + 58, w - 60, 30), Lang.T("Welche Art Rolle? (dann A-Z)", "Which kind of role? (then A-Z)"), Ui.Small);
+        if (Ui.Button(new Rect(panel.xMax - 70, panel.y + 15, 50, 50), "X"))
+        {
+            open = false;
+            selectedTarget = None;
+            return;
+        }
+
+        for (int i = 0; i < cats.Count; i++)
+        {
+            var (cat, label, hex) = cats[i];
+            var rect = new Rect(panel.x + 30, panel.y + 100 + i * 64, w - 60, 54);
+            if (GUI.Button(rect, new GUIContent($"<color={hex}>{label}</color>"), Ui.ButtonStyle))
+            {
+                guessCategory = cat;
+                guessScroll = 0;
+                return;
+            }
+        }
+    }
+
+    private int guessScroll;
+    private GUIStyle scrollHintStyle;
 
     private IEnumerable<(string Label, byte Kind, byte Id)> Guessables()
     {
-        foreach (var role in RoleRegistry.Roles.Where(r => !r.IsExtra && r.Count.Int > 0 && r.Chance.Int > 0))
+        // Mod-Rollen: nur was AKTIV ist (wie "Aktuell aktiv" = Count > 0), ohne Anpassungen/Geister (IsExtra).
+        foreach (var role in RoleRegistry.Roles.Where(r => !r.IsExtra && r.Count.Int > 0))
         {
             if (IsEvil && role.Team == RoleTeam.Impostor) continue;                         // keine eigenen Leute
             if (!IsEvil && role.Team == RoleTeam.Crewmate && !canGuessCrewRoles.Bool) continue;
             yield return (role.ColoredName, KindMod, role.Id);
         }
 
+        // Spiel-Rollen nur, wenn sie in den Einstellungen wirklich aktiviert sind (Impostor-Basis immer möglich).
         if (!IsEvil)
             foreach (var type in VanillaImpostorRoles)
-                yield return ($"<color=#FF1919>{type}</color>", KindVanilla, (byte)type);
+                if (type == RoleTypes.Impostor || VanillaEnabled(type))
+                    yield return ($"<color=#FF1919>{type}</color>", KindVanilla, (byte)type);
 
         if (canGuessCrewRoles.Bool)
             foreach (var type in VanillaCrewRoles)
-                yield return ($"<color=#8CFFFF>{type}</color>", KindVanilla, (byte)type);
+                if (VanillaEnabled(type))
+                    yield return ($"<color=#8CFFFF>{type}</color>", KindVanilla, (byte)type);
 
         // Boeser Guesser: auch "Crewmate" - richtig nur, wenn der Spieler wirklich keine Rolle hat
         if (IsEvil && canGuessCrewmate != null && canGuessCrewmate.Bool)
             yield return ("<color=#FFFFFF>Crewmate</color>", KindVanilla, (byte)RoleTypes.Crewmate);
+    }
+
+    // Kategorien fürs Orakel-Menü
+    protected const int CatCrew = 0, CatImpostor = 1, CatNeutral = 2;
+
+    /// <summary>Wie Guessables(), aber jede Rolle mit ihrer Kategorie (Crew/Impostor/Neutral) - fürs Orakel-Menü.</summary>
+    private IEnumerable<(string Label, byte Kind, byte Id, int Cat)> GuessablesCat()
+    {
+        foreach (var role in RoleRegistry.Roles.Where(r => !r.IsExtra && r.Count.Int > 0))
+        {
+            if (IsEvil && role.Team == RoleTeam.Impostor) continue;
+            if (!IsEvil && role.Team == RoleTeam.Crewmate && !canGuessCrewRoles.Bool) continue;
+            int cat = role.Team == RoleTeam.Impostor ? CatImpostor : role.Team == RoleTeam.Neutral ? CatNeutral : CatCrew;
+            yield return (role.ColoredName, KindMod, role.Id, cat);
+        }
+
+        if (!IsEvil)
+            foreach (var type in VanillaImpostorRoles)
+                if (type == RoleTypes.Impostor || VanillaEnabled(type))
+                    yield return ($"<color=#FF1919>{type}</color>", KindVanilla, (byte)type, CatImpostor);
+
+        if (canGuessCrewRoles.Bool)
+            foreach (var type in VanillaCrewRoles)
+                if (VanillaEnabled(type))
+                    yield return ($"<color=#8CFFFF>{type}</color>", KindVanilla, (byte)type, CatCrew);
+
+        if (IsEvil && canGuessCrewmate != null && canGuessCrewmate.Bool)
+            yield return ("<color=#FFFFFF>Crewmate</color>", KindVanilla, (byte)RoleTypes.Crewmate, CatCrew);
+    }
+
+    /// <summary>Farbcodes/Namen zum Sortieren entfernen (&lt;color&gt;...&lt;/color&gt; raus).</summary>
+    private static string PlainName(string label) =>
+        System.Text.RegularExpressions.Regex.Replace(label ?? "", "<.*?>", "").Trim();
+
+    private int guessCategory = -1; // -1 = Kategorie-Auswahl, sonst CatCrew/CatImpostor/CatNeutral
+
+    /// <summary>Ist eine Spiel-Rolle (Shapeshifter, Engineer ...) in den Einstellungen aktiviert?</summary>
+    private static bool VanillaEnabled(RoleTypes type)
+    {
+        try
+        {
+            var ro = GameOptionsManager.Instance?.CurrentGameOptions?.RoleOptions;
+            return ro != null && ro.GetNumPerGame(type) > 0 && ro.GetChancePerGame(type) > 0;
+        }
+        catch { return false; }
     }
 
     // ---------- Host-Entscheidung ----------
@@ -314,8 +527,8 @@ public abstract class GuesserBase : CustomRole
     {
         if (action == ActionAnnounce && data.Length >= 2)
         {
-            // Keine Meldung - nur der Kill-Sound fuer alle
-            Sfx.Play(Sfx.Kill);
+            // data[1]: 0/1 = jemand ist gestorben (Kill-Sound), 2 = Fehlschuss ohne Tod (Fail-Sound)
+            Sfx.Play(data[1] == 2 ? Sfx.Fail : Sfx.Kill);
             return;
         }
 
@@ -330,10 +543,15 @@ public abstract class GuesserBase : CustomRole
         shotsUsed[sender.PlayerId] = used + 1;
 
         bool correct = Matches(target, data[1], data[2]);
-        var dying = correct ? target : sender;
+        ResolveGuess(sender, target, correct, used + 1);
+    }
 
+    /// <summary>Host: entscheidet, was ein Treffer/Fehlschuss bewirkt. Standard: richtig -> Ziel stirbt, falsch -> Guesser stirbt.</summary>
+    protected virtual void ResolveGuess(PlayerControl guesser, PlayerControl target, bool correct, int usedTotal)
+    {
+        var dying = correct ? target : guesser;
         SendToAll(ActionAnnounce, dying.PlayerId, (byte)(correct ? 1 : 0));
-        KillSystem.KillNoBody(dying, sender);
+        KillSystem.KillNoBody(dying, guesser);
     }
 
     private static bool Matches(PlayerControl target, byte kind, byte id)

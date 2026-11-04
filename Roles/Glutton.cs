@@ -39,7 +39,7 @@ public sealed class Glutton : CustomRole
             Label = "Verschlucken|Swallow",
             Icon = "eat",
             NeedsTarget = true,
-            TargetFilter = p => !RoleRegistry.Has(p, this), // keine anderen Vielfraesse schlucken
+            TargetFilter = p => !RoleRegistry.Has(p, this) && !IsSwallowed(p), // keine anderen Vielfraße und keine schon Verschluckten
             Cooldown = () => cooldown.Value,
             StartCooldown = 10f,
             Hotkey = KeyCode.F,
@@ -80,6 +80,7 @@ public sealed class Glutton : CustomRole
                     if (!p) continue;
                     if (p.Visible) p.Visible = false;
                     if (belly) p.transform.position = belly.transform.position;
+                    if (p.MyPhysics && p.MyPhysics.body) p.MyPhysics.body.velocity = Vector2.zero; // kein Rest-Schwung (sonst läuft man danach nur noch)
                 }
             }
         }
@@ -109,9 +110,25 @@ public sealed class Glutton : CustomRole
 
     public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
     {
-        // Stirbt ein Vielfrass -> seine Gefangenen werden freigelassen
-        if (!RoleRegistry.Has(victim, this) || !stomach.TryGetValue(victim.PlayerId, out var set)) return;
-        foreach (var id in set) { var p = FindPlayer(id); if (p) p.Visible = true; }
-        set.Clear();
+        if (!victim) return;
+
+        // Ein GEFANGENER, der stirbt, kommt aus dem Magen frei - sonst wird sein Geist weiter in den Bauch gezogen
+        // (unsichtbar, bewegungslos). Aus allen Magen-Sets entfernen und wieder normal sichtbar machen.
+        bool wasCaptive = false;
+        foreach (var s in stomach.Values) if (s.Remove(victim.PlayerId)) wasCaptive = true;
+        if (wasCaptive) victim.Visible = true;
+
+        // Stirbt ein VIELFRASS -> seine restlichen Gefangenen werden freigelassen
+        if (RoleRegistry.Has(victim, this) && stomach.TryGetValue(victim.PlayerId, out var set))
+        {
+            foreach (var id in set)
+            {
+                var p = FindPlayer(id);
+                if (!p) continue;
+                p.Visible = true;
+                if (p.MyPhysics && p.MyPhysics.body) p.MyPhysics.body.velocity = Vector2.zero; // sauber freilassen (sonst "läuft nur noch")
+            }
+            set.Clear();
+        }
     }
 }

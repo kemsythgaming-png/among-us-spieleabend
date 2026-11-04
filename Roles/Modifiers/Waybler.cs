@@ -22,6 +22,12 @@ public sealed class Waybler : CustomRole
 
     private bool firstExileDone;
 
+    // Nicht auf Rollen, die ohnehin durch Rauswurf gewinnen (Jester/Executioner) - sonst doppelt.
+    public override bool CanReceiveModifier(PlayerControl player, CustomRole mainRole) =>
+        base.CanReceiveModifier(player, mainRole)
+        && mainRole is not Spieleabend.Roles.Jester
+        && mainRole is not Spieleabend.Roles.Executioner;
+
     protected override void Setup() { }
 
     public override void ResetState() => firstExileDone = false;

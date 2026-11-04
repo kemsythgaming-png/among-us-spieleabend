@@ -30,17 +30,35 @@ public static class KillSystem
         return true;
     }
 
-    /// <summary>Host: Kill ohne Schutz-Regeln (z. B. Selbstmord des Sheriffs).</summary>
+    /// <summary>
+    /// Host: Fern-Kill (Zauberer-Strahl o. Ä.). Das Opfer stirbt an Ort und Stelle mit Leiche, der Killer wird NICHT
+    /// hinteleportiert. Schilde/Schutz (Medic, Süßigkeitenkind, Kürbis ...) fangen den Kill weiterhin ab.
+    /// </summary>
+    public static bool RangedKill(PlayerControl killer, PlayerControl target)
+    {
+        if (!CustomRole.AmHost || !CustomRole.IsAlive(target) || !killer) return false;
+        if (target.protectedByGuardianId >= 0) { killer.RpcMurderPlayer(target, false); return false; }
+        if (Intercept(killer, target)) return false;
+        target.RpcMurderPlayer(target, true); // Selbst-Murder: Leiche an Ort und Stelle, kein Teleport des Killers
+        return true;
+    }
+
+    /// <summary>
+    /// Host: Kill mit Leiche. Fremd-Kills (killer != target) werden von Schilden/Schutz noch abgefangen
+    /// (z. B. Süßigkeitenkind-Schild); nur echte Selbst-Kills (killer == target, z. B. Sheriff-Fehlschuss) gehen immer durch.
+    /// </summary>
     public static void ForceKill(PlayerControl killer, PlayerControl target)
     {
         if (!CustomRole.AmHost || !CustomRole.IsAlive(target)) return;
+        if (killer && killer != target && Intercept(killer, target)) return; // Schild/Schutz fängt auch Force-Kills ab
         killer.RpcMurderPlayer(target, true);
     }
 
-    /// <summary>Host: Spieler stirbt ohne Leiche (geht auch im Meeting).</summary>
+    /// <summary>Host: Spieler stirbt ohne Leiche (geht auch im Meeting). Fremd-Kills werden von Schilden noch abgefangen.</summary>
     public static void KillNoBody(PlayerControl victim, PlayerControl killer = null)
     {
         if (!CustomRole.AmHost || !CustomRole.IsAlive(victim)) return;
+        if (killer && killer != victim && Intercept(killer, victim)) return; // Schild/Schutz fängt auch Kills ohne Leiche ab
         byte killerId = killer ? killer.PlayerId : byte.MaxValue;
         RoleRpc.SendKillNoBody(victim.PlayerId, killerId);
         ApplyKillNoBody(victim.PlayerId, killerId);
@@ -65,7 +83,11 @@ public static class KillSystem
         MeetingCleanup(victim);
     }
 
-    /// <summary>Im Meeting: Stimmen von/fuer den Toten zuruecksetzen und Karte als tot markieren.</summary>
+    /// <summary>
+    /// Im Meeting: den Toten als tot markieren und die Stimmen FÜR ihn zurückgeben, damit dessen Wähler neu wählen können.
+    /// Bewusst OHNE CheckForEndVoting (sonst endet das Meeting, wenn der Guesser einen Noch-nicht-Wähler killt -> kein 2. Schuss)
+    /// und OHNE Timer-Reset (der würde das Meeting ~10 s zurück in die Diskussion werfen und das Menü sperren).
+    /// </summary>
     private static void MeetingCleanup(PlayerControl victim)
     {
         var meeting = MeetingHud.Instance;
@@ -81,11 +103,9 @@ public static class KillSystem
             }
             else if ((byte)state.VotedForId == victim.PlayerId)
             {
-                state.UnsetVote();
+                state.UnsetVote(); // Wähler des Getöteten dürfen neu wählen
             }
         }
-
-        if (CustomRole.AmHost) meeting.CheckForEndVoting();
     }
 
     internal static void RaiseDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
@@ -173,6 +193,7 @@ internal static class MeetingStartPatch
         }
 
         FirstDeathShield.OnMeetingStart();
+        Spieleabend.Roles.TaskTracker.Reset(); // Aufgabenprüfer zählt ab jetzt wieder bei 0 -> "seit dem letzten Meeting"
         if (!RoleRegistry.HasAssignments) return;
         foreach (var role in RoleRegistry.Roles) role.OnMeetingStart();
     }

@@ -43,6 +43,30 @@ internal static class BulkRoleOps
         ChatNote.Message(Lang.T($"Alle Anzahl: {count}", $"All counts: {count}"));
     }
 
+    /// <summary>Alle Mod-Rollen EINES Teams auf dieselbe Chance setzen (z. B. nur Crew).</summary>
+    public static void SetTeamChances(RoleTeam team, int percent)
+    {
+        if (!SettingsWindow.CanEdit) return;
+        foreach (var r in RoleRegistry.Roles) if (r.Team == team) r.Chance.SetValue(percent);
+        ChatNote.Message(Lang.T($"{TeamName(team)} - alle Chancen: {percent}%", $"{TeamName(team)} - all chances: {percent}%"));
+    }
+
+    /// <summary>Alle Mod-Rollen EINES Teams auf dieselbe Anzahl setzen.</summary>
+    public static void SetTeamCounts(RoleTeam team, int count)
+    {
+        if (!SettingsWindow.CanEdit) return;
+        foreach (var r in RoleRegistry.Roles) if (r.Team == team) r.Count.SetValue(count);
+        ChatNote.Message(Lang.T($"{TeamName(team)} - alle Anzahl: {count}", $"{TeamName(team)} - all counts: {count}"));
+    }
+
+    private static string TeamName(RoleTeam team) => team switch
+    {
+        RoleTeam.Crewmate => "Crew",
+        RoleTeam.Impostor => "Impostor",
+        RoleTeam.Neutral => "Neutral",
+        _ => Lang.T("Anpassungen", "Modifiers"),
+    };
+
     /// <summary>Dieselbe Aktion auf alle Spiel-Rollen anwenden und danach an alle synchronisieren.</summary>
     private static void ForVanilla(Action<RoleTypes, IGameOptions> apply)
     {

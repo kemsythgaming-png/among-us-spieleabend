@@ -14,14 +14,16 @@ public sealed class Firefighter : CustomRole
     public override string IntroText => Lang.T("Du löschst jedes Feuer", "You put out every fire");
     public override string Description => Lang.T("Behebe die aktive Sabotage (F).", "Fix the active sabotage (F).");
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Stell dich zu der Konsole der laufenden Sabotage (Reaktor, Sauerstoff, Kommunikation oder Licht) - mit dem Knopf erledigst du die Reparatur dort sofort allein, ohne das Minispiel.",
-        "You are crew. Stand at the console of the current sabotage (reactor, oxygen, communications or lights) - the button instantly completes the repair there by yourself, without the minigame.");
+        "Du bist Crew. Mit dem Knopf behebst du die gerade laufende Sabotage von überall - Reaktor, Sauerstoff, Kommunikation und Licht sofort. Du hast dafür nur eine begrenzte Anzahl Ladungen (Zahl am Knopf).",
+        "You are crew. The button fixes the current sabotage from anywhere - reactor, oxygen, communications and lights at once. You only have a limited number of charges (shown on the button).");
 
-    private RoleOption cooldown;
+    private RoleOption cooldown, charges;
+    private int chargesLeft;
 
     protected override void Setup()
     {
-        cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 30f, 10f, 90f, 2.5f, "s");
+        cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 50f, 10f, 120f, 5f, "s");
+        charges = AddOption("Charges", "Ladungen|Charges", 3f, 1f, 10f, 1f);
 
         AddButton(new RoleButton
         {
@@ -31,31 +33,18 @@ public sealed class Firefighter : CustomRole
             Cooldown = () => cooldown.Value,
             StartCooldown = 15f,
             Hotkey = KeyCode.F,
-            CanUse = () => SabotageActive() && NearConsole(),
-            OnClick = _ => FixSabotages(),
+            UsesLeft = () => chargesLeft,
+            CanUse = () => SabotageActive() && chargesLeft > 0,
+            OnClick = _ => { if (chargesLeft > 0) { chargesLeft--; FixSabotages(); } },
         });
     }
 
-    /// <summary>Steht der Feuerwehrmann an einer Sabotage-Konsole (Reaktor, O2, Komm, Licht)?</summary>
-    private static bool NearConsole()
+    public override void OnAssigned(PlayerControl player)
     {
-        var ship = ShipStatus.Instance;
-        var local = PlayerControl.LocalPlayer;
-        if (!ship || !local) return false;
-        Vector2 me = local.GetTruePosition();
-        foreach (var con in ship.GetComponentsInChildren<Console>(true))
-        {
-            if (!con) continue;
-            string n = con.name.ToLower();
-            bool relevant = n.Contains("reactor") || n.Contains("nuclear") || n.Contains("seismic")
-                || n.Contains("oxygen") || n.Contains("o2") || n.Contains("comm")
-                || n.Contains("switch") || n.Contains("light") || n.Contains("elec");
-            if (relevant && Vector2.Distance(me, con.transform.position) <= 3f) return true;
-        }
-        return false;
+        if (player == PlayerControl.LocalPlayer) chargesLeft = charges.Int;
     }
 
-    private static bool SabotageActive()
+    internal static bool SabotageActive()
     {
         var ship = ShipStatus.Instance;
         if (!ship || ship.Systems == null) return false;
@@ -67,7 +56,7 @@ public sealed class Firefighter : CustomRole
         catch { return false; }
     }
 
-    private static void FixSabotages()
+    internal static void FixSabotages()
     {
         var ship = ShipStatus.Instance;
         if (!ship) return;
@@ -79,8 +68,8 @@ public sealed class Firefighter : CustomRole
         // Sauerstoff
         Repair(ship, SystemTypes.LifeSupp, 0x40);
         Repair(ship, SystemTypes.LifeSupp, 0x41);
-        // Kommunikation
-        Repair(ship, SystemTypes.Comms, 0);
+        // Kommunikation - aber NICHT die Störsender-Störung (die ist keine echte Sabotage)
+        if (!(MapSaboteur.Instance?.JamActive ?? false)) Repair(ship, SystemTypes.Comms, 0);
         // Licht: alle falsch stehenden Schalter umlegen
         FixLights(ship);
         Sfx.Play(Sfx.TaskComplete, 0.7f);

@@ -603,20 +603,22 @@ def icon_ebutton():
 
 
 def icon_tp():
-    """Klopapier-Rolle mit herabhaengendem Blatt (Mumie)."""
+    """Teleporter: Portal-Ring mit einem Pfeil, der hineinspringt."""
     img, d = canvas()
-    white = (246, 246, 250, 255)
-    d.rectangle((120, 175, 392, 345), fill=white)                                                           # Koerper
-    ellipse(d, (120, 290, 392, 400), white)                                                                 # Unterkante
-    ellipse(d, (120, 120, 392, 230), white)                                                                 # Oberkante
-    d.rectangle((118, 230, 394, 290), fill=white, outline=None)
-    for y in (255, 300, 340):
-        d.line((150, y, 362, y), fill=(214, 214, 222, 255), width=6)
-    ellipse(d, (205, 150, 307, 200), (170, 125, 85, 255), 14)                                               # Pappkern
-    d.rounded_rectangle((300, 345, 374, 480), 10, fill=white, outline=OUTLINE, width=14)                    # Blatt
-    d.line((120, 175, 120, 345), fill=OUTLINE, width=16)
-    d.line((392, 175, 392, 345), fill=OUTLINE, width=16)
-    d.ellipse((120, 120, 392, 230), outline=OUTLINE, width=16)
+    c = S / 2
+    teal = (90, 205, 180, 255)
+    dark = (40, 110, 95, 255)
+    light = (225, 255, 246, 255)
+    # Portal (flache Ellipse unten) mit abgestuften Ringen
+    d.ellipse((92, 300, S - 92, 452), fill=dark, outline=OUTLINE, width=W)
+    d.ellipse((150, 326, S - 150, 426), fill=teal)
+    d.ellipse((210, 350, S - 210, 402), fill=light)
+    # Pfeil nach unten ins Portal
+    ax = c
+    d.polygon([
+        (ax - 62, 70), (ax + 62, 70), (ax + 62, 232),
+        (ax + 120, 232), (ax, 352), (ax - 120, 232), (ax - 62, 232),
+    ], fill=teal, outline=OUTLINE, width=W)
     return img
 
 
@@ -706,7 +708,31 @@ def icon_door():
     return img
 
 
+def icon_admin():
+    """Admin-Tisch: Monitor mit farbigen Spieler-Punkten."""
+    img, d = canvas()
+    screen = (38, 50, 68, 255)
+    # Monitor-Gehäuse + Anzeige
+    d.rounded_rectangle((78, 110, S - 78, 332), 26, fill=screen, outline=OUTLINE, width=W)
+    d.rounded_rectangle((116, 146, S - 116, 296), 14, fill=(66, 120, 172, 255))                      # blaue Anzeige
+    # farbige Punkte = Spieler in Räumen
+    for (cx, cy, col) in (
+        (182, 198, (235, 70, 70, 255)),
+        (300, 190, (70, 205, 115, 255)),
+        (352, 256, (250, 212, 70, 255)),
+        (214, 262, (120, 150, 250, 255)),
+    ):
+        d.ellipse((cx - 22, cy - 22, cx + 22, cy + 22), fill=col, outline=OUTLINE, width=8)
+    # Standfuß
+    d.rectangle((S / 2 - 20, 332, S / 2 + 20, 392), fill=screen, outline=None)
+    d.rounded_rectangle((S / 2 - 96, 388, S / 2 + 96, 430), 14, fill=screen, outline=OUTLINE, width=W)
+    d.line((S / 2 - 20, 332, S / 2 - 20, 392), fill=OUTLINE, width=10)
+    d.line((S / 2 + 20, 332, S / 2 + 20, 392), fill=OUTLINE, width=10)
+    return img
+
+
 ICONS = {
+    "admin": icon_admin,
     "slot": icon_slot,
     "bolt": icon_bolt,
     "extinguish": icon_extinguish,

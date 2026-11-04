@@ -83,7 +83,18 @@ public sealed class Witch : CustomRole
     public override string GetMeetingIcon(PlayerControl viewer, PlayerControl target) =>
         IsCursed(target) && (RoleRegistry.Has(viewer, this) || everyoneSeesCurse.Bool) ? "cursed" : null;
 
-    /// <summary>Auf der Map sieht nur die Hexe, wen sie verflucht hat.</summary>
+    /// <summary>Auf der Map sieht nur die Hexe, wen sie verflucht hat - und nur, wenn das Ziel wirklich in ihrer Sicht ist.</summary>
     public override string GetNameIcon(PlayerControl viewer, PlayerControl target) =>
-        IsCursed(target) && RoleRegistry.Has(viewer, this) ? "cursed" : null;
+        IsCursed(target) && RoleRegistry.Has(viewer, this) && InSight(viewer, target) ? "cursed" : null;
+
+    /// <summary>Wie echte Spieler: nur sichtbar, wenn das Ziel im eigenen Lichtkreis und nicht hinter einer Wand steht.</summary>
+    private static bool InSight(PlayerControl viewer, PlayerControl target)
+    {
+        if (!viewer || !target) return false;
+        if (!IsAlive(viewer)) return true; // Geister sehen alles
+        Vector2 me = viewer.GetTruePosition(), pos = target.GetTruePosition();
+        float radius = ShipStatus.Instance ? ShipStatus.Instance.CalculateLightRadius(viewer.Data) : 5f;
+        if (Vector2.Distance(me, pos) > radius) return false;
+        return !PhysicsHelpers.AnythingBetween(me, pos, Constants.ShadowMask, false);
+    }
 }

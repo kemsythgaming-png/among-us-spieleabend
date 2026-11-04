@@ -54,6 +54,47 @@ Rollen, die es im Spiel schon gibt, sind bewusst **nicht** dabei: Mechaniker (�
 | Paranoid | Crew | Warnung, wenn ganz in der Nähe jemand getötet wird. |
 | Verräter | Anpassung (Crew) | Sterben alle Impostor, wird er (Chance einstellbar) zum neuen Impostor mit Kill-Button und das Spiel geht weiter. Eine Crew-Rolle (Sheriff, Medic ...) verliert er dabei. Neutrale bekommen ihn nicht. Geheim: Nicht einmal er selbst sieht die Anpassung, bis sie greift oder er stirbt. |
 
+### Neue Rollen (Batch Herbst 2025 – im Test)
+
+Dieser Schwung ist neu und wird gerade durchgetestet (siehe `Verteilung/Testliste-NeuerBatch.md`). Im F1-Fenster gibt es dafür einen **Test-Umschalter** (Reiter „Sets“): ein Klick schaltet alle *ungetesteten* Rollen ein, der nächste alle *getesteten*.
+
+| Rolle | Team | Fähigkeit (Taste) |
+|---|---|---|
+| Heiler | Crew | Opfert sich an einer Leiche (**F**) und belebt den Toten nach 5 s an dessen Stelle wieder. |
+| Tauscher | Crew | Menü (**F**): wählt zwei Ziele (auch Leichen, keine Geister) und tauscht ihre Positionen. |
+| Schildtechniker 🛡️ | Crew | Erzeugt eine sichtbare Zone (**F**), in der 10 s niemand getötet werden kann. Cooldown 50 s. |
+| Thermospezialist ☕ | Crew | Gibt einem Spieler ein Heißgetränk (**F**): 5 s immun gegen Frost/Verlangsamung. 2×/Runde. |
+| Kaminbauer 🔥 | Crew | Stellt einen tragbaren Kamin (**F**): Nähe ist 10 s frost-immun. |
+| Frostdetektor ❄️ | Crew | Scannt (**F**): wurde im kleinen Umkreis zuletzt eine Fähigkeit benutzt? (ohne Wer/Was). |
+| Vertauscher | Crew | Markiert zwei Spieler (**F**); im nächsten Meeting tauschen ihre erhaltenen Stimmen. |
+| Märtyrer | Anpassung | Wird er als **Erster** getötet (kein Rauswurf), gewinnt er allein. |
+| Leuchtkäfer ✨ | Anpassung | Leuchtet alle 20 s für 3 s auf; Nähe sieht ihn, auch durch dünne Wände. |
+| Techniker | Anpassung | Öffnet die Überwachungskameras von überall (**C**). |
+| Sprinter | Impostor | Macht sich kurz deutlich schneller (**F**). |
+| Werwolf | Impostor | Rausch (**F**): schneller und tötet automatisch jeden Nicht-Impostor in der Nähe. |
+| Selbstmordbomber | Impostor | Sprengt sich (**F**): alle im Radius sterben, er selbst auch. |
+| Assassine | Impostor | Punkt setzen (**F**), später dorthin zurückspringen (**G**). |
+| Tatortreiniger | Impostor | Putzt eine Leiche weg (**F**) - sie verschwindet und ist nicht mehr meldbar. |
+| Störsender | Impostor | Stört die Karte (**F**): Nicht-Impostor können Karte/Admin nicht öffnen. |
+| Frostbeißer ❄️ | Impostor | Friert den Umkreis ein (**F**): andere 8 s bewegungslos + Eis über dem Bildschirm. CD 35. |
+| Schneesturm-Bändiger 🌨️ | Impostor | Schneesturm (**F**): 7 s weniger Sicht im Bereich. CD 40. |
+| Falscher Weihnachtsmann 🎅 | Impostor | Gibt einem Spieler 10 s Aussehen+Name eines anderen (Menü **F**). CD 40. |
+| Lawinenleger 🏔️ | Impostor | Markiert einen Bereich (**F**); nach 5 s Lawine - wer bleibt, stirbt. |
+| Grinch | Impostor | Markiert jemanden (**F**); nach dem nächsten Meeting verliert er seine Rolle. |
+| Zauberer | Impostor | Magiestrahl nach vorne (**F**), bis zur Reichweite oder Wand; erster Treffer stirbt. |
+| Thor | Impostor | Wirft den Hammer in Klickrichtung (**F**), zweiter Druck ruft ihn zurück; fliegt durch Wände, tötet unterwegs. |
+| Sniper | Impostor | Zoom (**F**), dann Schuss (**G**) - tötet auf Distanz, auch durch Wände. |
+| Leichenschlepper | Impostor | Nimmt eine Leiche auf und zieht sie mit (**F**), legt sie woanders ab. |
+| Clown | Impostor | Vertauscht kurz Farben und Namen aller Spieler (**F**). |
+| Schneeballkönig | Neutral | Wirft Schneebälle (**F**) - getroffene Spieler sterben. |
+| Wintergeist | Neutral | Markiert heimlich (**F**); stirbt das Ziel, gibt es eine Schneeflocke. 3 = Sieg. |
+| Überträger | Neutral | Steckt jemanden an (**F**); Angesteckte sterben nach 2 min und stecken die Nähe an. |
+| Wettkönig | Neutral | Wählt jede Runde eine geheime Wette (kleines Fenster). 2× richtig = Sieg. |
+| Kettentauscher | Neutral | Markiert einen Nachbarn (**F**); beim Meeting tauschen sie die Rolle. Wer am Ende Kettentauscher ist, verliert. |
+| Seelensammler | Neutral | Sammelt Leichen (**F**) und füttert sie einem Impostor (**G**). Genug Fütterungen = Sieg. Kann nicht töten. |
+
+Noch **geplant** (Idee steht, Umsetzung folgt): Tierfreund (Crew), Task-Geber (Impostor), Dummy-Macher (Crew), Überlebender (Neutral), Schutzfee (Neutral).
+
 ### Geisterrollen
 
 Geisterrollen werden nicht zu Spielbeginn verteilt, sondern **beim Tod**: Anzahl und Wahrscheinlichkeit stellt der Host wie bei jeder Rolle im F1-Fenster ein (Standard: aus). Jeder bekommt höchstens eine; die bisherige Rolle bleibt.
@@ -106,10 +147,22 @@ Die EXE enthält **keine Spieldateien**, das verbietet die Among Us Mod Policy. 
    ```
    powershell -ExecutionPolicy Bypass -File Verteilung\Paket-bauen.ps1
    ```
-3. Release anlegen:
+3. Patchnotes als **Markdown-Datei** schreiben (echte Zeilenumbrüche + Aufzählung - ohne sie steht auf GitHub alles in einer Zeile). Beispiel `notes.md`:
+   ```markdown
+   ## Was ist neu
+
+   **Neue Rollen**
+   - Heiler (Crew) - opfert sich und belebt eine Leiche wieder
+   - Zauberer (Impostor) - Magiestrahl nach vorne
+
+   **Fixes**
+   - ...
    ```
-   gh release create v4.5.1 dist/AmongUsSpieleabend.dll dist/AmongUsSpieleabend-Launcher.exe --title "Among Us Spieleabend 4.5.1" --notes "Was neu ist"
+4. Release mit `--notes-file` anlegen (nicht `--notes "..."`, das wird eine einzige Zeile):
    ```
+   gh release create v4.5.1 dist/AmongUsSpieleabend-Launcher.exe dist/AmongUsSpieleabend.dll dist/AmongUsSpieleabend-Deinstallieren.exe --title "Among Us Spieleabend 4.5.1" --notes-file notes.md
+   ```
+   Bestehende Release-Notes nachträglich schön machen: `gh release edit v4.5.1 --notes-file notes.md`.
 
 Beim nächsten Start holt sich jeder Launcher die neue `AmongUsSpieleabend.dll` automatisch. Alle Spieler brauchen dieselbe Mod-Version, also vor dem Spieleabend einmal über die Verknüpfung starten.
 

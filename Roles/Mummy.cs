@@ -37,6 +37,7 @@ public sealed class Mummy : CustomRole
         AddButton(new RoleButton
         {
             Label = "Einwickeln|Wrap",
+            GameIcon = _ => PaperRollSprite(), // Papierrolle statt des Teleport-Icons
             Icon = "tp",
             NeedsTarget = true,
             SharesKillCooldown = true,
@@ -135,6 +136,52 @@ public sealed class Mummy : CustomRole
         NamePlateId = "nameplate_NoPlate",
         PlayerName = "",
     };
+
+    // ---------- Eigenes Symbol: Papierrolle (Klopapier, aufrecht mit herabhängendem Blatt) ----------
+    private static Sprite paperSprite;
+    private static Sprite PaperRollSprite()
+    {
+        if (paperSprite) return paperSprite;
+        const int S = 96;
+        var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) tex.SetPixel(x, y, Color.clear);
+
+        var cream = new Color(0.97f, 0.95f, 0.90f, 1f);
+        var shade = new Color(0.80f, 0.77f, 0.70f, 1f); // Seiten-/Kanten-Schatten
+        var tube  = new Color(0.62f, 0.47f, 0.32f, 1f); // Papprolle
+        var hole  = new Color(0.40f, 0.29f, 0.19f, 1f); // Loch in der Mitte
+
+        bool In(float x, float y, float cx, float cy, float rx, float ry)
+        { float dx = (x - cx) / rx, dy = (y - cy) / ry; return dx * dx + dy * dy <= 1f; }
+
+        const float bx0 = 28f, bx1 = 68f, by0 = 26f, by1 = 72f, cx = 48f;
+        // Körper (Zylinder) + herabhängendes Blatt
+        for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++)
+        {
+            bool side = x >= bx0 && x <= bx1 && y >= by0 && y <= by1;
+            bool topCap = In(x, y, cx, by1, (bx1 - bx0) / 2f, 9f);
+            bool botCap = In(x, y, cx, by0, (bx1 - bx0) / 2f, 9f);
+            bool sheet = x >= 40f && x <= 56f && y >= 6f && y <= by0 + 1f; // Blatt hängt unten heraus
+            if (side || topCap || botCap || sheet)
+            {
+                // leichte Schattierung an den Rändern für Rundung
+                bool edge = (x <= bx0 + 3f || x >= bx1 - 3f) && y >= by0 && y <= by1;
+                tex.SetPixel(x, y, edge ? shade : cream);
+            }
+        }
+        // oberer Ring (Papprolle) + Loch
+        for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++)
+        {
+            if (In(x, y, cx, by1, 13f, 6f)) tex.SetPixel(x, y, tube);
+            if (In(x, y, cx, by1, 6.5f, 3f)) tex.SetPixel(x, y, hole);
+        }
+        tex.Apply();
+        paperSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f);
+        paperSprite.hideFlags = HideFlags.HideAndDontSave;
+        return paperSprite;
+    }
 }
 
 /// <summary>Eingewickelte Spieler können kein Meeting einberufen / keine Leiche melden.</summary>

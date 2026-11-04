@@ -45,7 +45,7 @@ public sealed class WailingSpirit : CustomRole
         AddButton(new RoleButton
         {
             Label = "Alarm|Alarm",
-            Icon = "radar",
+            Icon = "ghost",
             NeedsTarget = false,
             UsableWhenDead = true,
             Visible = () => !IsAlive(PlayerControl.LocalPlayer),
@@ -83,16 +83,16 @@ public sealed class WailingSpirit : CustomRole
         if (action != ActionWail || data.Length < 8 || !RoleRegistry.Has(sender, this)) return;
         alarmPos = new Vector2(BitConverter.ToSingle(data, 0), BitConverter.ToSingle(data, 4));
 
-        // Alle hoeren ein "BOOO" und sehen den Pfeil - Lebende UND Geister, genau gleich
-        alarmUntil = Time.time + 6f;
-        Sfx.Play(BooClip(), 0.9f);
-        Notifier.Show($"<color={ColorHex}>{Lang.T("BOO! Ein Pfeil zeigt zur Quelle.", "BOO! An arrow points to the source.")}</color>", 3f);
+        // Alle hoeren denselben Sound wie der Rachegeist (beim Platzieren) und sehen den Pfeil
+        alarmUntil = Time.time + 2f; // Pfeil nur ~2 s
+        Sfx.Play(Sfx.Creepy, 0.9f);
+        Notifier.Show($"<color={ColorHex}>{Lang.T("Ein Pfeil zeigt zur Quelle.", "An arrow points to the source.")}</color>", 3f);
 
-        // Heulender Geist an der Stelle, von der es kam (alle sehen es)
+        // Heulender Geist an der Stelle, von der es kam (alle sehen es) - kleiner
         var ghost = new GameObject("Spieleabend_WailGhost");
         if (ShipStatus.Instance) ghost.transform.SetParent(ShipStatus.Instance.transform, true);
         ghost.transform.position = new Vector3(alarmPos.x, alarmPos.y, alarmPos.y / 1000f - 0.5f);
-        ghost.transform.localScale = Vector3.one * 0.7f;
+        ghost.transform.localScale = Vector3.one * 0.45f;
         var gsr = ghost.AddComponent<SpriteRenderer>();
         gsr.sprite = ButtonIcons.Get("ghost", null);
         gsr.color = new Color(1f, 1f, 1f, 0.55f);

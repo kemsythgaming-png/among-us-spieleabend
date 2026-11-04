@@ -18,29 +18,66 @@ public sealed class Boo : CustomRole
     public override string IntroText => Lang.T("Erschreck die Crew", "Spook the crew");
     public override string Description => Lang.T("Knopf: Kleckse auf allen Bildschirmen\naußer deinem.", "Button: blots on every screen\nbut yours.");
     public override string LongDescription => Lang.T(
-        "Impostor: Mit dem Knopf \"BOO!\" klatschen bei allen anderen Spielern 3-6 Kleckse auf den Bildschirm (wie kleine Geister), die kurz die Sicht stören und dann Stück für Stück wieder verschwinden. Du selbst (und andere BOOs) seht nichts davon. Es gibt keinen Schaden - nur Chaos.",
-        "Impostor: the \"BOO!\" button splatters 3-6 blots onto every other player's screen (like little ghosts) that briefly block their view and then fade away one by one. You (and other BOOs) see nothing. No damage - just chaos.");
+        "Impostor: Mit dem Knopf \"BOO!\" klatschen bei allen anderen Spielern Kleckse auf den Bildschirm (wie kleine Geister), die kurz die Sicht stören und dann verschwinden. Du selbst (und andere BOOs) seht nichts davon. Du lädst alle 30 s einen Einsatz auf und kannst bis zu 3 Stacks ansammeln (Zahl am Knopf). Kein Schaden - nur Chaos.",
+        "Impostor: the \"BOO!\" button splatters blots onto every other player's screen (like little ghosts) that briefly block their view and then fade. You (and other BOOs) see nothing. You charge one use every 30 s and can store up to 3 stacks (number on the button). No damage - just chaos.");
 
     private const byte ActionBoo = 0;
+    private const int MaxStacks = 3;
     private RoleOption cooldown;
+    private RoleButton button;
     private static Sprite booSprite;
+
+    private int stacks;
+    private float nextCharge;
 
     protected override void Setup()
     {
-        cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 30f, 10f, 90f, 2.5f, "s");
+        cooldown = AddOption("Cooldown", "Nachlade-Zeit je Stack|Recharge per stack", 30f, 5f, 90f, 2.5f, "s");
 
-        AddButton(new RoleButton
+        button = AddButton(new RoleButton
         {
             Label = "BOO!|BOO!",
             GameIcon = _ => BooSprite(),
             NeedsTarget = false,
-            Cooldown = () => cooldown.Value,
-            StartCooldown = 15f,
-            OnClick = _ => SendToAll(ActionBoo, (byte)Random.Range(3, 7)), // 3-6 Kleckse
+            Cooldown = () => cooldown.Value,       // Radial zeigt die 30-s-Aufladung
+            StartCooldown = 0f,
+            UsesLeft = () => stacks,               // bis zu 3 Stacks sichtbar am Knopf
+            CanUse = () => stacks > 0,
+            OnClick = _ =>
+            {
+                if (stacks <= 0) return;
+                stacks--;
+                SendToAll(ActionBoo, (byte)Random.Range(12, 25));
+            },
         });
     }
 
-    public override void ResetState() => BooOverlay.Reset();
+    public override void ResetState() { stacks = 0; nextCharge = Time.time + cooldown.Value; BooOverlay.Reset(); }
+
+    /// <summary>In der Aufgabenliste oben links: aktuelle Stacks (bis 3).</summary>
+    public override string GetTaskNote(PlayerControl local) =>
+        $"BOO-Stacks: {stacks}/{MaxStacks} ({Lang.T("lädt alle", "charges every")} {Mathf.RoundToInt(cooldown.Value)}s)";
+
+    /// <summary>Stacks laden mit der Zeit auf (alle 30 s einer, bis 3). Startet leer.</summary>
+    public override void Update()
+    {
+        if (!IsLocalRole) return;
+        if (stacks < MaxStacks && Time.time >= nextCharge)
+        {
+            stacks++;
+            if (stacks < MaxStacks) nextCharge = Time.time + cooldown.Value;
+        }
+        // Radial zeigt die Aufladung nur, wenn gerade kein Stack da ist (sonst blockiert es das Klicken).
+        if (button != null) button.Timer = stacks == 0 ? Mathf.Max(0f, nextCharge - Time.time) : 0f;
+    }
+
+
+    /// <summary>Freeplay-Test: ein BOO-Dummy löst seine Kleckse direkt beim lokalen Spieler aus (kein Kill).</summary>
+    public override bool FreeplayAbility(PlayerControl attacker, PlayerControl target)
+    {
+        BooOverlay.Trigger(Random.Range(12, 25));
+        return true;
+    }
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
@@ -100,7 +137,7 @@ internal static class BooOverlay
             {
                 X = Random.Range(0.08f, 0.92f) * w,
                 Y = Random.Range(0.1f, 0.9f) * h,
-                Size = Random.Range(260f, 470f),
+                Size = Random.Range(430f, 740f),
                 Start = Time.time,
                 Life = Random.Range(3f, 6f),
             });
@@ -108,24 +145,25 @@ internal static class BooOverlay
 
     public static void Reset() => blots.Clear();
 
+    private static GUIStyle blotStyle;
+
     public static void Draw()
     {
         if (blots.Count == 0) return;
         if (CustomRole.InMeeting) { blots.Clear(); return; }
         EnsureTex();
+        // WICHTIG (IL2CPP): GUI.DrawTexture und GUI.color sind wegoptimiert ("Method unstripping failed") und
+        // haben das Fenster jeden Frame abstürzen lassen - die Kleckse erschienen NIE. Deshalb über einen
+        // Style-Hintergrund mit GUI.Box zeichnen. Die weiche Kante steckt schon in der Textur (Alpha pro Pixel).
+        if (blotStyle == null) { blotStyle = new GUIStyle(Ui.Small); blotStyle.normal.background = tex; }
         float t = Time.time;
-        var prev = GUI.color;
         for (int i = blots.Count - 1; i >= 0; i--)
         {
             var b = blots[i];
             float age = t - b.Start;
             if (age >= b.Life) { blots.RemoveAt(i); continue; }
-            float k = age / b.Life;
-            float alpha = k < 0.15f ? k / 0.15f : 1f - (k - 0.15f) / 0.85f; // kurz rein, dann langsam raus
-            GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01(alpha) * 0.9f);
-            GUI.DrawTexture(new Rect(b.X - b.Size / 2f, b.Y - b.Size / 2f, b.Size, b.Size), tex);
+            GUI.Box(new Rect(b.X - b.Size / 2f, b.Y - b.Size / 2f, b.Size, b.Size), GUIContent.none, blotStyle);
         }
-        GUI.color = prev;
     }
 
     private static void EnsureTex()

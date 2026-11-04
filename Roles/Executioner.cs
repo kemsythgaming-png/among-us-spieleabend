@@ -7,7 +7,7 @@ namespace Spieleabend.Roles;
 
 /// <summary>
 /// Neutral: bekommt einen Crewmate als Ziel. Wird genau dieses Ziel rausgevotet, gewinnt er allein.
-/// Stirbt das Ziel auf andere Weise, wird er (einstellbar) zum Jester.
+/// Stirbt das Ziel auf andere Weise, bleibt er Executioner (kann dann nicht mehr gewinnen).
 /// </summary>
 public sealed class Executioner : CustomRole
 {
@@ -28,7 +28,7 @@ public sealed class Executioner : CustomRole
         }
     }
     public override string LongDescription =>
-        Lang.T("Du bist neutral und hast ein Ziel - es steht oben links bei deiner Rolle.\n\nWird genau dieses Ziel rausgevotet, gewinnst du allein. Stirbt es anders, wirst du (einstellbar) zum Jester.", "You are neutral and have a target - it's shown with your role (top left).\n\nIf exactly this target is voted out, you win alone. If it dies another way, you become a Jester (configurable).");
+        Lang.T("Du bist neutral und hast ein Ziel - es steht oben links bei deiner Rolle.\n\nWird genau dieses Ziel rausgevotet, gewinnst du allein. Stirbt es auf andere Weise, kannst du nicht mehr gewinnen.", "You are neutral and have a target - it's shown with your role (top left).\n\nIf exactly this target is voted out, you win alone. If it dies another way, you can no longer win.");
 
     /// <summary>Name des eigenen Ziels (nur fuer den Executioner selbst), oder null.</summary>
     private string LocalTargetName()
@@ -41,15 +41,10 @@ public sealed class Executioner : CustomRole
 
     private const byte ActionSetTarget = 0;
 
-    private RoleOption becomesJester;
-
     /// <summary>Executioner -> Ziel (bei allen Clients bekannt, sichtbar nur fuer den Executioner).</summary>
     private readonly Dictionary<byte, byte> targets = new();
 
-    protected override void Setup()
-    {
-        becomesJester = AddToggle("BecomesJester", "Wird Jester, wenn das Ziel anders stirbt|Becomes Jester if target dies otherwise", true);
-    }
+    protected override void Setup() { }
 
     public override void ResetState() => targets.Clear();
 
@@ -72,6 +67,20 @@ public sealed class Executioner : CustomRole
         if (action == ActionSetTarget && data.Length >= 2) targets[data[0]] = data[1];
     }
 
+    /// <summary>Sicherheitsnetz (auch Practise): hat ein lebender Executioner noch kein Ziel, wird eins zugewiesen.</summary>
+    public override void Update()
+    {
+        var local = PlayerControl.LocalPlayer;
+        if (!AmHost || !local || !RoleRegistry.Has(local, this) || !IsAlive(local)) return;
+        if (targets.ContainsKey(local.PlayerId)) return;
+        var candidates = PlayerControl.AllPlayerControls.ToArray()
+            .Where(p => IsAlive(p) && p != local && !IsImpostor(p) && !IsNeutral(p)).ToList();
+        if (candidates.Count == 0) return;
+        var target = candidates[Random.Range(0, candidates.Count)];
+        targets[local.PlayerId] = target.PlayerId;                 // sofort lokal (Practise)
+        SendToAll(ActionSetTarget, local.PlayerId, target.PlayerId);
+    }
+
     public override void OnAnyExiled(PlayerControl exiled)
     {
         if (!AmHost) return;
@@ -82,18 +91,6 @@ public sealed class Executioner : CustomRole
         if (winners.Count > 0) CustomWin.Trigger(this, winners);
     }
 
-    public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
-    {
-        if (!AmHost || cause == DeathCause.Exile || !becomesJester.Bool) return;
-
-        var jester = RoleRegistry.Roles.OfType<Jester>().FirstOrDefault();
-        foreach (var pair in targets.Where(t => t.Value == victim.PlayerId).ToList())
-        {
-            var exe = FindPlayer(pair.Key);
-            if (IsAlive(exe) && RoleRegistry.Has(exe, this) && jester != null)
-                RoleRegistry.ChangeRole(exe, jester);
-        }
-    }
-
+    // Stirbt das Ziel nicht per Rauswurf, bleibt der Executioner einfach Executioner (kein Jester-Wechsel).
     // Kein Zeichen mehr ueber dem Kopf des Ziels - der Zielname steht nur oben links bei der Rolle (siehe Description).
 }

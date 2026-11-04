@@ -29,12 +29,25 @@ public sealed class ButtonBarry : CustomRole
             NeedsTarget = false,
             Cooldown = () => cooldown.Value,
             StartCooldown = 15f,
-            CanUse = () => !InMeeting,
+            CanUse = () => !InMeeting && !SabotageActive(), // während einer Sabotage gesperrt (wie der echte Notfall-Knopf)
             OnClick = _ =>
             {
                 var local = PlayerControl.LocalPlayer;
-                if (local && IsAlive(local)) local.CmdReportDeadBody(null); // null = Notfall-Meeting
+                if (local && IsAlive(local) && !SabotageActive()) local.CmdReportDeadBody(null); // null = Notfall-Meeting
             },
         });
+    }
+
+    /// <summary>Läuft gerade eine Sabotage (Reaktor, O2, Licht ...)? Dann ist der Notfall-Knopf gesperrt.</summary>
+    private static bool SabotageActive()
+    {
+        var ship = ShipStatus.Instance;
+        if (!ship || ship.Systems == null) return false;
+        try
+        {
+            return ship.Systems.ContainsKey(SystemTypes.Sabotage)
+                && ship.Systems[SystemTypes.Sabotage].TryCast<SabotageSystemType>() is { AnyActive: true };
+        }
+        catch { return false; }
     }
 }

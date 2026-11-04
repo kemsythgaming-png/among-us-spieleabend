@@ -18,6 +18,8 @@ public static class Notifier
 
     internal static void Draw()
     {
+        return; // Auf Wunsch abgeschaltet: diese oberen Banner werden nie gezeichnet (Infos kommen im Among-Us-Stil an Knöpfen/Namen).
+#pragma warning disable CS0162
         if (message == null || Time.time > until) return;
         style ??= new GUIStyle(Ui.Title) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
         var rect = new Rect(Ui.ScreenWidth / 2f - 500f, 120f, 1000f, 90f);

@@ -58,7 +58,7 @@ public sealed class Tracker2 : CustomRole
         for (int i = prints.Count - 1; i >= 0; i--)
         {
             var (go, born) = prints[i];
-            float k = (t - born) / 4f;
+            float k = (t - born) / 2f; // nach ~2 s verschwinden
             if (!go || k >= 1f) { if (go) Object.Destroy(go); prints.RemoveAt(i); continue; }
             var sr = go.GetComponent<SpriteRenderer>();
             if (sr) { var c = sr.color; sr.color = new Color(c.r, c.g, c.b, (1f - k) * 0.8f); }
@@ -99,7 +99,15 @@ public sealed class Tracker2 : CustomRole
 
     private static Color PlayerColor(PlayerControl p)
     {
-        try { return Palette.PlayerColors[p.Data.DefaultOutfit.ColorId]; }
+        try
+        {
+            // AKTUELLE Farbe (ändert sich z. B. durch Verkleidung/Tausch), nicht die Standardfarbe
+            var type = p.CurrentOutfitType;
+            int colorId = p.Data.Outfits != null && p.Data.Outfits.ContainsKey(type)
+                ? p.Data.Outfits[type].ColorId
+                : p.Data.DefaultOutfit.ColorId;
+            return Palette.PlayerColors[colorId];
+        }
         catch { return Color.white; }
     }
 

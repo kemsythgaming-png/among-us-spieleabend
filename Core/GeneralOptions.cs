@@ -43,6 +43,10 @@ public static class GeneralOptions
     /// <summary>Prototyp: Map-Erweiterung fuer The Skeld (neuer Raum + echter Vent). Standard aus.</summary>
     public static RoleOption MapExtension { get; private set; }
 
+    /// <summary>Extra-Vents auf der Skeld (einzeln schaltbar).</summary>
+    public static RoleOption VentCafeteria { get; private set; }
+    public static RoleOption VentComms { get; private set; }
+
     /// <summary>Mod-Einstellungen, die im Reiter "Spiel" (statt "Allgemein") stehen. Werden trotzdem mit allen synchronisiert.</summary>
     internal static readonly System.Collections.Generic.List<RoleOption> GameTab = new();
 
@@ -72,6 +76,10 @@ public static class GeneralOptions
         GameTab.Add(TestRoom);
         MapExtension = Add(config, "MapExtension", "Map-Erweiterung (Skeld, Test)|Map extension (Skeld, test)", 0, 0, 1, 1, "", true);
         GameTab.Add(MapExtension);
+        VentCafeteria = Add(config, "VentCafeteria", "Extra-Vent: Cafeteria ↔ O2/Upper Engine (Skeld)|Extra vent: Cafeteria ↔ O2/Upper Engine (Skeld)", 0, 0, 1, 1, "", true);
+        GameTab.Add(VentCafeteria);
+        VentComms = Add(config, "VentComms", "Extra-Vent: Komm. ↔ Schild/Admin (Skeld)|Extra vent: Comms ↔ Shields/Admin (Skeld)", 0, 0, 1, 1, "", true);
+        GameTab.Add(VentComms);
     }
 
     public static int MaxFor(RoleTeam team)

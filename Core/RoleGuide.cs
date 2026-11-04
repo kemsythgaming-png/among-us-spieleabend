@@ -26,6 +26,7 @@ internal static class RoleGuide
 
     private static bool open;
     private static int tab;
+    private static int activeSub; // im Reiter "Aktuell aktiv": 0 = Rollen, 1 = Anpassungen
     private static int selected = -1;
     private static Vector2 scroll;
     private static VanillaRoleEntry selectedVanilla; // im Reiter "Diese Runde" bzw. in der Suche: gewaehlte Rolle aus dem Spiel
@@ -130,9 +131,11 @@ internal static class RoleGuide
         bool Match(string s) => !string.IsNullOrEmpty(s) && s.IndexOf(q, System.StringComparison.OrdinalIgnoreCase) >= 0;
         var roles = searching
             ? RoleRegistry.Roles.Where(r => Match(r.Name) || Match(r.Description) || Match(r.LongDescription)).ToList()
-            : RoleRegistry.Roles.Where(Tabs[tab].Filter).ToList();
+            : thisGame
+                ? RoleRegistry.Roles.Where(r => r.Count.Int > 0 && (activeSub == 0 ? r.Team != RoleTeam.Modifier : r.Team == RoleTeam.Modifier)).ToList()
+                : RoleRegistry.Roles.Where(Tabs[tab].Filter).ToList();
         var vanilla = searching ? VanillaRoleEntry.All.Where(v => Match(v.Name) || Match(v.Description)).ToList()
-            : thisGame ? VanillaRoleEntry.All.Where(v => v.Count > 0).ToList()
+            : thisGame && activeSub == 0 ? VanillaRoleEntry.All.Where(v => v.Count > 0).ToList() // Spiel-Rollen nur unter "Rollen"
             : new System.Collections.Generic.List<VanillaRoleEntry>();
         if (searching && selected < 0 && selectedVanilla == null)
         {
@@ -140,7 +143,17 @@ internal static class RoleGuide
             else if (vanilla.Count > 0) selectedVanilla = vanilla[0];
         }
         int rows = roles.Count + vanilla.Count + (thisGame ? 1 : 0);
-        var view = new Rect(listBox.x + 10, listBox.y + 12, listBox.width - 20, listBox.height - 24);
+
+        // Im Reiter "Aktuell aktiv": oben zwischen Rollen und Anpassungen umschalten (sonst bei vielen Anpassungen unübersichtlich).
+        float listTop = listBox.y + 12;
+        if (thisGame)
+        {
+            float sw = (listBox.width - 30) / 2f;
+            if (GUI.Button(new Rect(listBox.x + 10, listBox.y + 10, sw, 44), new GUIContent(Lang.T("Rollen", "Roles")), activeSub == 0 ? Ui.TabSelected : Ui.Tab)) { activeSub = 0; scroll = Vector2.zero; selected = -1; }
+            if (GUI.Button(new Rect(listBox.x + 20 + sw, listBox.y + 10, sw, 44), new GUIContent(Lang.T("Anpassungen", "Modifiers")), activeSub == 1 ? Ui.TabSelected : Ui.Tab)) { activeSub = 1; scroll = Vector2.zero; selected = -1; }
+            listTop = listBox.y + 64;
+        }
+        var view = new Rect(listBox.x + 10, listTop, listBox.width - 20, listBox.yMax - listTop - 12);
         float rowWidth = view.width - 16;
         scroll.y = Ui.Scroll(view, rows * RowH, scroll.y);
         Rect Row(float y, float h) => new(view.x, view.y + y - scroll.y, rowWidth, h);

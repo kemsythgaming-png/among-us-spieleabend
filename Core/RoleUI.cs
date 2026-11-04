@@ -47,12 +47,45 @@ internal static class RoleUI
         }
 
         if (!ShipStatus.Instance) return;
+        bool localImp = OnImpostorTeam(local);
         foreach (var p in PlayerControl.AllPlayerControls)
         {
             if (!p || !p.cosmetics || p.Data == null) continue;
             UpdateWorldLabel(local, p);
             UpdateWorldIcon(local, p);
+            // Impostor sehen ihre Mitimpostor (auch Mod-Impostor/Verräter) mit rotem Namen
+            if (localImp && p != local && CustomRole.IsAlive(p) && OnImpostorTeam(p))
+                p.cosmetics.nameText.color = CustomRole.ImpostorRed;
+            // Rollen-eigene Namensfarbe (z. B. Seer: geprüfte Spieler grün/rot) - überschreibt zuletzt
+            var over = NameColorOverride(local, p);
+            if (over.HasValue) p.cosmetics.nameText.color = over.Value;
         }
+    }
+
+    /// <summary>
+    /// Gehört der Spieler zum Impostor-Team? (echter Impostor, Mod-Impostor-Rolle oder Verräter-Anpassung).
+    /// Bewusst OHNE Freeplay-Fake-Impostor - sonst würden im Testmodus alle Dummys als Partner rot.
+    /// </summary>
+    private static bool OnImpostorTeam(PlayerControl p)
+    {
+        if (!p || p.Data == null) return false;
+        if (p.Data.Role && p.Data.Role.IsImpostor) return true; // echter Impostor (ohne Fake-Impostor)
+        var r = RoleRegistry.GetRole(p);
+        if (r != null && r.Team == RoleTeam.Impostor) return true;
+        foreach (var m in RoleRegistry.GetModifiers(p)) if (m.Team == RoleTeam.Impostor) return true;
+        return false;
+    }
+
+    /// <summary>Fragt alle Rollen, ob eine von ihnen dem Betrachter für target eine eigene Namensfarbe geben will.</summary>
+    private static Color? NameColorOverride(PlayerControl viewer, PlayerControl target)
+    {
+        if (!RoleRegistry.HasAssignments) return null;
+        foreach (var role in RoleRegistry.Roles)
+        {
+            var c = role.GetNameColor(viewer, target);
+            if (c.HasValue) return c;
+        }
+        return null;
     }
 
     public static void UpdateMeeting(MeetingHud meeting)
@@ -75,6 +108,12 @@ internal static class RoleUI
             if (id == local.PlayerId && main != null) state.NameText.color = main.NameColor;
 
             var player = CustomRole.FindPlayer(id);
+            // Impostor sehen ihre Mitimpostor auch im Meeting mit rotem Namen
+            if (id != local.PlayerId && OnImpostorTeam(local) && OnImpostorTeam(player))
+                state.NameText.color = CustomRole.ImpostorRed;
+            // Rollen-eigene Namensfarbe (nur für den Betrachter, z. B. Seer)
+            var over = player ? NameColorOverride(local, player) : null;
+            if (over.HasValue) state.NameText.color = over.Value;
             string info = player ? InfoFor(local, player) : "";
 
             if (!meetingLabels.TryGetValue(id, out var label) || !label)
@@ -166,7 +205,9 @@ internal static class RoleUI
                         && !(Roles.Modifiers.SecondLife.Instance?.WillRise(viewer) ?? false) // toter Survivor auch
                         && !(Roles.Ghosts.WailingSpirit.Instance?.HidesRoles(viewer) ?? false); // toter Heulgeist sieht keine Rollen
         bool self = target == viewer && GeneralOptions.ShowOwnRole.Bool;
-        if (deadView || self)
+        // Freeplay-Test: bei Dummys die zugewiesene Rolle immer zeigen (damit man sie prüfen kann, auch tot).
+        bool freeplayDummy = FreeplayTest.IsFreeplay && target && target.isDummy && FreeplayTest.DummyRole(target.PlayerId) != null;
+        if (deadView || self || freeplayDummy)
         {
             string label = RoleLabel(target);
             if (!string.IsNullOrEmpty(label)) parts.Add(label);
@@ -202,8 +243,11 @@ internal static class RoleUI
         else if (FreeplayTest.IsFakeImpostor(player)) text = $"<color=#FF1919>Impostor ({Lang.T("Test", "test")})</color>";
         else if (player.Data.Role)
         {
-            string color = player.Data.Role.IsImpostor ? "#FF1919" : "#8CFFFF";
-            text = $"<color={color}>{player.Data.Role.NiceName}</color>";
+            bool imp = player.Data.Role.IsImpostor;
+            string nice = player.Data.Role.NiceName;
+            // Fehlt die Übersetzung (TranslationController liefert "STRMISS"), auf Team zurückfallen
+            if (string.IsNullOrEmpty(nice) || nice.Contains("STRMISS")) nice = imp ? Lang.T("Impostor", "Impostor") : Lang.T("Crewmate", "Crewmate");
+            text = $"<color={(imp ? "#FF1919" : "#8CFFFF")}>{nice}</color>";
         }
         else text = "";
 
@@ -247,9 +291,13 @@ internal static class RoleUI
         // Joker: Die Hauptrolle bleibt immer als "Joker" mit Joker-Erklärung stehen (nicht die geliehene Rolle).
         bool joker = Spieleabend.Roles.Joker.IsJoker(local.PlayerId) && Spieleabend.Roles.Joker.Instance != null;
         string text = string.Join("\n", roles.Select(r =>
-            joker && !r.IsModifier
+        {
+            string note = r.GetTaskNote(local); // z. B. Kopfgeldjäger-Ziel
+            string extra = string.IsNullOrEmpty(note) ? "" : $"\n{note}";
+            return joker && !r.IsModifier
                 ? $"<color={Spieleabend.Roles.Joker.Instance.ColorHex}><b>Joker:</b>\n{Spieleabend.Roles.Joker.Instance.Description}</color>"
-                : $"<color={r.ColorHex}><b>{r.Name}:</b>\n{r.Description}</color>"));
+                : $"<color={r.ColorHex}><b>{r.Name}:</b>\n{r.Description}{extra}</color>";
+        }));
         if (roleTask && roleTaskText == text && local.myTasks.Contains(roleTask)) return;
         RemoveRoleTask(local);
 

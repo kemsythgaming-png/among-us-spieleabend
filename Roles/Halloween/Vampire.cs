@@ -61,6 +61,13 @@ public sealed class Vampire : CustomRole
     /// <summary>Nach dem Meeting sind alle Bisse erledigt (gestorben oder vom Schild abgefangen).</summary>
     public override void OnMeetingEnd(PlayerControl exiled) => myBites.Clear();
 
+    /// <summary>Freeplay-Test: ein Vampir-Dummy beißt dich - der verzögerte Kill passiert dann an Ort und Stelle.</summary>
+    public override bool FreeplayAbility(PlayerControl attacker, PlayerControl target)
+    {
+        OnAction(attacker, ActionBite, new byte[] { target.PlayerId }); // Host registriert den Biss
+        return true;
+    }
+
     /// <summary>Der Vampir hoert das Kill-Geraeusch genau dann, wenn sein Opfer tot umfaellt.</summary>
     public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
     {
@@ -88,7 +95,12 @@ public sealed class Vampire : CustomRole
         {
             bitten.Remove(pair.Key);
             var victim = FindPlayer(pair.Key);
-            if (IsAlive(victim)) KillSystem.ForceKill(victim, victim); // Leiche dort, wo das Opfer gerade ist
+            if (!IsAlive(victim)) continue;
+            var vamp = FindPlayer(pair.Value.Vampire);
+            // Schild/Schutz des Opfers fängt auch den verzögerten Biss ab (Intercept erst prüfen).
+            if (KillSystem.Intercept(IsAlive(vamp) ? vamp : victim, victim)) { myBites.Remove(victim.PlayerId); continue; }
+            // Selbst-Kill an Ort und Stelle: die Leiche bleibt beim Opfer und NIEMAND fliegt zum Kill.
+            KillSystem.ForceKill(victim, victim);
         }
     }
 

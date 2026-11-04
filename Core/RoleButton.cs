@@ -23,8 +23,14 @@ public class RoleButton
     public Func<string> IconFunc;
     private string lastIcon;
 
+    /// <summary>Abklingzeit läuft auch, während man sich nicht bewegen kann (z. B. in einer Aufgabe) - für passive Knöpfe wie die Banane.</summary>
+    public bool CoolsDownAlways;
+
     /// <summary>Optional: Symbol eines Original-Knopfs verwenden (z. B. den Vent-Knopf der Impostor).</summary>
     public Func<HudManager, Sprite> GameIcon;
+
+    /// <summary>Optional: Symbol größer/kleiner skalieren (1 = normal).</summary>
+    public float IconScale = 1f;
 
     /// <summary>Abklingzeit in Sekunden (meist eine RoleOption: () => meineOption.Value).</summary>
     public Func<float> Cooldown = () => 30f;
@@ -110,6 +116,18 @@ public class RoleButton
         if (ui) ui.gameObject.SetActive(false);
     }
 
+    /// <summary>
+    /// Symbol zuverlässig wechseln: Knopf neu aufbauen, damit das Bild über den (funktionierenden) statischen
+    /// Icon-Weg in CreateUi gesetzt wird. IconFunc setzt den Sprite zwar, er wird aber nicht immer sichtbar.
+    /// </summary>
+    public void SetIconStatic(string name)
+    {
+        if (Icon == name && ui) return;
+        Icon = name;
+        lastIcon = null;
+        if (ui) { Object.Destroy(ui.gameObject); ui = null; usesText = null; shownUses = int.MinValue; }
+    }
+
     internal void Update(HudManager hud, bool inMeeting)
     {
         var local = PlayerControl.LocalPlayer;
@@ -118,7 +136,7 @@ public class RoleButton
         bool hudVisible = alive
             ? hud.ReportButton.gameObject.activeSelf
             : hud.KillButton && hud.KillButton.transform.parent && hud.KillButton.transform.parent.gameObject.activeInHierarchy;
-        bool show = (alive || UsableWhenDead) && ShipStatus.Instance && !inMeeting && hudVisible
+        bool show = (alive || UsableWhenDead || FreeplayTest.ButtonsWhenDead) && ShipStatus.Instance && !inMeeting && hudVisible
                     && (Visible == null || Visible());
 
         if (!show)
@@ -136,6 +154,7 @@ public class RoleButton
         ui.gameObject.SetActive(true);
         if (ui.buttonLabelText && ui.buttonLabelText.text != ShownLabel) ui.OverrideText(ShownLabel); // falls das Spiel sie doch zuruecksetzt
         UpdateUses();
+
 
         // Symbol zur Laufzeit wechseln (z. B. Joker: jedes Mal ein anderer Knopf)
         if (IconFunc != null && ui.graphic)
@@ -162,7 +181,8 @@ public class RoleButton
             EndEffect();
         }
 
-        if (local.CanMove || local.inVent) Timer = Mathf.Max(0f, Timer - Time.deltaTime);
+        // Abklingzeit läuft IMMER runter - auch während einer Aufgabe oder wenn man sich gerade nicht bewegen kann.
+        Timer = Mathf.Max(0f, Timer - Time.deltaTime);
         if (SharesKillCooldown) Timer = Mathf.Max(Timer, local.killTimer); // nach einem normalen Kill auch hier warten
         ui.SetCoolDown(Timer, Mathf.Max(Cooldown(), Timer));
 
@@ -232,6 +252,30 @@ public class RoleButton
             if (sprite) ui.graphic.sprite = sprite;
         }
 
+        // Wird der Knopf mitten im Spiel geklont (z. B. Gambler-Nutzen, Crew hat gerade keinen Kill-Button), ist das
+        // Grafik-Objekt des geklonten Kill-Buttons oft inaktiv -> der gesetzte Sprite bliebe unsichtbar. Erzwingen.
+        if (ui.graphic)
+        {
+            ui.graphic.gameObject.SetActive(true);
+            ui.graphic.enabled = true;
+            ui.graphic.color = Color.white;
+            if (!Mathf.Approximately(IconScale, 1f))
+            {
+                ui.graphic.transform.localScale = Vector3.one * IconScale;
+                // Das größere Icon kann die Beschriftung überdecken -> Text sicher nach vorne holen.
+                if (ui.buttonLabelText)
+                {
+                    try
+                    {
+                        var r = ui.buttonLabelText.GetComponent<Renderer>();
+                        if (r) r.sortingOrder = ui.graphic.sortingOrder + 10;
+                        ui.buttonLabelText.transform.SetAsLastSibling();
+                    }
+                    catch { }
+                }
+            }
+        }
+
         // Vanilla-Klick-Logik (Kill-Anfrage) komplett ersetzen
         var passive = ui.GetComponent<PassiveButton>();
         passive.OnClick = new Button.ButtonClickedEvent();
@@ -241,8 +285,8 @@ public class RoleButton
     public void Click()
     {
         var local = PlayerControl.LocalPlayer;
-        if (!local || local.Data == null || (local.Data.IsDead && !UsableWhenDead)) return;
-        if (!local.CanMove && !(UsableInVent && local.inVent)) return;
+        if (!local || local.Data == null || (local.Data.IsDead && !UsableWhenDead && !FreeplayTest.ButtonsWhenDead)) return;
+        if (!local.CanMove && !(UsableInVent && local.inVent) && !FreeplayTest.ButtonsWhenDead) return;
         if (Owner == null || !Owner.IsLocalRole || Timer > 0f) return;
         if (NeedsTarget && !CustomRole.IsAlive(Target)) return;
         if (Visible != null && !Visible()) return;
@@ -263,10 +307,14 @@ public class RoleButton
             local.SetKillTimer(Mathf.Max(local.killTimer, GameManager.Instance.LogicOptions.GetKillCooldown()));
         OnClick?.Invoke(target);
         Used?.Invoke(Owner); // z. B. der Joker würfelt danach eine neue Fähigkeit
+        if (target != null) UsedOnTarget?.Invoke(Owner, target); // z. B. Bodyguard: Alarm, wenn sein Schützling angepeilt wird
     }
 
     /// <summary>Wird ausgelöst, nachdem ein Knopf benutzt wurde (mit der besitzenden Rolle).</summary>
     public static Action<CustomRole> Used;
+
+    /// <summary>Wird ausgelöst, wenn ein Ziel-Knopf auf einen bestimmten Spieler benutzt wurde (Rolle + Ziel).</summary>
+    public static Action<CustomRole, PlayerControl> UsedOnTarget;
 
     private PlayerControl FindTarget(PlayerControl local)
     {

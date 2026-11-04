@@ -22,6 +22,7 @@ public sealed class Bait : CustomRole
 
     private RoleOption delay;
     private byte pendingBody = byte.MaxValue;
+    private byte pendingKiller = byte.MaxValue;
     private float reportAt;
 
     protected override void Setup()
@@ -29,25 +30,33 @@ public sealed class Bait : CustomRole
         delay = AddOption("Delay", "Verzögerung|Delay", 0.5f, 0f, 3f, 0.5f, "s");
     }
 
-    public override void ResetState() => pendingBody = byte.MaxValue;
+    public override void ResetState() { pendingBody = byte.MaxValue; pendingKiller = byte.MaxValue; }
 
     public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)
     {
-        // Laeuft beim Killer selbst: er "meldet" die Leiche (eine normale Aktion seines Clients)
-        if (cause != DeathCause.Kill || !killer || killer == victim || killer != PlayerControl.LocalPlayer) return;
+        if (cause != DeathCause.Kill || !killer || killer == victim) return;
+        // Läuft normalerweise beim Killer selbst. Im Freeplay ist der Killer ein (lokal gesteuerter) Dummy -
+        // dann übernimmt der lokale Client die Meldung für ihn.
+        bool iAmKiller = killer == PlayerControl.LocalPlayer;
+        bool freeplayDummyKiller = FreeplayTest.IsFreeplay && killer.isDummy;
+        if (!iAmKiller && !freeplayDummyKiller) return;
         if (!RoleRegistry.Has(victim, this)) return;
         pendingBody = victim.PlayerId;
+        pendingKiller = killer.PlayerId;
         reportAt = Time.time + delay.Value;
     }
 
     public override void Update()
     {
         if (pendingBody == byte.MaxValue || Time.time < reportAt) return;
-        var local = PlayerControl.LocalPlayer;
         var body = FindPlayer(pendingBody);
+        var killer = FindPlayer(pendingKiller);
         pendingBody = byte.MaxValue;
-        if (!IsAlive(local) || InMeeting || !body || body.Data == null) return;
-        local.CmdReportDeadBody(body.Data);
+        if (InMeeting || !body || body.Data == null) return;
+
+        // Im Freeplay meldet der Dummy-Killer (der tote Köder kann es nicht), sonst der lokale Killer.
+        PlayerControl reporter = FreeplayTest.IsFreeplay ? killer : PlayerControl.LocalPlayer;
+        if (IsAlive(reporter)) reporter.CmdReportDeadBody(body.Data);
     }
 }
 

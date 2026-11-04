@@ -22,8 +22,8 @@ public sealed class VoodooDoll : CustomRole
     public override string IntroText => Lang.T("Zieh die Fäden", "Pull the strings");
     public override string Description => Lang.T("Übernimm einen Spieler (F)\nund steuere ihn.", "Take over a player (F)\nand control them.");
     public override string LongDescription => Lang.T(
-        "Impostor: Mit dem Knopf öffnest du von überall ein Auswahl-Menü (wie der Shapeshifter). Wählst du einen Spieler, übernimmst du ihn für kurze Zeit: Du siehst durch seine Augen und steuerst ihn, er kann nur zuschauen. Du kannst dabei jeden in seiner Nähe töten - auch Impostor oder dich selbst. Alle Namen sind in dieser Zeit in Crew-Farbe. (Echtes Steuern geht zuverlässig nur bei Test-Dummys.)",
-        "Impostor: the button opens a selection menu from anywhere (like the Shapeshifter). Pick a player to take them over briefly: you see through their eyes and control them, they can only watch. You can kill anyone near them - including impostors or yourself. All names show in crew color meanwhile. (Real control only works reliably on test dummies.)");
+        "Impostor: Mit dem Knopf öffnest du von überall ein Auswahl-Menü (wie der Shapeshifter). Wählst du einen Spieler, übernimmst du ihn für kurze Zeit: Dein eigener Körper bleibt sichtbar an seinem Platz stehen (und ist angreifbar!), nur deine Kamera schwenkt auf das Ziel - du siehst durch seine Augen und steuerst ihn, er kann nur zuschauen. Du kannst dabei jeden in seiner Nähe töten. Alle Namen sind in dieser Zeit in Crew-Farbe. (Echtes Steuern geht zuverlässig nur bei Test-Dummys.)",
+        "Impostor: the button opens a selection menu from anywhere (like the Shapeshifter). Pick a player to take them over briefly: your own body stays visible where it is (and can be attacked!), only your camera pans to the target - you see through their eyes and control them, they can only watch. You can kill anyone near them. All names show in crew color meanwhile. (Real control only works reliably on test dummies.)");
 
     private const byte ActionPossess = 0, ActionKill = 1;
     private RoleOption cooldown, duration;
@@ -39,8 +39,8 @@ public sealed class VoodooDoll : CustomRole
     private float myUntil;
     private ShapeshifterMinigame menu;
     private bool namesTinted;
-    private Vector3 homePos;
-    private bool homeSet;
+    private FollowerCamera cam;
+    private MonoBehaviour camBack;
 
     protected override void Setup()
     {
@@ -54,9 +54,9 @@ public sealed class VoodooDoll : CustomRole
             NeedsTarget = false,
             Cooldown = () => cooldown.Value,
             StartCooldown = 10f,
+            CoolsDownAlways = true,                 // Cooldown läuft auch WÄHREND der Übernahme (Knopf bleibt sichtbar, nur ausgegraut)
             Hotkey = KeyCode.F,
-            CanUse = () => myTarget == byte.MaxValue,
-            Visible = () => myTarget == byte.MaxValue,
+            CanUse = () => myTarget == byte.MaxValue, // während einer Übernahme nicht erneut nutzbar
             OnClick = _ => OpenMenu(),
         });
 
@@ -109,13 +109,17 @@ public sealed class VoodooDoll : CustomRole
     private void BeginPossession(byte targetId)
     {
         var local = PlayerControl.LocalPlayer;
+        var target = FindPlayer(targetId);
         myTarget = targetId;
         myUntil = Time.time + duration.Value;
-        if (local)
+        // Dein Körper bleibt sichtbar und an seinem Platz stehen - du bist also weiter da und angreifbar.
+        // Nur die Kamera schwenkt auf das Ziel, damit du durch seine Augen siehst.
+        if (!cam && Camera.main) cam = Camera.main.GetComponent<FollowerCamera>();
+        if (cam && target)
         {
-            homePos = local.transform.position;
-            homeSet = true;
-            local.Visible = false; // dein eigener Körper ist unsichtbar - du steckst im Ziel
+            camBack = cam.Target;
+            cam.Target = target;
+            cam.SnapToTarget();
         }
         LocalPossessing = true;
         Sfx.Play(Sfx.Shapeshift);
@@ -124,16 +128,14 @@ public sealed class VoodooDoll : CustomRole
     private void EndPossession()
     {
         var local = PlayerControl.LocalPlayer;
-        if (local)
+        // Kamera zurück auf den eigenen Körper
+        if (cam)
         {
-            local.Visible = true;
-            if (homeSet)
-            {
-                local.transform.position = homePos; // zurück an deinen Platz
-                if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
-            }
+            cam.Target = camBack ? camBack : local;
+            cam.SnapToTarget();
         }
-        homeSet = false;
+        camBack = null;
+        if (local && local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
         myTarget = byte.MaxValue;
         myUntil = 0f;
         LocalPossessing = false;
@@ -183,9 +185,9 @@ public sealed class VoodooDoll : CustomRole
             }
         }
 
-        // Sicht folgt dem Ziel: dein (unsichtbarer) Körper + Kamera sitzen auf dem Ziel, damit du etwas siehst
-        local.transform.position = new Vector3(target.transform.position.x, target.transform.position.y, local.transform.position.z);
+        // Dein Körper bleibt stehen (sichtbar + angreifbar); nur die Kamera sitzt auf dem Ziel.
         if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
+        if (cam && cam.Target != target) { cam.Target = target; cam.SnapToTarget(); }
 
         // Während der Übernahme nur den Töten-Knopf: normalen Kill + Vent ausblenden (der Klon hat sein Bild schon)
         var hud = HudManager.InstanceExists ? HudManager.Instance : null;
@@ -203,8 +205,8 @@ public sealed class VoodooDoll : CustomRole
         foreach (var p in PlayerControl.AllPlayerControls)
         {
             if (!p || !p.cosmetics || !p.cosmetics.nameText) continue;
-            // eigenen (unsichtbaren) Namen ausblenden, alle anderen in Crew-Farbe
-            p.cosmetics.nameText.color = p == local ? new Color(1f, 1f, 1f, 0f) : CrewBlue;
+            // alle Namen in Crew-Farbe (dein eigener Name bleibt normal weiß, du bist ja weiter sichtbar)
+            p.cosmetics.nameText.color = p == local ? Color.white : CrewBlue;
         }
     }
 

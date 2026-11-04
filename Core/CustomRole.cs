@@ -203,6 +203,18 @@ public abstract class CustomRole
     public virtual string GetNameMark(PlayerControl viewer, PlayerControl target) => null;
 
     /// <summary>
+    /// Eigene Namensfarbe, die der lokale Spieler (viewer) fuer target sehen soll - z. B. der Seer faerbt gepruefte
+    /// Spieler gruen/rot. Wird fuer ALLE Rollen auf der Map und im Meeting abgefragt; null = Farbe nicht aendern.
+    /// </summary>
+    public virtual Color? GetNameColor(PlayerControl viewer, PlayerControl target) => null;
+
+    /// <summary>
+    /// Zusatzzeile, die unter der Rollenbeschreibung in der Aufgabenliste (oben links) steht - z. B. der
+    /// Kopfgeldjaeger zeigt dort sein aktuelles Ziel. null = nichts.
+    /// </summary>
+    public virtual string GetTaskNote(PlayerControl local) => null;
+
+    /// <summary>
     /// Schutzblasen, die der lokale Spieler (viewer) sehen soll - z. B. Medic-Schild. Die Rolle entscheidet, wer was sieht.
     /// </summary>
     public virtual IEnumerable<(PlayerControl Target, Color Color)> GetProtectionBubbles(PlayerControl viewer) =>
@@ -213,6 +225,12 @@ public abstract class CustomRole
     /// Bei SendToHost laeuft das nur beim Host - dort Entscheidungen treffen (z. B. wer stirbt).
     /// </summary>
     public virtual void OnAction(PlayerControl sender, byte action, byte[] data) { }
+
+    /// <summary>
+    /// Freeplay-Test: ein Dummy mit dieser Rolle soll seine Fähigkeit auf den lokalen Spieler ausüben.
+    /// true = selbst erledigt (z. B. BOO); false = Standard (Impostor-Dummy killt den Spieler).
+    /// </summary>
+    public virtual bool FreeplayAbility(PlayerControl attacker, PlayerControl target) => false;
 
     // ---------- Helfer fuer Rollen ----------
 

@@ -10,7 +10,7 @@ namespace Spieleabend.Roles.Ghosts;
 public sealed class GuardianSpirit : CustomRole
 {
     public override string ConfigSection => "Waechtergeist";
-    public override string Name => Lang.T("Wächtergeist", "Guardian Spirit");
+    public override string Name => Lang.T("VentGeist", "Vent Spirit");
     public override Color Color => new Color32(170, 200, 140, 255);
     public override RoleTeam Team => RoleTeam.Crewmate;
     public override bool IsGhostRole => true;
@@ -44,8 +44,7 @@ public sealed class GuardianSpirit : CustomRole
             NeedsTarget = false,
             UsableWhenDead = true,
             Visible = () => !IsAlive(PlayerControl.LocalPlayer),
-            Cooldown = () => cooldown.Value,
-            Duration = () => duration.Value,
+            Cooldown = () => cooldown.Value, // nach dem Zunageln normaler Cooldown (keine Dauer-Anzeige)
             StartCooldown = 10f,
             Hotkey = KeyCode.F,
             CanUse = () => NearestVent() != null,

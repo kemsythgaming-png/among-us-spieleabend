@@ -32,6 +32,12 @@ internal enum RpcId : byte
 
     /// <summary>Host -> alle: Hinweis in den Chat schreiben (z. B. geaenderte Einstellung) [text]</summary>
     ChatNote = 218,
+
+    /// <summary>Beliebig -> alle: Emote ueber dem Spieler zeigen [playerId][emoteIndex]</summary>
+    Emote = 219,
+
+    /// <summary>Host -> alle: einem Spieler eine Zusatzrolle (Geisterrolle) wieder wegnehmen [playerId][roleId]</summary>
+    RemoveRole = 220,
 }
 
 internal static class RoleRpc
@@ -75,6 +81,18 @@ internal static class RoleRpc
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 
+    public static void SendRemoveRole(byte playerId, byte roleId)
+    {
+        try
+        {
+            var writer = Start(RpcId.RemoveRole, -1);
+            writer.Write(playerId);
+            writer.Write(roleId);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"RemoveRole senden: {e.Message}"); }
+    }
+
     /// <summary>Host -> alle anderen: einen Hinweis in den Chat schreiben.</summary>
     public static void SendChatNote(string text)
     {
@@ -85,6 +103,19 @@ internal static class RoleRpc
             AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
         catch (System.Exception e) { Plugin.Logger.LogWarning($"ChatNote senden: {e.Message}"); }
+    }
+
+    /// <summary>Emote ueber dem eigenen Spieler an alle anderen schicken.</summary>
+    public static void SendEmote(byte playerId, byte index)
+    {
+        try
+        {
+            var writer = Start(RpcId.Emote, -1);
+            writer.Write(playerId);
+            writer.Write(index);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"Emote senden: {e.Message}"); }
     }
 
     public static void SendKillNoBody(byte playerId, byte killerId)
@@ -184,6 +215,12 @@ internal static class RoleRpc
                 break;
             case RpcId.ChatNote:
                 ChatNote.Display(sender, reader.ReadString());
+                break;
+            case RpcId.Emote:
+                Emotes.Apply(reader.ReadByte(), reader.ReadByte());
+                break;
+            case RpcId.RemoveRole:
+                RoleRegistry.ApplyRemoveRole(reader.ReadByte(), reader.ReadByte());
                 break;
         }
     }

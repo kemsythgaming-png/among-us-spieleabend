@@ -27,11 +27,13 @@ public sealed class Haunting : CustomRole
 
     private const byte ActionRelease = 0;
     private const float ClickRadius = 0.7f, ClickReach = 3f;
+    private const float ReleaseGrace = 3f; // kurz nach dem Werden nicht erlösbar (sonst erlöst der Kill-Klick sofort)
 
     internal static Haunting Instance { get; private set; }
 
     private readonly HashSet<byte> released = new();
     private readonly HashSet<byte> shownToLiving = new();
+    private readonly Dictionary<byte, float> hauntSince = new(); // ab wann spukt wer (für die Schutzzeit)
 
     private RoleOption visibility;
 
@@ -44,7 +46,8 @@ public sealed class Haunting : CustomRole
     /// <summary>Beim Werden: neue Aufgaben (nur der Host verteilt sie, an alle).</summary>
     public override void OnAssigned(PlayerControl player)
     {
-        if (AmHost && RoleRegistry.IsRoleChange) GiveNewTasks(player);
+        // Echter Spielwechsel (Tod) ODER Freeplay-Test: neue Aufgaben geben (im Freeplay zum Prüfen)
+        if (AmHost && (RoleRegistry.IsRoleChange || FreeplayTest.IsFreeplay)) GiveNewTasks(player);
     }
 
     private static void GiveNewTasks(PlayerControl p)
@@ -79,12 +82,12 @@ public sealed class Haunting : CustomRole
     {
         HideAll();
         released.Clear();
+        hauntSince.Clear();
         localCollider = false;
         localFaded = false;
         spawnedInRoom = false;
-        hasLastPos = false;
+        spawnAt = 0f;
         wasInMeeting = false;
-        restoreUntil = 0f;
     }
 
     /// <summary>Spukt dieser Spieler gerade (Geist mit dieser Rolle, nicht erloest)?</summary>
@@ -114,29 +117,46 @@ public sealed class Haunting : CustomRole
             Notifier.Show($"<color={ColorHex}>{Lang.T("Du wurdest erlöst - du kannst nicht mehr gewinnen.", "You were released - you can't win anymore.")}</color>", 5f);
     }
 
-    // Nach dem Meeting an die vorherige Stelle zurueck (nicht am Vent/Spawn neu erscheinen)
-    private Vector3 lastGoodPos;
-    private bool hasLastPos, wasInMeeting;
-    private float restoreUntil;
+    private bool wasInMeeting;
 
     // Nur beim Spukgeist selbst: Collider wieder an, damit er wie eine lebende Figur an Waenden haengen bleibt
     private bool localCollider;
     private bool localFaded;     // Spukgestalt sieht auch sich selbst nur schwach
     private bool spawnedInRoom;  // beim Werden einmal in einen leeren Raum versetzen
+    private float spawnAt;        // Zeitpunkt für das verzögerte Vent-Spawnen (nach der Kill-Animation)
+    private int playersLayer = -2, ghostLayer = -2; // -2 = noch nicht ermittelt
+
+    /// <summary>
+    /// Kernproblem: Tote liegen auf dem Layer "Ghost", der laut Kollisionsmatrix NICHT mit den Schiffs-Wänden
+    /// (Layer "Ship") kollidiert - deshalb reicht es NICHT, nur den Collider einzuschalten. Wir legen die eigene
+    /// Spukgestalt zusätzlich lokal auf den "Players"-Layer, dann bleibt sie wie ein Crewmate an Wänden hängen.
+    /// (Players kollidieren untereinander nicht, also blockiert man keine Lebenden und bleibt trotzdem unsichtbar.)
+    /// </summary>
+    internal void ForceLiveCollision(PlayerControl local)
+    {
+        if (!local || !local.Collider) return;
+        if (playersLayer == -2) { playersLayer = LayerMask.NameToLayer("Players"); ghostLayer = LayerMask.NameToLayer("Ghost"); }
+        if (!local.Collider.enabled) local.Collider.enabled = true;
+        var go = local.Collider.gameObject;
+        if (playersLayer >= 0 && go.layer != playersLayer) go.layer = playersLayer;
+    }
 
     private void UpdateLocalCollision()
     {
         var local = PlayerControl.LocalPlayer;
         if (!local || !local.Collider) return;
+        if (playersLayer == -2) { playersLayer = LayerMask.NameToLayer("Players"); ghostLayer = LayerMask.NameToLayer("Ghost"); }
         bool want = Haunts(local) && !InMeeting;
-        // Jeden Frame erzwingen: das Spiel schaltet den Collider fuer Tote sonst gleich wieder aus -> man liefe durch Waende.
         if (want)
         {
-            if (!local.Collider.enabled) local.Collider.enabled = true;
+            ForceLiveCollision(local);
         }
         else if (localCollider && !IsAlive(local))
         {
-            local.Collider.enabled = false; // erloest/Meeting -> wieder normaler Geist (durch Waende)
+            // erloest/Meeting -> wieder normaler Geist (durch Waende)
+            local.Collider.enabled = false;
+            var go = local.Collider.gameObject;
+            if (ghostLayer >= 0 && go.layer != ghostLayer) go.layer = ghostLayer;
         }
         localCollider = want;
     }
@@ -156,26 +176,24 @@ public sealed class Haunting : CustomRole
         }
         localFaded = fadeLocal;
 
-        // Beim Werden einmal in einen moeglichst leeren Raum versetzen (nicht direkt neben Lebende)
+        // Beim Werden einmal auf ein zufälliges Vent versetzen - aber ERST nach der Kill-Animation (sonst zieht es den
+        // Mörder mit, weil die Animation ihn kurz am Opfer festhält).
         if (Haunts(local) && !spawnedInRoom && !InMeeting)
         {
-            spawnedInRoom = true;
-            SpawnInEmptyRoom(local);
+            if (spawnAt <= 0f) spawnAt = Time.time + 1.6f;
+            if (Time.time >= spawnAt)
+            {
+                spawnedInRoom = true;
+                spawnAt = 0f;
+                SpawnInEmptyRoom(local);
+            }
         }
 
-        // Nach einem Meeting an die letzte Stelle vor dem Meeting zurueck (statt am Vent/Spawn)
+        // Nach einem Meeting erscheint die Spukgestalt wieder auf einem zufälligen Vent (spawnedInRoom zurücksetzen
+        // -> der Spawn-Block oben läuft im nächsten Frame erneut).
         bool meetingNow = InMeeting;
-        if (wasInMeeting && !meetingNow && Haunts(local) && hasLastPos) restoreUntil = Time.time + 0.5f;
+        if (wasInMeeting && !meetingNow && Haunts(local)) spawnedInRoom = false;
         wasInMeeting = meetingNow;
-        if (Haunts(local) && !meetingNow)
-        {
-            if (Time.time < restoreUntil)
-            {
-                local.transform.position = new Vector3(lastGoodPos.x, lastGoodPos.y, local.transform.position.z);
-                if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
-            }
-            else { lastGoodPos = local.transform.position; hasLastPos = true; }
-        }
 
         bool livingViewer = IsAlive(local) && !InMeeting;
 
@@ -187,6 +205,14 @@ public sealed class Haunting : CustomRole
         }
 
         // Lebende klicken die Spukgestalt an
+        // Schutzzeit mitführen: ab wann spukt wer (auf jedem Client)
+        foreach (var p in PlayerControl.AllPlayerControls)
+        {
+            if (!p) continue;
+            if (Haunts(p)) { if (!hauntSince.ContainsKey(p.PlayerId)) hauntSince[p.PlayerId] = Time.time; }
+            else hauntSince.Remove(p.PlayerId);
+        }
+
         if (livingViewer && Input.GetMouseButtonDown(0) && !Ui.IsMouseBlocked() && Camera.main && !Minigame.Instance)
         {
             Vector2 click = Camera.main.ScreenToWorldPoint(Input.mousePosition);
@@ -194,6 +220,8 @@ public sealed class Haunting : CustomRole
             foreach (var p in PlayerControl.AllPlayerControls)
             {
                 if (!Haunts(p)) continue;
+                // Frisch gespukt? Dann noch nicht erlösbar - sonst erlöst der Kill-Klick den Geist sofort nach dem Kill.
+                if (!hauntSince.TryGetValue(p.PlayerId, out var since) || Time.time - since < ReleaseGrace) continue;
                 Vector2 pos = p.transform.position;
                 if (Vector2.Distance(click, pos) > ClickRadius || Vector2.Distance(me, pos) > ClickReach) continue;
                 SendToAll(ActionRelease, p.PlayerId);
@@ -207,24 +235,18 @@ public sealed class Haunting : CustomRole
                 if (Haunts(p) && AllTasksDone(p)) CustomWin.Trigger(this, new[] { p });
     }
 
-    /// <summary>Den lokalen Spieler in einen Raum ohne lebende Spieler versetzen (sonst irgendeinen Raum).</summary>
+    /// <summary>Beim Werden: einfach auf ein zufälliges Vent setzen - Vents sind immer frei begehbar (nie in einer Wand).</summary>
     private void SpawnInEmptyRoom(PlayerControl local)
     {
         var ship = ShipStatus.Instance;
-        if (!ship || ship.AllRooms == null) return;
-        var rooms = ship.AllRooms.ToArray().Where(r => r && r.roomArea).ToList();
-        if (rooms.Count == 0) return;
+        if (!ship || ship.AllVents == null) return;
+        var vents = ship.AllVents.ToArray().Where(v => v).ToList();
+        if (vents.Count == 0) return;
 
-        var alive = PlayerControl.AllPlayerControls.ToArray().Where(p => p && p != local && IsAlive(p)).ToList();
-        var empty = rooms.Where(r => !alive.Any(p => r.roomArea.OverlapPoint(p.GetTruePosition()))).ToList();
-        var pool = empty.Count > 0 ? empty : rooms;
-        var room = pool[Random.Range(0, pool.Count)];
-
-        Vector2 c = room.roomArea.bounds.center;
-        local.transform.position = new Vector3(c.x, c.y, local.transform.position.z);
+        var vent = vents[Random.Range(0, vents.Count)];
+        Vector2 pick = (Vector2)(vent.transform.position + vent.Offset);
+        local.transform.position = new Vector3(pick.x, pick.y, local.transform.position.z);
         if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
-        lastGoodPos = c;
-        hasLastPos = true;
     }
 
     private static bool AllTasksDone(PlayerControl p)
@@ -244,12 +266,15 @@ public sealed class Haunting : CustomRole
         if (!p.Visible) p.Visible = true;
         SetLayer(p.cosmetics.gameObject, LayerMask.NameToLayer("Players"));
         p.cosmetics.SetPhantomRoleAlpha(visibility.Value / 100f);
+        // Name NICHT zeigen - sonst wüssten Lebende sofort, wer spukt (die Figur ist nur schwach sichtbar).
+        if (p.cosmetics.nameText) p.cosmetics.nameText.gameObject.SetActive(false);
     }
 
     private void Hide(PlayerControl p)
     {
         if (!shownToLiving.Remove(p.PlayerId) || !p || !p.cosmetics) return;
         p.cosmetics.SetPhantomRoleAlpha(1f);
+        if (p.cosmetics.nameText) p.cosmetics.nameText.gameObject.SetActive(true); // Name wieder zulassen (z. B. im Meeting)
         var local = PlayerControl.LocalPlayer;
         if (p.Data != null && p.Data.IsDead && IsAlive(local))
         {
@@ -281,5 +306,23 @@ internal static class HauntingWalkPatch
     public static void Prefix(PlayerPhysics __instance, ref bool amDead)
     {
         if (amDead && Haunting.Instance != null && Haunting.Instance.WalksAsLiving(__instance.myPlayer)) amDead = false;
+    }
+}
+
+/// <summary>
+/// Collider der eigenen Spukgestalt genau im Physik-Schritt (FixedUpdate) erzwingen.
+/// HudManager.Update laeuft nur einmal pro Frame - schaltet das Spiel den Collider in FixedUpdate kurz aus,
+/// liefe man im selben Physik-Schritt durch die Wand. Hier sitzt der Collider garantiert vor der Bewegung.
+/// </summary>
+[HarmonyPatch(typeof(PlayerPhysics), nameof(PlayerPhysics.FixedUpdate))]
+internal static class HauntingColliderPatch
+{
+    public static void Prefix(PlayerPhysics __instance)
+    {
+        var inst = Haunting.Instance;
+        var p = __instance ? __instance.myPlayer : null;
+        if (inst == null || p != PlayerControl.LocalPlayer || !inst.WalksAsLiving(p)) return;
+        if (MeetingHud.Instance || ExileController.Instance) return; // im Meeting wie ein normaler Geist
+        if (!p.inVent) inst.ForceLiveCollision(p); // Collider AN + Layer "Players" genau vor dem Physik-Schritt
     }
 }

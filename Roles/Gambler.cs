@@ -20,52 +20,57 @@ public sealed class Gambler : CustomRole
     public override string IntroText => Lang.T("Dein Glück an der Walze", "Your luck on the reels");
     public override string Description => Lang.T("Aufgaben geben Coins. Dreh am\nAutomaten (F) für eine Fähigkeit.", "Tasks give coins. Spin the\nmachine (F) for an ability.");
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Jede erledigte Aufgabe gibt dir 1-3 Coins (Zahl am Automaten-Knopf). Hast du genug Coins, drehst du mit F am Spielautomaten - du gewinnst eine zufällige, EINMAL nutzbare Fähigkeit: Schild, Sheriff-Schuss, Radar, Prüfer, Enttarnen oder Tempo. Mit Taste C nutzt du die gewonnene Fähigkeit.",
-        "You are crew. Each finished task gives 1-3 coins (shown on the machine button). With enough coins, press F to spin the slot machine - you win a random, ONE-USE ability: shield, sheriff shot, radar, inspect, reveal or speed. Press C to use the won ability.");
+        "Du bist Crew. Jede erledigte Aufgabe gibt dir 1-3 Coins (Zahl am Automaten-Knopf). Hast du genug Coins, drehst du mit F am Spielautomaten - 3 Walzen mit Symbolen:\n\n- 2 gleiche Symbole: du bekommst diese Fähigkeit 1x.\n- 3 gleiche Symbole: du bekommst sie sogar 2x.\n- alles verschieden: Pech, nichts.\n\nFähigkeiten: Schild, Sheriff-Schuss, Radar, Feuerwehrmann (Sabotage löschen), Teleport oder ein Trank (wie beim Trankbrauer). Mit Taste C nutzt du die gewonnene Fähigkeit.",
+        "You are crew. Each finished task gives 1-3 coins (shown on the machine button). With enough coins, press F to spin the slot machine - 3 reels of symbols:\n\n- 2 matching symbols: you get that ability once.\n- 3 matching symbols: you get it twice.\n- all different: no luck, nothing.\n\nAbilities: shield, sheriff shot, radar, firefighter (fix the sabotage), teleport or a potion (like the Potion Brewer). Press C to use the won ability.");
 
     internal static Gambler Instance { get; private set; }
 
     private const byte ActionShoot = 0, ActionShield = 1, ActionShieldBreak = 2;
 
-    private enum Ability { Schild, Schuss, Radar, Pruefer, Enttarnen, Tempo }
+    private enum Ability { Schild, Schuss, Radar, Feuerwehr, Teleport, Trank }
     private static readonly (string De, string En, string Icon)[] Abilities =
     {
         ("Schild", "Shield", "shield"),
         ("Sheriff-Schuss", "Sheriff shot", "shoot"),
         ("Radar", "Radar", "radar"),
-        ("Prüfer", "Inspect", "check"),
-        ("Enttarnen", "Reveal", "guess"),
-        ("Tempo", "Speed", "bolt"),
+        ("Feuerwehr", "Firefighter", "extinguish"),
+        ("Teleport", "Teleport", "tp"),
+        ("Trank", "Potion", "cauldron"),
     };
 
-    private RoleOption spinCost;
+    private bool pendingTeleport; // Teleport-Fähigkeit: Karte offen, Verbrauch erst nach dem Teleport
+
+    private RoleOption spinCost, spinCooldown;
     private RoleButton slotButton, useButton;
 
     private int coins;
     private int won = -1;          // gewonnene Fähigkeit (-1 = keine)
+    private int wonUses;           // wie oft noch nutzbar (2 bei Dreier-Treffer, 1 bei Zweier)
     private bool spinning;
+    private int lastWonShown = -1;              // welches Symbol der Nutzen-Knopf gerade zeigt
     private float spinStart, resultShownUntil, nextTick;
-    private int reelResult;
+    private readonly int[] reels = new int[3];  // Ergebnis der 3 Walzen
     private const float SpinTime = 2.4f;
 
     // Effektzustände
     private bool shieldActive;                    // lokal: für die Blase
     private readonly HashSet<byte> shielded = new(); // Host: wer ist gerade geschützt
-    private float speedUntil, radarUntil;
+    private float radarUntil;
     private GameObject radarArrow;
     private static Sprite arrowSprite;
 
     protected override void Setup()
     {
         Instance = this;
-        spinCost = AddOption("SpinCost", "Kosten pro Dreh|Cost per spin", 5f, 1f, 20f, 1f);
+        spinCost = AddOption("SpinCost", "Kosten pro Dreh|Cost per spin", 3f, 1f, 20f, 1f);
+        spinCooldown = AddOption("SpinCooldown", "Abklingzeit nach dem Dreh|Cooldown after a spin", 20f, 0f, 60f, 5f, "s");
 
         slotButton = AddButton(new RoleButton
         {
             Label = "Automat|Slot machine",
             Icon = "slot",
             NeedsTarget = false,
-            Cooldown = () => 2f,
+            Cooldown = () => spinCooldown.Value,     // nach jedem Dreh eine Abklingzeit
             StartCooldown = 3f,
             UsesLeft = () => coins,                 // Coin-Zahl am Knopf
             CanUse = () => coins >= spinCost.Int && won < 0 && !spinning,
@@ -76,22 +81,29 @@ public sealed class Gambler : CustomRole
         useButton = AddButton(new RoleButton
         {
             Label = "Nutzen|Use",
-            Icon = "shield",
-            IconFunc = () => won >= 0 ? Abilities[won].Icon : "shield",
+            Icon = "shield",                                   // Startbild; beim Gewinn via SetIconStatic auf die Fähigkeit gewechselt
             NeedsTarget = false,
-            Cooldown = () => 0f,
+            Cooldown = () => 1f,               // >0, sonst NaN in der Radial-Anzeige -> Knopf wirkt leer/fehlt
+            StartCooldown = 1f,
+            UsesLeft = () => wonUses,          // wie oft die Fähigkeit noch geht (1 oder 2)
             Visible = () => won >= 0,
-            CanUse = () => won >= 0,
+            CanUse = () => AbilityReady(),     // nur aktiv, wenn die Fähigkeit gerade wirklich nutzbar ist
             Hotkey = KeyCode.C,
             OnClick = _ => UseAbility(),
         });
     }
 
+    public override void OnAssigned(PlayerControl player)
+    {
+        // Im Practise gleich ein paar Coins, damit man die Slot-Machine sofort testen kann
+        if (player == PlayerControl.LocalPlayer && FreeplayTest.IsFreeplay) coins = spinCost.Int * 3;
+    }
+
     public override void ResetState()
     {
-        coins = 0; won = -1; spinning = false;
+        coins = 0; won = -1; wonUses = 0; spinning = false; pendingTeleport = false;
         shieldActive = false; shielded.Clear();
-        speedUntil = radarUntil = 0f;
+        radarUntil = 0f;
         if (radarArrow) Object.Destroy(radarArrow);
         radarArrow = null;
     }
@@ -104,27 +116,64 @@ public sealed class Gambler : CustomRole
         coins -= spinCost.Int;
         spinning = true;
         spinStart = Time.time;
-        reelResult = Random.Range(0, Abilities.Length);
+        // Jede Walze zufällig - wie an einem echten Automaten
+        for (int i = 0; i < reels.Length; i++) reels[i] = Random.Range(0, Abilities.Length);
         Sfx.Play(Sfx.TaskUpdate, 0.8f);
+    }
+
+    /// <summary>Treffer auswerten: 3 gleich = Fähigkeit mit 2 Nutzungen, 2 gleich = 1 Nutzung, sonst Pech (nichts).</summary>
+    private void Evaluate()
+    {
+        if (reels[0] == reels[1] && reels[1] == reels[2]) { won = reels[0]; wonUses = 2; }       // Jackpot: 3 gleiche -> 2x
+        else if (reels[0] == reels[1] || reels[0] == reels[2]) { won = reels[0]; wonUses = 1; }    // 2 gleiche (Walze 0 dabei)
+        else if (reels[1] == reels[2]) { won = reels[1]; wonUses = 1; }                            // 2 gleiche (Walze 1+2)
+        else { won = -1; wonUses = 0; }                                                            // Pech: alle verschieden
     }
 
     public override void Update()
     {
-        // Dreh fertig -> Gewinn festlegen
+        // Teleport-Fähigkeit: Karte offen -> auf den Klick warten, dann erst verbrauchen
+        if (pendingTeleport)
+        {
+            if (MapTeleport.Update()) { pendingTeleport = false; ConsumeWon(); }
+            else if (!MapTeleport.Active) pendingTeleport = false; // Karte ohne Teleport geschlossen -> Fähigkeit bleibt
+        }
+
+        // Dreh fertig -> Treffer auswerten
         if (spinning && Time.time >= spinStart + SpinTime)
         {
             spinning = false;
-            won = reelResult;
-            resultShownUntil = Time.time + 1.6f;
-            Sfx.Play(Sfx.TaskComplete, 0.9f);
-            Notifier.Show($"<color={ColorHex}>{Lang.T("Gewonnen", "Won")}: {Abilities[won].De}</color>", 4f);
+            Evaluate();
+            resultShownUntil = Time.time + 2f;
+            // Keine Text-Meldung mehr - das Ergebnis sieht man am Automaten und am Nutzen-Knopf.
+            Sfx.Play(won >= 0 ? Sfx.TaskComplete : Sfx.TaskUpdate, won >= 0 ? 0.9f : 0.5f);
         }
-        if (useButton != null && won >= 0) useButton.Label = Abilities[won].De + "|" + Abilities[won].En;
+        if (useButton != null && won >= 0)
+        {
+            useButton.Label = Abilities[won].De + "|" + Abilities[won].En;
+            if (lastWonShown != won) { useButton.SetIconStatic(Abilities[won].Icon); lastWonShown = won; } // Bild sicher setzen (Knopf-Neuaufbau)
+        }
+        if (won < 0) lastWonShown = -1;
 
         // Tick-Geräusch während des Drehens
         if (spinning && Time.time >= nextTick) { nextTick = Time.time + 0.12f; Sfx.Play(Sfx.TaskUpdate, 0.2f); }
 
         UpdateRadar();
+    }
+
+    /// <summary>Ist die gewonnene Fähigkeit gerade wirklich nutzbar? (sonst bleibt der Nutzen-Knopf grau)</summary>
+    private bool AbilityReady()
+    {
+        if (won < 0) return false;
+        var local = PlayerControl.LocalPlayer;
+        if (!IsAlive(local)) return false;
+        return (Ability)won switch
+        {
+            Ability.Schuss => Nearest(local, 2.0f) != null,
+            Ability.Trank => Nearest(local, 2.5f) != null,
+            Ability.Feuerwehr => Firefighter.SabotageActive(),
+            _ => true, // Schild, Radar, Teleport: überall nutzbar
+        };
     }
 
     private void UseAbility()
@@ -150,22 +199,30 @@ public sealed class Gambler : CustomRole
                 radarUntil = Time.time + 6f;
                 Sfx.Play(Sfx.Investigate);
                 break;
-            case Ability.Pruefer:
-                var insp = Nearest(local, 2.5f);
-                if (insp) Notifier.Show($"<color={ColorHex}>{insp.Data.PlayerName}: {TaskTracker.Count(insp.PlayerId)} {Lang.T("Aufgaben", "tasks")}</color>", 4f);
-                else return;
+            case Ability.Feuerwehr:
+                if (!Firefighter.SabotageActive()) { Notifier.Show(Lang.T("Keine Sabotage aktiv.", "No sabotage active."), 2f); return; }
+                Firefighter.FixSabotages();
+                Notifier.Show($"<color={ColorHex}>{Lang.T("Sabotage gelöscht!", "Sabotage fixed!")}</color>", 3f);
                 break;
-            case Ability.Enttarnen:
-                var rev = Nearest(local, 2.5f);
-                if (rev) Notifier.Show($"{rev.Data.PlayerName}: {RoleUI.RoleLabel(rev)}", 5f);
-                else return;
-                break;
-            case Ability.Tempo:
-                speedUntil = Time.time + 8f;
+            case Ability.Teleport:
+                if (!MapTeleport.Open()) return; // Karte ging nicht auf -> nicht verbrauchen
+                pendingTeleport = true;
+                Notifier.Show($"<color={ColorHex}>{Lang.T("Klick auf die Karte, um dich zu teleportieren.", "Click the map to teleport.")}</color>", 4f);
+                return; // Verbrauch erst nach dem Teleport (siehe Update)
+            case Ability.Trank:
+                var drinker = Nearest(local, 2.5f);
+                if (!drinker) { Notifier.Show(Lang.T("Niemand in der Nähe.", "Nobody nearby."), 2f); return; }
+                PotionBrewer.Instance?.CastRandom(drinker);
                 Sfx.Play(Sfx.Investigate);
                 break;
         }
-        won = -1; // verbraucht
+        ConsumeWon();
+    }
+
+    /// <summary>Eine Nutzung der gewonnenen Fähigkeit verbrauchen (bei Dreier-Treffer bleibt sie noch ein 2. Mal).</summary>
+    private void ConsumeWon()
+    {
+        if (--wonUses <= 0) won = -1;
     }
 
     private PlayerControl Nearest(PlayerControl local, float range)
@@ -183,7 +240,7 @@ public sealed class Gambler : CustomRole
         {
             var victim = FindPlayer(data[0]);
             if (!IsAlive(victim) || !IsAlive(sender)) return;
-            if (IsImpostor(victim)) KillSystem.ForceKill(victim, victim);   // Treffer: Impostor stirbt
+            if (IsImpostor(victim)) KillSystem.TryKill(sender, victim);     // Treffer: normale Kill-Animation
             else KillSystem.ForceKill(sender, sender);                      // daneben: der Gambler stirbt
         }
         else if (action == ActionShield && AmHost)
@@ -211,9 +268,6 @@ public sealed class Gambler : CustomRole
     {
         if (viewer && shieldActive && RoleRegistry.Has(viewer, this)) yield return (viewer, Color);
     }
-
-    public override float SpeedMultiplier(PlayerControl local) =>
-        IsLocalRole && IsAlive(local) && Time.time < speedUntil ? 1.5f : 1f;
 
     // ---------- Radar-Pfeil ----------
     private void UpdateRadar()
@@ -267,8 +321,30 @@ public sealed class Gambler : CustomRole
         return arrowSprite;
     }
 
-    // ---------- Slot-Machine-Anzeige (IMGUI): scrollende Walzen, gestaffelt anhaltend ----------
+    // ---------- Slot-Machine-Anzeige (IMGUI): schnell wechselnde Symbole, gestaffelt anhaltend ----------
+    // Bilder gehen hier NUR über einen Box-Style mit normal.background (GUI.DrawTexture ist im IL2CPP wegoptimiert).
     private static int Mod(int a, int n) => ((a % n) + n) % n;
+
+    private static GUIStyle titleStyle, statusStyle, cellStyle;
+    private static Texture2D cellTex;
+    private static readonly Dictionary<string, GUIStyle> iconStyles = new();
+    private static readonly RectOffset Zero = new RectOffset(); // Felder sind standardmäßig 0 (IL2CPP hat keinen 4-Arg-Ctor)
+
+    /// <summary>Box-Style, der nur ein Bild zeichnet (von Ui.Panel abgeleitet, Rand 0 -> randloses Bild).</summary>
+    private static GUIStyle BoxWithImage(Texture2D tex)
+    {
+        var s = new GUIStyle(Ui.Panel) { border = Zero, padding = Zero, overflow = Zero, margin = Zero };
+        s.normal.background = tex;
+        return s;
+    }
+
+    private static GUIStyle IconStyle(string name)
+    {
+        if (iconStyles.TryGetValue(name, out var s) && s != null) return s;
+        s = BoxWithImage(ButtonIcons.Texture(name));
+        iconStyles[name] = s;
+        return s;
+    }
 
     public override void DrawGUI()
     {
@@ -277,63 +353,42 @@ public sealed class Gambler : CustomRole
 
         float cx = Ui.ScreenWidth / 2f, cy = 480f;
         var panel = new Rect(cx - 235f, cy - 165f, 470f, 330f);
-        var prev = GUI.color;
 
-        // Gehäuse + goldener Rahmen
-        GUI.color = new Color(0.14f, 0.11f, 0.16f, 0.96f);
-        GUI.DrawTexture(panel, Texture2D.whiteTexture);
-        GUI.color = new Color(0.92f, 0.76f, 0.26f, 1f);
-        GUI.DrawTexture(new Rect(panel.x, panel.y, panel.width, 6f), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(panel.x, panel.yMax - 6f, panel.width, 6f), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(panel.x, panel.y, 6f, panel.height), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(panel.xMax - 6f, panel.y, 6f, panel.height), Texture2D.whiteTexture);
+        GUI.Box(panel, GUIContent.none, Ui.Panel); // dunkles Gehäuse (bewährter Box-Style)
 
-        var title = new GUIStyle(GUI.skin.label) { fontSize = 30, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-        GUI.color = new Color(1f, 0.85f, 0.3f, 1f);
-        GUI.Label(new Rect(panel.x, panel.y + 10f, panel.width, 36f), Lang.T("Spielautomat", "Slot machine"), title);
+        titleStyle ??= new GUIStyle(Ui.Title) { alignment = TextAnchor.MiddleCenter, fontSize = 30 };
+        GUI.Label(new Rect(panel.x, panel.y + 12f, panel.width, 40f), $"<color=#FFD94D>{Lang.T("Spielautomat", "Slot machine")}</color>", titleStyle);
+
+        if (!cellTex)
+        {
+            cellTex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave };
+            cellTex.SetPixel(0, 0, new Color(0.95f, 0.95f, 0.98f, 1f));
+            cellTex.Apply();
+        }
+        cellStyle ??= BoxWithImage(cellTex);
 
         float cell = 108f, gap = 16f, totalW = cell * 3 + gap * 2, startX = cx - totalW / 2f, reelY = cy - cell / 2f + 14f;
         float tt = spinning ? Time.time - spinStart : SpinTime;
 
-        void DrawIcon(Rect r, int idx)
-        {
-            var tex = ButtonIcons.Texture(Abilities[idx].Icon);
-            if (tex) { GUI.color = Color.white; GUI.DrawTexture(r, tex, ScaleMode.ScaleToFit); }
-        }
-
         for (int i = 0; i < 3; i++)
         {
             var reel = new Rect(startX + i * (cell + gap), reelY, cell, cell);
-            GUI.color = Color.white;
-            GUI.DrawTexture(reel, Texture2D.whiteTexture); // heller Walzen-Hintergrund
+            GUI.Box(reel, GUIContent.none, cellStyle); // helle Walzen-Fläche
 
             float stop = SpinTime * (0.42f + i * 0.19f); // Walze i hält gestaffelt
             bool locked = tt >= stop;
-
-            GUI.BeginGroup(reel);
-            if (locked)
-            {
-                DrawIcon(new Rect(10f, 10f, cell - 20f, cell - 20f), reelResult);
-            }
-            else
-            {
-                float period = 0.07f + i * 0.015f;
-                float phase = tt / period;
-                int idx = Mod((int)phase, Abilities.Length);
-                int nxt = Mod((int)phase + 1, Abilities.Length);
-                float slide = phase - Mathf.Floor(phase);
-                DrawIcon(new Rect(10f, 10f - slide * cell, cell - 20f, cell - 20f), idx);
-                DrawIcon(new Rect(10f, 10f + (1f - slide) * cell, cell - 20f, cell - 20f), nxt);
-            }
-            GUI.EndGroup();
+            // Während des Drehens schnell durch die Symbole blättern, dann auf dem eigenen Ergebnis stehen bleiben
+            int idx = locked ? reels[i] : Mod((int)(tt / (0.07f + i * 0.015f)), Abilities.Length);
+            GUI.Box(new Rect(reel.x + 12f, reel.y + 12f, cell - 24f, cell - 24f), GUIContent.none, IconStyle(Abilities[idx].Icon));
         }
 
-        var style = new GUIStyle(GUI.skin.label) { fontSize = 26, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+        statusStyle ??= new GUIStyle(Ui.Title) { alignment = TextAnchor.MiddleCenter, fontSize = 26 };
         bool allLocked = tt >= SpinTime * (0.42f + 2 * 0.19f);
-        GUI.color = !allLocked ? new Color(1f, 1f, 1f, 0.85f) : new Color(0.4f, 1f, 0.5f, 1f);
-        string txt = !allLocked ? Lang.T("Dreht ...", "Spinning ...") : $"{Lang.T("Gewonnen", "Won")}: {Abilities[Mathf.Max(0, reelResult)].De}";
-        GUI.Label(new Rect(panel.x, panel.yMax - 50f, panel.width, 38f), txt, style);
-        GUI.color = prev;
+        string col, txt;
+        if (!allLocked) { col = "#FFFFFF"; txt = Lang.T("Dreht ...", "Spinning ..."); }
+        else if (won >= 0) { col = "#66FF80"; txt = $"{Lang.T("Gewonnen", "Won")}: {Abilities[won].De}{(wonUses > 1 ? " (2x)" : "")}"; }
+        else { col = "#FF8080"; txt = Lang.T("Pech - nichts", "No luck"); }
+        GUI.Label(new Rect(panel.x, panel.yMax - 52f, panel.width, 40f), $"<color={col}>{txt}</color>", statusStyle);
     }
 }
 

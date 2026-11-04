@@ -5,25 +5,51 @@ using UnityEngine;
 
 namespace Spieleabend.Roles.Modifiers;
 
-/// <summary>Anpassung: Links und rechts (optional auch oben/unten) sind vertauscht.</summary>
+/// <summary>
+/// Anpassung: Betrunken. Die Steuerung ist mal links/rechts, mal oben/unten, mal beides vertauscht - und wechselt
+/// alle 13-18 s zwischen „verdreht" und „normal" hin und her (zufällig, welche Achse betroffen ist).
+/// </summary>
 public sealed class Drunk : CustomRole
 {
     public override string Name => Lang.T("Betrunken", "Drunk");
     public override Color Color => new Color32(200, 150, 60, 255);
     public override RoleTeam Team => RoleTeam.Modifier;
     public override string IntroText => Lang.T("Hicks!", "Hic!");
-    public override string Description => Lang.T("Links und rechts sind vertauscht!", "Left and right are swapped!");
+    public override string Description => Lang.T("Deine Steuerung ist verdreht -\nund wechselt immer wieder.", "Your controls are twisted -\nand keep changing.");
     public override string LongDescription => Lang.T(
-        "Anpassung: Du bist betrunken - links und rechts sind vertauscht (je nach Einstellung auch oben und unten). Deine Rolle bleibt.",
-        "Modifier: you are drunk - left and right are swapped (depending on the settings also up and down). Your role stays.");
+        "Anpassung: Du bist betrunken - links/rechts und/oder oben/unten sind vertauscht. Alle paar Sekunden (13-18 s) wird es wieder normal und dann wieder verdreht - mal nur eine Achse, mal beide. Deine Rolle bleibt.",
+        "Modifier: you are drunk - left/right and/or up/down are swapped. Every few seconds (13-18 s) it turns normal and then twisted again - sometimes just one axis, sometimes both. Your role stays.");
 
     internal static Drunk Instance { get; private set; }
-    internal RoleOption SwapVertical { get; private set; }
 
-    protected override void Setup()
+    // aktueller Zustand (nur fuer den lokalen Betrunkenen relevant)
+    internal bool CurX { get; private set; }
+    internal bool CurY { get; private set; }
+    internal bool CurRotate { get; private set; } // Steuerung um 90° gedreht (rechts = oben)
+    private float nextChange;
+
+    private bool Verdreht => CurX || CurY || CurRotate;
+
+    protected override void Setup() => Instance = this;
+
+    public override void ResetState()
     {
-        Instance = this;
-        SwapVertical = AddToggle("SwapVertical", "Auch oben/unten vertauscht|Also swap up/down", false);
+        CurX = true; CurY = true; CurRotate = false; // startet verdreht
+        nextChange = Time.time + UnityEngine.Random.Range(13f, 18f);
+    }
+
+    public override void Update()
+    {
+        if (!IsLocalRole || InMeeting) return;
+        if (Time.time < nextChange) return;
+        nextChange = Time.time + UnityEngine.Random.Range(13f, 18f);
+
+        if (Verdreht) { CurX = CurY = CurRotate = false; return; } // war verdreht -> jetzt normal
+        // war normal -> wieder verdrehen, zufällig wie
+        int mode = UnityEngine.Random.Range(0, 4); // 0 = beide Achsen, 1 = nur links/rechts, 2 = nur oben/unten, 3 = um 90° gedreht
+        CurRotate = mode == 3;
+        CurX = !CurRotate && mode != 2;
+        CurY = !CurRotate && mode != 1;
     }
 }
 
@@ -64,8 +90,20 @@ internal static class DrunkKeyboardPatch
             return;
         }
 
-        bool vert = byRole && drunk.SwapVertical.Bool;
-        __instance.del = new Vector2(-raw.x, vert ? -raw.y : raw.y);
+        // Betrunken-Rolle im Dreh-Modus: Steuerung um 90° gedreht (rechts = oben)
+        if (byRole && drunk.CurRotate)
+        {
+            __instance.del = new Vector2(-raw.y, raw.x);
+            flipped = true;
+            return;
+        }
+
+        // Betrunken-Rolle: aktueller Zustand (Achsen wechseln zeitlich). Bierdalf macht ebenfalls beide Achsen,
+        // der Kopfüber-Trank nur links/rechts.
+        bool swapX = byBierdalf || byPotion || (byRole && drunk.CurX);
+        bool swapY = byBierdalf || (byRole && drunk.CurY);
+        if (!swapX && !swapY) return; // z. B. Betrunken gerade in der "normal"-Phase
+        __instance.del = new Vector2(swapX ? -raw.x : raw.x, swapY ? -raw.y : raw.y);
         flipped = true;
     }
 }

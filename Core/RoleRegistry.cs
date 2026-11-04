@@ -86,6 +86,7 @@ public static class RoleRegistry
         Camouflage.Reset();
         ProtectionVisuals.Reset();
         FireEffect.Reset();
+        Emotes.Reset();
         SpeedControl.Reset();
         GhostRoles.Reset();
         foreach (var role in Roles) role.ResetState();
@@ -111,6 +112,7 @@ public static class RoleRegistry
         EndSummary.ResetKills();
         CardSwipeHelpPatch.Reset();
         foreach (var role in Roles) role.ResetState();
+        ButtonManager.Reset(); // alte Knöpfe sofort ausblenden (sonst bleiben beim Freeplay-Rollenwechsel welche hängen)
 
         foreach (var (playerId, roleId) in pairs) AddInternal(playerId, roleId);
         ButtonManager.OnRolesAssigned();
@@ -124,12 +126,7 @@ public static class RoleRegistry
             role.OnAssigned(player);
         }
 
-        // Die Rolle steht im Intro (Rollen-Bildschirm, siehe RoleUI.UpdateIntro). Nur im Freeplay gibt es kein Intro -
-        // dort kurz ansagen, welche Testrolle man hat.
-        var local = PlayerControl.LocalPlayer;
-        var mine = GetDisplayed(local).ToList();
-        if (mine.Count > 0 && FreeplayTest.IsFreeplay)
-            Notifier.Show(Lang.T("Deine Rolle: ", "Your role: ") + string.Join(" + ", mine.Select(r => r.ColoredName)), 8f);
+        // (Früher wurde im Freeplay "Deine Rolle: …" eingeblendet - auf Wunsch entfernt.)
     }
 
     private static void AddInternal(byte playerId, byte roleId)
@@ -191,6 +188,21 @@ public static class RoleRegistry
             try { role.OnAssigned(player); }
             finally { IsRoleChange = false; }
         }
+        RoleUI.Reset();
+    }
+
+    /// <summary>Host: einem Spieler eine Zusatzrolle (z. B. Geisterrolle) wieder wegnehmen.</summary>
+    public static void RemoveRole(PlayerControl player, CustomRole role)
+    {
+        if (!CustomRole.AmHost || !player || role == null) return;
+        RoleRpc.SendRemoveRole(player.PlayerId, role.Id);
+        ApplyRemoveRole(player.PlayerId, role.Id);
+    }
+
+    internal static void ApplyRemoveRole(byte playerId, byte roleId)
+    {
+        if (modifiers.TryGetValue(playerId, out var list)) list.Remove(roleId);
+        if (mainRoles.TryGetValue(playerId, out var m) && m == roleId) mainRoles.Remove(playerId);
         RoleUI.Reset();
     }
 

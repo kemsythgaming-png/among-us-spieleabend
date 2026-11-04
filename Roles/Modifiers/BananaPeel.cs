@@ -48,6 +48,7 @@ public sealed class BananaPeel : CustomRole
             GameIcon = _ => PeelSprite(),
             NeedsTarget = false,
             Cooldown = () => cooldown.Value,
+            CoolsDownAlways = true, // läuft auch während einer Aufgabe runter
             StartCooldown = 10f,
             OnClick = _ =>
             {
@@ -154,6 +155,14 @@ public sealed class BananaPeel : CustomRole
         {
             if (!p.Obj || t < p.ArmAt) continue; // erst nach kurzer Zeit "scharf" (Platzierer rutscht nicht sofort selbst)
             if (Vector2.Distance(me, p.Obj.transform.position) > TripRadius) continue;
+
+            // Süßigkeiten-Kind mit aktivem Zucker-Schild: geschützt - die Schale ist weg, aber man rutscht nicht (zeitbasiert, kein Verbrauch).
+            if (Halloween.CandyKid.HasShield(local))
+            {
+                SendToAll(ActionTrip, local.PlayerId, p.Placer, p.Seq);
+                break;
+            }
+
             slipUntil = t + SlipTime;
             Sfx.Play(Sfx.Fail);
             SendToAll(ActionTrip, local.PlayerId, p.Placer, p.Seq);

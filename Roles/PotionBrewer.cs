@@ -71,13 +71,25 @@ public sealed class PotionBrewer : CustomRole
             Cooldown = () => cooldown.Value,
             StartCooldown = 10f,
             Hotkey = KeyCode.F,
-            OnClick = target =>
-            {
-                if (!target) return;
-                byte p = (byte)UnityEngine.Random.Range(0, PotionCount);
-                SendToAll(ActionPotion, target.PlayerId, p);
-            },
+            OnClick = target => CastRandom(target),
         });
+    }
+
+    // Nur zuverlässige, "logische" Tränke (entsprechen Anpassungen): Langsam, Eingefroren, Schnell,
+    // verdrehte Steuerung (Betrunken), Schrumpf (Mini), Riese (Giant), Nebel (Kurzsichtig), Adlerauge.
+    private static readonly byte[] Allowed =
+    {
+        (byte)Potion.Slow, (byte)Potion.Freeze, (byte)Potion.Speed, (byte)Potion.Reverse,
+        (byte)Potion.Shrink, (byte)Potion.Grow, (byte)Potion.Fog, (byte)Potion.Eagle,
+    };
+
+    /// <summary>Löst bei target einen zufälligen (zuverlässigen) Trank-Effekt aus. Schild schluckt ihn.</summary>
+    internal void CastRandom(PlayerControl target)
+    {
+        if (!target) return;
+        if (Halloween.CandyKid.Absorb(target)) return; // Süßigkeitenkind-Schild schluckt auch den Trank
+        byte p = Allowed[UnityEngine.Random.Range(0, Allowed.Length)];
+        SendToAll(ActionPotion, target.PlayerId, p);
     }
 
     public override void ResetState()
@@ -103,6 +115,10 @@ public sealed class PotionBrewer : CustomRole
         var p = (Potion)Mathf.Clamp(data[1], 0, PotionCount - 1);
         effects[data[0]] = (p, Time.time + Durations[(int)p]);
         if (p == Potion.Compass) compassAngle[data[0]] = UnityEngine.Random.Range(0f, 360f);
+
+        // Sichtbarer Treffer auf dem Ziel (bei allen) - so merkt man IMMER, dass ein Trank gewirkt hat,
+        // auch bei den subtilen (Kicher, Adlerauge, Kompass ...).
+        ProtectionVisuals.ShowBurst(FindPlayer(data[0]), Color);
 
         var local = PlayerControl.LocalPlayer;
         if (local && local.PlayerId == data[0])

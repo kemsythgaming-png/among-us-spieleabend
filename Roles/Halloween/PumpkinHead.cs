@@ -19,11 +19,10 @@ public sealed class PumpkinHead : CustomRole
     public override string IntroText => Lang.T("Hohl, aber unverwundbar", "Hollow, but invincible");
     public override string Description => Lang.T("Setz den Kürbis auf (F):\nunverwundbar, aber fast blind.", "Put on the pumpkin (F):\ninvincible, but almost blind.");
     public override string LongDescription => Lang.T(
-        "Halloween-Crew. Mit Taste F setzt du für ein paar Sekunden einen Kürbis auf. Solange du ihn trägst, kann dich niemand töten.\n\nDafür siehst du nur, was durch die zwei Augenlöcher passt - der Rest ist Kürbis. Die anderen sehen dich in der Zeit nur als schwarze Silhouette - ohne Farbe und Namen.",
-        "Halloween crew. Press F to put on a pumpkin for a few seconds. While you wear it, nobody can kill you.\n\nBut you only see what fits through the two eye holes - the rest is pumpkin. Meanwhile the others only see you as a black silhouette - no color, no name.");
+        "Halloween-Crew. Mit Taste F setzt du für ein paar Sekunden einen Kürbis auf. Solange du ihn trägst, kann dich niemand töten.\n\nDafür siehst du nur, was durch die zwei Augenlöcher passt - der Rest ist Kürbis. Für die anderen siehst du ganz normal aus.",
+        "Halloween crew. Press F to put on a pumpkin for a few seconds. While you wear it, nobody can kill you.\n\nBut you only see what fits through the two eye holes - the rest is pumpkin. To everyone else you look completely normal.");
 
     private const byte ActionOn = 0, ActionBlocked = 1;
-    private const int BlackColorId = 6;
 
     internal static PumpkinHead Instance { get; private set; }
 
@@ -31,7 +30,6 @@ public sealed class PumpkinHead : CustomRole
 
     // bei allen Clients: wer traegt bis wann einen Kuerbis
     private readonly Dictionary<byte, float> wearingUntil = new();
-    private readonly Dictionary<byte, PlayerOutfitType> silhouettes = new();
 
     // lokal: Kuerbis-Sicht
     private GameObject overlay;
@@ -58,7 +56,6 @@ public sealed class PumpkinHead : CustomRole
     public override void ResetState()
     {
         wearingUntil.Clear();
-        RestoreSilhouettes();
         if (overlay) Object.Destroy(overlay);
         overlay = null;
     }
@@ -66,7 +63,6 @@ public sealed class PumpkinHead : CustomRole
     public override void OnMeetingStart()
     {
         wearingUntil.Clear();
-        RestoreSilhouettes();
     }
 
     internal bool Wearing(PlayerControl p) =>
@@ -94,8 +90,8 @@ public sealed class PumpkinHead : CustomRole
     public override KillIntercept InterceptKill(PlayerControl killer, PlayerControl target)
     {
         if (!Wearing(target) || killer == target) return KillIntercept.None;
-        killer.RpcMurderPlayer(target, false); // Kill scheitert sichtbar, Abklingzeit des Killers startet neu
-        SendToAll(ActionBlocked, target.PlayerId);
+        // Lautlos blocken: nur der Fehlschlag-Kill (Killer-Abklingzeit), KEIN Burst und KEIN Sound.
+        try { killer.RpcMurderPlayer(target, false); } catch { }
         return KillIntercept.Handled;
     }
 
@@ -103,59 +99,15 @@ public sealed class PumpkinHead : CustomRole
     {
         var local = PlayerControl.LocalPlayer;
 
-        // Silhouetten fuer alle anderen
+        // abgelaufene Kuerbis-Traeger aus der Liste raeumen
         foreach (var id in wearingUntil.Keys.ToList())
-        {
-            var p = FindPlayer(id);
-            bool show = Wearing(p) && p != local && !Camouflage.Active;
-            if (show && !silhouettes.ContainsKey(id))
-            {
-                silhouettes[id] = p.CurrentOutfitType;
-                p.RawSetOutfit(SilhouetteOutfit(), PlayerOutfitType.MushroomMixup);
-            }
-            else if (!show && silhouettes.ContainsKey(id)) Restore(id);
-            if (!Wearing(p) && wearingUntil[id] <= Time.time) wearingUntil.Remove(id);
-        }
+            if (wearingUntil[id] <= Time.time) wearingUntil.Remove(id);
 
         // Kuerbis-Sicht fuer den Traeger selbst
         bool mine = Wearing(local);
         if (mine && !overlay) overlay = CreateOverlay();
         if (overlay) overlay.SetActive(mine);
     }
-
-    private void RestoreSilhouettes()
-    {
-        foreach (var id in silhouettes.Keys.ToList()) Restore(id);
-        silhouettes.Clear();
-    }
-
-    private void Restore(byte id)
-    {
-        var type = silhouettes[id];
-        silhouettes.Remove(id);
-        var p = FindPlayer(id);
-        if (!p || p.Data == null) return;
-
-        NetworkedPlayerInfo.PlayerOutfit outfit = null;
-        if (p.Data.Outfits.ContainsKey(type)) outfit = p.Data.Outfits[type];
-        if (outfit == null)
-        {
-            outfit = p.Data.DefaultOutfit;
-            type = PlayerOutfitType.Default;
-        }
-        p.RawSetOutfit(outfit, type);
-    }
-
-    private static NetworkedPlayerInfo.PlayerOutfit SilhouetteOutfit() => new()
-    {
-        ColorId = BlackColorId,
-        HatId = "hat_NoHat",
-        SkinId = "skin_None",
-        VisorId = "visor_EmptyVisor",
-        PetId = "pet_EmptyPet",
-        NamePlateId = "nameplate_NoPlate",
-        PlayerName = "",
-    };
 
     /// <summary>
     /// Bildschirmfuellender Kuerbis mit zwei Augenloechern. Liegt direkt vor der Dunkelheit (ShadowQuad) - also ueber

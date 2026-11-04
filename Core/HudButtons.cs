@@ -83,10 +83,11 @@ internal static class HudButtons
         button.OnClick = new Button.ButtonClickedEvent();
         button.OnClick.AddListener(onClick);
 
-        // Unser komplettes Icon (Rahmen + Symbol) in den groessten Sprite setzen und alle anderen Sprites ausblenden,
-        // damit nur EIN Rahmen zu sehen ist (kein doppelter aus Spiel-Rahmen + Symbol-Rahmen).
+        // Unser komplettes Icon (Rahmen + Symbol) in das groesste Grafik-Element setzen und ALLE anderen ausblenden -
+        // sowohl SpriteRenderer ALS AUCH UI-Images (der Original-"Guide"-Charakter ist ein Image und blieb sonst sichtbar).
         var renderers = go.GetComponentsInChildren<SpriteRenderer>(true);
-        SpriteRenderer main = null;
+        var images = go.GetComponentsInChildren<Image>(true);
+        Component main = null;
         float largest = -1f;
         foreach (var sr in renderers)
         {
@@ -94,15 +95,23 @@ internal static class HudButtons
             float area = sr.sprite.bounds.size.x * sr.sprite.bounds.size.y;
             if (area > largest) { largest = area; main = sr; }
         }
+        foreach (var im in images)
+        {
+            if (!im || !im.sprite) continue;
+            float area = im.sprite.bounds.size.x * im.sprite.bounds.size.y;
+            if (area > largest) { largest = area; main = im; }
+        }
         foreach (var sr in renderers)
         {
             if (!sr) continue;
-            if (sr == main)
-            {
-                var sprite = ButtonIcons.Get(icon, sr.sprite);
-                if (sprite) sr.sprite = sprite;
-            }
+            if (sr == main) { var sprite = ButtonIcons.Get(icon, sr.sprite); if (sprite) sr.sprite = sprite; }
             else sr.enabled = false;
+        }
+        foreach (var im in images)
+        {
+            if (!im) continue;
+            if (im == main) { var sprite = ButtonIcons.Get(icon, im.sprite); if (sprite) im.sprite = sprite; }
+            else im.enabled = false;
         }
 
         // Controller-Hinweise des Originals ausblenden

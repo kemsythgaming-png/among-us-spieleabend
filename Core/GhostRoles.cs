@@ -31,13 +31,38 @@ internal static class GhostRoles
         return false;
     }
 
-    /// <summary>Host, regelmaessig: betroffene Rollen behalten keine Spiel-Geisterrolle (falls das Spiel sie vergibt).</summary>
+    /// <summary>Host, regelmaessig: betroffene Rollen behalten keine Spiel-Geisterrolle; außerdem bekommen rollenlose
+    /// Geister eine Geisterrolle, sobald sie ALLE ihre Aufgaben erledigt haben.</summary>
     internal static void Update()
     {
         if (!CustomRole.AmHost || Time.time < nextCheck) return;
         nextCheck = Time.time + 0.5f;
         foreach (var p in PlayerControl.AllPlayerControls)
-            if (p && p.Data != null && p.Data.IsDead && !p.Data.Disconnected && PlainGhostOnly(p)) EnsurePlainGhost(p);
+        {
+            if (!p || p.Data == null || !p.Data.IsDead || p.Data.Disconnected) continue;
+            if (PlainGhostOnly(p)) { EnsurePlainGhost(p); continue; } // hat schon eine Geisterrolle (oder steht wieder auf)
+            // Rollenloser Geist, der alle Aufgaben geschafft hat -> garantiert eine Geisterrolle (ohne Chance-Würfeln)
+            if (!GhostRoleExempt(p) && AllTasksDone(p)) AssignGhostRole(p, ignoreChance: true);
+        }
+    }
+
+    /// <summary>Hat der Spieler alle (echten) Aufgaben erledigt?</summary>
+    private static bool AllTasksDone(PlayerControl p)
+    {
+        var tasks = p.Data?.Tasks;
+        if (tasks == null || tasks.Count == 0) return false;
+        foreach (var t in tasks) if (t != null && !t.Complete) return false;
+        return true;
+    }
+
+    /// <summary>Bekommt keine Geisterrolle (Survivor/Untoter, die wieder aufstehen, oder schon eine Geister-Anpassung).</summary>
+    private static bool GhostRoleExempt(PlayerControl p)
+    {
+        if (RoleRegistry.GetModifiers(p).Any(r => r.IsGhostRole)) return true;
+        if ((Roles.Halloween.Undead.Instance?.WillRise(p) ?? false) || (Roles.Modifiers.SecondLife.Instance?.WillRise(p) ?? false)) return true;
+        if (Roles.Modifiers.SecondLife.Instance != null && RoleRegistry.Has(p, Roles.Modifiers.SecondLife.Instance)) return true;
+        if (Roles.Halloween.Undead.Instance != null && RoleRegistry.Has(p, Roles.Halloween.Undead.Instance)) return true;
+        return false;
     }
 
     /// <summary>
@@ -67,23 +92,24 @@ internal static class GhostRoles
     internal static void OnDeath(PlayerControl victim)
     {
         if (!CustomRole.AmHost || !victim || victim.Data == null || victim.Data.Disconnected) return;
-        if (RoleRegistry.GetModifiers(victim).Any(r => r.IsGhostRole)) return;
-        if ((Roles.Halloween.Undead.Instance?.WillRise(victim) ?? false) || (Roles.Modifiers.SecondLife.Instance?.WillRise(victim) ?? false)) return; // steht wieder auf
-        // Survivor und Untoter bekommen nie eine Geisterrolle (sonst haetten sie nach dem endgueltigen Tod einen Geister-Knopf)
-        if (Roles.Modifiers.SecondLife.Instance != null && RoleRegistry.Has(victim, Roles.Modifiers.SecondLife.Instance)) return;
-        if (Roles.Halloween.Undead.Instance != null && RoleRegistry.Has(victim, Roles.Halloween.Undead.Instance)) return;
+        if (GhostRoleExempt(victim)) return;
+        AssignGhostRole(victim, ignoreChance: false);
+    }
 
+    /// <summary>Host: dem Geist eine freie Geisterrolle geben. ignoreChance = garantiert (für den Aufgaben-Weg).</summary>
+    private static bool AssignGhostRole(PlayerControl victim, bool ignoreChance)
+    {
         foreach (var role in RoleRegistry.Roles.Where(r => r.IsGhostRole && r.Count.Int > 0).OrderBy(_ => Random.value))
         {
             used.TryGetValue(role.Id, out int n);
             if (n >= role.Count.Int || !role.CanHaunt(victim)) continue;
-            if (Random.Range(0, 100) >= role.Chance.Int) continue;
+            if (!ignoreChance && Random.Range(0, 100) >= role.Chance.Int) continue;
 
             used[role.Id] = n + 1;
             RoleRegistry.AddRole(victim, role);
-
             EnsurePlainGhost(victim);
-            return;
+            return true;
         }
+        return false;
     }
 }
