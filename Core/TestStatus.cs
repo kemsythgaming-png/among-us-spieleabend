@@ -30,14 +30,13 @@ internal static class TestStatus
         "Boo", "EvilGuesser", "Wizard", "Werewolf", "Sniper",
         "BodyDragger", "FalseSanta", "GuardianSpirit", "WailingSpirit",
         "Haunting", "Zombie", "Mummy", "Oracle",
+        "VengefulSpirit",
     };
 
     /// <summary>Anpassungen, die trotz der Sammelfreigabe noch NICHT getestet sind (z. B. gemeldeter Bug).</summary>
     private static readonly HashSet<string> UntestedModifiers = new()
     {
         "Lover",
-        // Noch offen (gemeldet + gefixt, aber noch nicht erneut getestet):
-        "Bait",          // Köder
     };
 
     // An/Aus-Schalter: dürfen ungetestete Rollen benutzt/eingestellt werden? Standard: AUS.

@@ -23,6 +23,18 @@ internal static class UpdateNotes
     // Neueste Version zuerst.
     private static readonly Entry[] History =
     {
+        new Entry("4.9.18",
+            new[]
+            {
+                Lang.T("<b>Keine neue Rolle</b>\nKöder und Rachegeist sind jetzt geprüft und standardmäßig dabei.",
+                       "<b>No new role</b>\nBait and Vengeful Spirit are now verified and on by default."),
+            },
+            new[]
+            {
+                Lang.T("<b>Geprüft:</b> Köder (Anpassung) und Rachegeist (Geist) gelten jetzt als getestet - sie sind damit auch bei ausgeschaltetem Schalter \"Ungetestete Rollen\" verfügbar.",
+                       "<b>Verified:</b> Bait (modifier) and Vengeful Spirit (ghost) now count as tested - so they are available even with the \"Untested roles\" switch off."),
+            }),
+
         new Entry("4.9.17",
             new[]
             {
