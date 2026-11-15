@@ -103,12 +103,14 @@ public static class ProtectionVisuals
         {
             if (!b.Obj) continue;
             var target = CustomRole.FindPlayer(b.Target);
-            bool visible = target && target.cosmetics && target.cosmetics.nameText.gameObject.activeInHierarchy && !target.inVent;
+            // Schild mit der Chamäleon-Tarnung mit ausblenden (sonst verrät die Blase den unsichtbaren Spieler).
+            float camo = Spieleabend.Roles.Chameleon.VisibilityAlpha(b.Target);
+            bool visible = target && target.cosmetics && target.cosmetics.nameText.gameObject.activeInHierarchy && !target.inVent && camo > 0.02f;
             b.Renderer.enabled = visible;
             float pulse = 1f + 0.06f * Mathf.Sin(t * 3f + b.Phase);
             b.Obj.transform.localScale = new Vector3(pulse, pulse, 1f);
             var c = b.Renderer.color;
-            b.Renderer.color = new Color(c.r, c.g, c.b, 0.55f + 0.2f * Mathf.Sin(t * 2.2f + b.Phase));
+            b.Renderer.color = new Color(c.r, c.g, c.b, (0.55f + 0.2f * Mathf.Sin(t * 2.2f + b.Phase)) * camo);
         }
 
         for (int i = bursts.Count - 1; i >= 0; i--)

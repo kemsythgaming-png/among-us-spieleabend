@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Spieleabend.Core;
 using UnityEngine;
 
@@ -33,6 +34,8 @@ public sealed class Oracle : GuesserBase
     private const byte ActionStatus = 2;
     private RoleOption neededCorrect, perMeeting;
     private readonly Dictionary<byte, int> correctByPlayer = new(); // Host: richtige Treffer je Orakel
+    private readonly Dictionary<byte, HashSet<byte>> guessedHost = new(); // Host: auf wen hat welches Orakel schon geraten
+    private readonly HashSet<byte> localGuessed = new();            // lokal: auf wen habe ich schon geraten (jede Person nur 1x)
     private int localCorrect;                                       // lokal: eigene richtige Treffer (für die Anzeige)
 
     protected override void SetupExtra()
@@ -45,10 +48,49 @@ public sealed class Oracle : GuesserBase
     {
         base.ResetState();
         correctByPlayer.Clear();
+        guessedHost.Clear();
+        localGuessed.Clear();
         localCorrect = 0;
     }
 
     private int Need => neededCorrect != null ? neededCorrect.Int : 3;
+
+    // ---------- Jede Person nur 1x ratbar ----------
+
+    /// <summary>Client: bereits geratene Spieler verschwinden als Ziel (Knopf/Button weg).</summary>
+    protected override bool CanTargetExtra(PlayerControl p) => p && !localGuessed.Contains(p.PlayerId);
+
+    /// <summary>Lokal merken, auf wen schon geraten wurde.</summary>
+    protected override void OnGuessSent(byte targetId) => localGuessed.Add(targetId);
+
+    /// <summary>Host: lehnt einen 2. Tipp auf dieselbe Person ab; sonst vermerken.</summary>
+    protected override bool AllowGuessHost(PlayerControl guesser, PlayerControl target)
+    {
+        if (!guessedHost.TryGetValue(guesser.PlayerId, out var set)) guessedHost[guesser.PlayerId] = set = new HashSet<byte>();
+        if (set.Contains(target.PlayerId)) return false; // schon auf diese Person geraten
+        set.Add(target.PlayerId);
+        return true;
+    }
+
+    /// <summary>
+    /// Host: solange ein lebendes Orakel seine nötigen Treffer noch erreichen kann (genug lebende, noch nicht
+    /// geratene Ziele), läuft das Spiel weiter - auch wenn die Impostor schon rausgevotet sind.
+    /// </summary>
+    public override bool KeepsGameGoing()
+    {
+        foreach (var p in PlayerControl.AllPlayerControls)
+        {
+            if (!IsAlive(p) || !RoleRegistry.Has(p, this)) continue;
+            correctByPlayer.TryGetValue(p.PlayerId, out int c);
+            int remaining = Need - c;
+            if (remaining <= 0) continue; // hätte eigentlich schon gewonnen
+            guessedHost.TryGetValue(p.PlayerId, out var set);
+            int targets = PlayerControl.AllPlayerControls.ToArray()
+                .Count(t => IsAlive(t) && t != p && (set == null || !set.Contains(t.PlayerId)));
+            if (targets >= remaining) return true; // kann die nötigen Treffer noch schaffen
+        }
+        return false;
+    }
 
     protected override string GuessHint() =>
         Lang.T($"Richtig für den Sieg: {Need}. Ein falscher Tipp tötet dich NICHT.",

@@ -110,6 +110,22 @@ public static class CustomWin
         return imp > 0 && crew == 0 && neutral > 0;
     }
 
+    /// <summary>
+    /// Host: Hält irgendeine Rolle das Spiel noch am Laufen (z. B. das Orakel, das weiter raten darf, auch wenn die
+    /// Impostor schon rausgevotet sind)? true = das Vanilla-Spielende unterdrücken.
+    /// </summary>
+    internal static bool AnyRoleKeepsGameGoing()
+    {
+        if (Active || FreeplayTest.IsFreeplay) return false;
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !RoleRegistry.HasAssignments) return false;
+        foreach (var role in RoleRegistry.Roles)
+        {
+            try { if (role.KeepsGameGoing()) return true; }
+            catch (System.Exception e) { Plugin.Logger.LogError($"{role.Name}.KeepsGameGoing: {e.Message}"); }
+        }
+        return false;
+    }
+
     internal static void Handle(MessageReader reader)
     {
         var role = RoleRegistry.Get(reader.ReadByte());
@@ -257,5 +273,5 @@ internal static class TaskCountPatch
 [HarmonyPatch(typeof(LogicGameFlowNormal), nameof(LogicGameFlowNormal.CheckEndCriteria))]
 internal static class NeutralImpostorEndPatch
 {
-    public static bool Prefix() => !CustomWin.NeutralVsImpostorOngoing();
+    public static bool Prefix() => !(CustomWin.NeutralVsImpostorOngoing() || CustomWin.AnyRoleKeepsGameGoing());
 }

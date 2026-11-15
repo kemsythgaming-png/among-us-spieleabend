@@ -122,7 +122,16 @@ public abstract class GuesserBase : CustomRole
 
     /// <summary>Wen darf man anvisieren? Der Boese Guesser keine echten/Mod-Impostor (Fake-Impostor-Dummys im Freeplay schon).</summary>
     private bool CanTarget(PlayerControl p, PlayerControl local) =>
-        IsAlive(p) && p != local && !(IsEvil && IsRealImpostorTeam(p));
+        IsAlive(p) && p != local && !(IsEvil && IsRealImpostorTeam(p)) && CanTargetExtra(p);
+
+    /// <summary>Zusätzliche Ziel-Einschränkung für Unterklassen (z. B. Orakel: jede Person nur 1x ratbar). true = erlaubt.</summary>
+    protected virtual bool CanTargetExtra(PlayerControl p) => true;
+
+    /// <summary>Host: darf dieser Rateversuch gezählt werden? (z. B. Orakel: nicht 2x auf dieselbe Person). Bei true wird er vermerkt.</summary>
+    protected virtual bool AllowGuessHost(PlayerControl guesser, PlayerControl target) => true;
+
+    /// <summary>Lokal: wurde gerade ein Tipp auf targetId abgeschickt (für Unterklassen, z. B. Orakel-Merkliste).</summary>
+    protected virtual void OnGuessSent(byte targetId) { }
 
     private static bool IsRealImpostorTeam(PlayerControl p)
     {
@@ -378,6 +387,7 @@ public abstract class GuesserBase : CustomRole
             if (GUI.Button(rect, new GUIContent(label), Ui.ButtonStyle))
             {
                 SendToHost(ActionGuess, target.PlayerId, kind, id);
+                OnGuessSent(target.PlayerId);
                 shotsLeft--;
                 shotThisMeeting = true;
                 guessesThisMeeting++;
@@ -540,6 +550,7 @@ public abstract class GuesserBase : CustomRole
 
         shotsUsed.TryGetValue(sender.PlayerId, out int used);
         if (used >= shots.Int) return;
+        if (!AllowGuessHost(sender, target)) return; // z. B. Orakel: nicht 2x auf dieselbe Person
         shotsUsed[sender.PlayerId] = used + 1;
 
         bool correct = Matches(target, data[1], data[2]);

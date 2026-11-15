@@ -31,7 +31,7 @@ public sealed class ThorRole : CustomRole
     private RoleButton button;
     private bool aiming;
     private float armedAt;
-    private sealed class Hammer { public byte Owner; public Vector2 Pos; public Vector2 Dir; public bool Recall; public GameObject Obj; public float Travel; public float NextWhoosh; }
+    private sealed class Hammer { public byte Owner; public Vector2 Pos; public Vector2 Dir; public bool Recall; public GameObject Obj; public float Travel; public float NextWhoosh; public bool Killed; }
     private readonly Dictionary<byte, Hammer> hammers = new();
 
     protected override void Setup()
@@ -46,6 +46,7 @@ public sealed class ThorRole : CustomRole
             NeedsTarget = false,
             Cooldown = () => 0.2f,                 // kurze Klicksperre; die echten 30 s setzt die Rückkehr
             StartCooldown = 10f,
+            FirstCooldown = 30f,                   // nicht sofort am Start werfen (Cooldown=0.2s würde Start sonst auf 0.2s drücken)
             Hotkey = KeyCode.F,
             // Nicht klickbar beim Zielen und solange der Hammer zurückfliegt (bis er wieder da ist).
             CanUse = () => !InMeeting && IsAlive(PlayerControl.LocalPlayer) && !aiming && !LocalRecalling(),
@@ -100,7 +101,7 @@ public sealed class ThorRole : CustomRole
     /// <summary>Freeplay-Test: ein Thor-Dummy wirft seinen Hammer auf den lokalen Spieler (lokal, direkt).</summary>
     public override bool FreeplayAbility(PlayerControl attacker, PlayerControl target)
     {
-        if (hammers.TryGetValue(attacker.PlayerId, out var existing)) { existing.Recall = true; return true; }
+        if (hammers.TryGetValue(attacker.PlayerId, out var existing)) { existing.Recall = true; existing.Killed = false; return true; }
         Vector2 origin = attacker.GetTruePosition();
         Vector2 dir = (Vector2)target.GetTruePosition() - origin;
         if (dir.sqrMagnitude < 0.0001f) dir = Vector2.right;
@@ -132,7 +133,7 @@ public sealed class ThorRole : CustomRole
         }
         else if (action == ActionRecall && data.Length >= 1)
         {
-            if (hammers.TryGetValue(data[0], out var h)) h.Recall = true;
+            if (hammers.TryGetValue(data[0], out var h)) { h.Recall = true; h.Killed = false; } // Rückflug darf wieder 1x töten
         }
     }
 
@@ -196,14 +197,17 @@ public sealed class ThorRole : CustomRole
                 Sfx.Play(Sfx.Splash, 0.35f);
             }
 
-            // Tötet in BEIDE Richtungen (Hin- und Rückflug) - auch Impostor, nur nicht den Werfer selbst
-            if (AmHost)
+            // Tötet in BEIDE Richtungen - auch Impostor, nur nicht den Werfer selbst.
+            // Je Richtung EIN Kill: 1x auf dem Hinflug, 1x auf dem Rückflug (Killed wird beim Rückruf zurückgesetzt).
+            if (AmHost && !h.Killed)
                 foreach (var p in PlayerControl.AllPlayerControls)
                     if (IsAlive(p) && p.PlayerId != h.Owner && !p.inVent
                         && Vector2.Distance(p.GetTruePosition(), h.Pos) <= KillRadius)
                     {
                         KillSystem.ForceKill(p, p);
+                        h.Killed = true; // nur 1 Kill pro Hammer
                         if (localP && h.Owner == localP.PlayerId) Sfx.Play(Sfx.Kill, 0.8f); // Kill-Sound für den Werfer
+                        break;
                     }
         }
         foreach (var id in remove) { if (hammers.TryGetValue(id, out var h) && h.Obj) Object.Destroy(h.Obj); hammers.Remove(id); }

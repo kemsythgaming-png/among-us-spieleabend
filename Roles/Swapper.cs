@@ -171,12 +171,11 @@ public sealed class Swapper : CustomRole
 
         if (!PosOf(aId, aBody, out Vector2 pa) || !PosOf(bId, bBody, out Vector2 pb)) return;
 
-        // Lebende Spieler versetzt der Host (netzwerk-synchron); Leichen bewegt jeder Client selbst
-        if (AmHost)
-        {
-            if (!aBody) SnapLiving(aId, pb);
-            if (!bBody) SnapLiving(bId, pa);
-        }
+        // Lebende Spieler: NUR der Besitzer darf versetzen (sonst serialisiert SnapTo nicht übers Netz
+        // und die eigene Bewegungs-Hoheit zieht den Spieler sofort an den Start zurück).
+        // Eigener Spieler -> selbst; Dummys/Bots -> der Host. OnAction läuft auf allen Clients.
+        if (!aBody) SnapLiving(aId, pb);
+        if (!bBody) SnapLiving(bId, pa);
         if (aBody) MoveBody(aId, pb);
         if (bBody) MoveBody(bId, pa);
 
@@ -203,7 +202,10 @@ public sealed class Swapper : CustomRole
     private static void SnapLiving(byte id, Vector2 pos)
     {
         var p = FindPlayer(id);
-        if (IsAlive(p) && p.NetTransform) p.NetTransform.SnapTo(pos);
+        if (!IsAlive(p) || !p.NetTransform) return;
+        // Nur der Besitzer des Spielers hat Bewegungs-Hoheit: eigener Spieler = lokal, Dummys/Bots = Host.
+        bool owns = p == PlayerControl.LocalPlayer || (AmHost && p.isDummy);
+        if (owns) p.NetTransform.SnapTo(pos);
     }
 
     private static void MoveBody(byte id, Vector2 pos)

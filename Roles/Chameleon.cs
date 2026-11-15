@@ -58,6 +58,9 @@ public sealed class Chameleon : CustomRole
         });
     }
 
+    /// <summary>Aktuelles Sichtbarkeits-Alpha eines Spielers durch die Chamäleon-Tarnung (1 = voll sichtbar, 0 = unsichtbar).</summary>
+    public static float VisibilityAlpha(byte id) => applied.TryGetValue(id, out var a) ? a : 1f;
+
     public override void ResetState() { ShowAll(); localCloaking = false; }
     public override void OnMeetingStart() { ShowAll(); localCloaking = false; }
 

@@ -38,6 +38,12 @@ public class RoleButton
     /// <summary>Abklingzeit zum Rundenstart (wird auf Cooldown begrenzt).</summary>
     public float StartCooldown = 10f;
 
+    /// <summary>
+    /// Eigener Start-Cooldown, der NICHT durch Cooldown() begrenzt wird - für Rollen mit absichtlich winzigem
+    /// Cooldown (z. B. Thor: Cooldown = 0.2 s Klicksperre, echte 30 s kommen erst nach der Rückkehr). -1 = aus.
+    /// </summary>
+    public float FirstCooldown = -1f;
+
     public KeyCode Hotkey = KeyCode.None;
 
     /// <summary>true: Button ist nur aktiv, wenn ein Spieler in Reichweite ist (wie der Kill-Button).</summary>
@@ -106,6 +112,8 @@ public class RoleButton
         float max = Cooldown();
         // Im Freeplay sind die Knoepfe nach einem Rollenwechsel fast sofort bereit (max 3s), zum schnellen Testen
         if (FreeplayTest.IsFreeplay) { Timer = Mathf.Min(3f, max); return; }
+        // Eigener, ungedeckelter Start-Cooldown (Thor): sonst würde Min(StartCooldown, 0.2s) auf 0.2s kollabieren.
+        if (roundStart && FirstCooldown >= 0f) { Timer = FirstCooldown; return; }
         Timer = roundStart ? Mathf.Min(StartCooldown, max) : max;
     }
 

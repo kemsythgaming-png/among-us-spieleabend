@@ -206,6 +206,12 @@ public abstract class CustomRole
     public virtual KillIntercept InterceptKill(PlayerControl killer, PlayerControl target) => KillIntercept.None;
 
     /// <summary>
+    /// Nur beim Host: true = diese Rolle hält das Vanilla-Spielende auf, solange sie noch gewinnen kann (z. B. das
+    /// Orakel, das weiter raten darf, auch wenn die Impostor schon raus sind). false = das Spiel darf normal enden.
+    /// </summary>
+    public virtual bool KeepsGameGoing() => false;
+
+    /// <summary>
     /// Markierung am Namen von target, die der lokale Spieler (viewer) sieht - z. B. ein Herz beim Lover.
     /// Wird fuer ALLE Rollen aufgerufen; die Rolle prueft selbst, ob viewer etwas sehen darf. null = nichts.
     /// </summary>

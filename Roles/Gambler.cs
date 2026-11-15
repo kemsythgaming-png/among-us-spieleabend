@@ -54,7 +54,7 @@ public sealed class Gambler : CustomRole
 
     // Effektzustände
     private bool shieldActive;                    // lokal: für die Blase
-    private readonly HashSet<byte> shielded = new(); // Host: wer ist gerade geschützt
+    private readonly HashSet<byte> shielded = new(); // auf allen Clients: wer ist gerade geschützt
     private float radarUntil;
     private GameObject radarArrow;
     private static Sprite arrowSprite;
@@ -186,7 +186,7 @@ public sealed class Gambler : CustomRole
         {
             case Ability.Schild:
                 shieldActive = true;
-                SendToHost(ActionShield);
+                SendToAll(ActionShield); // an ALLE (nicht nur Host), damit der Schutz zuverlässig greift
                 Sfx.Play(Sfx.Protect);
                 Notifier.Show($"<color={ColorHex}>{Lang.T("Schild aktiv - der nächste Kill prallt ab.", "Shield active - the next kill is blocked.")}</color>", 4f);
                 break;
@@ -243,12 +243,14 @@ public sealed class Gambler : CustomRole
             if (IsImpostor(victim)) KillSystem.TryKill(sender, victim);     // Treffer: normale Kill-Animation
             else KillSystem.ForceKill(sender, sender);                      // daneben: der Gambler stirbt
         }
-        else if (action == ActionShield && AmHost)
+        else if (action == ActionShield)
         {
+            // Auf ALLEN Clients merken (nicht nur Host), damit der Schutz zuverlässig greift.
             if (RoleRegistry.Has(sender, this)) shielded.Add(sender.PlayerId);
         }
         else if (action == ActionShieldBreak && data.Length >= 1)
         {
+            shielded.Remove(data[0]); // Schild überall verbraucht
             var g = FindPlayer(data[0]);
             if (g == PlayerControl.LocalPlayer) shieldActive = false;
             if (g) ProtectionVisuals.ShowBurst(g, Color);
@@ -258,7 +260,7 @@ public sealed class Gambler : CustomRole
 
     public override KillIntercept InterceptKill(PlayerControl killer, PlayerControl target)
     {
-        if (!AmHost || !target || !shielded.Contains(target.PlayerId)) return KillIntercept.None;
+        if (killer == target || !target || !shielded.Contains(target.PlayerId)) return KillIntercept.None;
         shielded.Remove(target.PlayerId);
         SendToAll(ActionShieldBreak, target.PlayerId);
         return KillIntercept.Handled;
