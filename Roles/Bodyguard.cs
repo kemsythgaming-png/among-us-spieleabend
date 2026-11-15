@@ -18,10 +18,10 @@ public sealed class Bodyguard : CustomRole
     public override string IntroText =>
         Lang.T("Behalt deinen Schützling im Blick", "Keep an eye on your ward");
     public override string Description =>
-        Lang.T("Wähle einen Schützling (F).\nBild blitzt blau, wenn er bedroht wird.", "Pick a ward (F).\nScreen flashes blue if threatened.");
+        Lang.T("Wähle einen Schützling (F).\nAlles gegen ihn wird geblockt.", "Pick a ward (F).\nEverything against them is blocked.");
     public override string LongDescription =>
-        Lang.T("Du bist Crew. Einmal pro Runde wählst du mit Taste F einen Schützling.\n\nVersucht irgendjemand - egal ob Crew, Impostor oder Neutral - etwas gegen ihn zu tun (ihn anzugreifen/zu töten), blitzt dein Bildschirm kurz blau auf. So merkst du sofort, dass dein Schützling bedroht wird - aber nicht, von wem.\n\nNur du siehst, wer dein Schützling ist.",
-                "You are crew. Once per round you pick a ward with key F.\n\nIf anyone - crew, impostor or neutral - tries to do something to them (attack/kill), your screen briefly flashes blue. So you instantly notice your ward is threatened - but not by whom.\n\nOnly you can see who your ward is.");
+        Lang.T("Du bist Crew. Pro Runde wählst du mit Taste F einen Schützling.\n\nAlles, was mit ihm interagiert (Impostor-Kill, Guesser, Spinnenbiss, Trankbrauer, egal welche Rolle), wird abgefangen - dein Schützling überlebt immer - und dein Bildschirm blitzt jedes Mal blau. Der Schutz hält bis zum nächsten Meeting; danach darfst du einen neuen Schützling wählen.\n\nNur du siehst, wer dein Schützling ist.",
+                "You are crew. Once per round you pick a ward with key F.\n\nEverything that interacts with them (impostor kill, guesser, spider bite, potion, any role) is blocked - your ward always survives - and your screen flashes blue each time. The protection lasts until the next meeting; afterwards you pick a new ward.\n\nOnly you can see who your ward is.");
 
     private const byte ActionGuard = 0, ActionAlert = 1;
     private const byte None = byte.MaxValue;
@@ -114,13 +114,13 @@ public sealed class Bodyguard : CustomRole
 
     public override void OnMeetingEnd(PlayerControl exiled) => uses = 1; // pro Runde ein neuer Schützling
 
-    /// <summary>Kein Opfern mehr - nur Warnung: Angriff auf den Schützling meldet dem Bodyguard einen blauen Blitz.</summary>
+    /// <summary>Angriff auf den Schützling: Bodyguard warnt (blauer Blitz) UND blockt diesen einen Kill - der Schützling überlebt. Danach ist der Schutz verbraucht.</summary>
     public override KillIntercept InterceptKill(PlayerControl killer, PlayerControl target)
     {
         if (guarded == None || !target || target.PlayerId != guarded) return KillIntercept.None;
-        if (killer && killer.PlayerId == guarded) return KillIntercept.None; // Selbst-Kill nicht melden
-        SendToAll(ActionAlert);
-        return KillIntercept.None; // der Kill wird NICHT geblockt
+        if (killer && killer.PlayerId == guarded) return KillIntercept.None; // Selbst-Kill nicht abfangen
+        SendToAll(ActionAlert);        // Warn-Blitz beim Bodyguard (jedes Mal)
+        return KillIntercept.Handled;  // dauerhaft blocken (Schild bricht NICHT) - bis zum nächsten Meeting
     }
 
     public override void OnPlayerDied(PlayerControl victim, PlayerControl killer, DeathCause cause)

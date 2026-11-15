@@ -22,11 +22,14 @@ public sealed class VoodooDoll : CustomRole
     public override string IntroText => Lang.T("Zieh die Fäden", "Pull the strings");
     public override string Description => Lang.T("Übernimm einen Spieler (F)\nund steuere ihn.", "Take over a player (F)\nand control them.");
     public override string LongDescription => Lang.T(
-        "Impostor: Mit dem Knopf öffnest du von überall ein Auswahl-Menü (wie der Shapeshifter). Wählst du einen Spieler, übernimmst du ihn für kurze Zeit: Dein eigener Körper bleibt sichtbar an seinem Platz stehen (und ist angreifbar!), nur deine Kamera schwenkt auf das Ziel - du siehst durch seine Augen und steuerst ihn, er kann nur zuschauen. Du kannst dabei jeden in seiner Nähe töten. Alle Namen sind in dieser Zeit in Crew-Farbe. (Echtes Steuern geht zuverlässig nur bei Test-Dummys.)",
-        "Impostor: the button opens a selection menu from anywhere (like the Shapeshifter). Pick a player to take them over briefly: your own body stays visible where it is (and can be attacked!), only your camera pans to the target - you see through their eyes and control them, they can only watch. You can kill anyone near them. All names show in crew color meanwhile. (Real control only works reliably on test dummies.)");
+        "Impostor: Mit dem Knopf öffnest du von überall ein Auswahl-Menü (wie der Shapeshifter). Wählst du einen Spieler, übernimmst du ihn für 10 Sekunden: Du siehst mit normaler Impostor-Sicht durch seine Augen und steuerst ihn, er kann nur zuschauen. Du kannst dabei jeden in seiner Nähe töten. Alle Namen sind in dieser Zeit in Crew-Farbe. (Echtes Steuern geht zuverlässig nur bei Test-Dummys.)",
+        "Impostor: the button opens a selection menu from anywhere (like the Shapeshifter). Pick a player to take them over for 10 seconds: you see through their eyes with normal impostor vision and control them, they can only watch. You can kill anyone near them. All names show in crew color meanwhile. (Real control only works reliably on test dummies.)");
 
     private const byte ActionPossess = 0, ActionKill = 1;
-    private RoleOption cooldown, duration;
+    private RoleOption cooldown, duration, sightRadius, allowSelfKill;
+
+    private GameObject visionMask;
+    private static Sprite maskSprite;
 
     /// <summary>Läuft gerade eine Übernahme beim lokalen Spieler (für die Melde-Sperre)?</summary>
     internal static bool LocalPossessing;
@@ -41,31 +44,33 @@ public sealed class VoodooDoll : CustomRole
     private bool namesTinted;
     private FollowerCamera cam;
     private MonoBehaviour camBack;
+    private RoleButton takeoverButton, killButton;
 
     protected override void Setup()
     {
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 35f, 15f, 90f, 2.5f, "s");
-        duration = AddOption("Duration", "Dauer|Duration", 12f, 5f, 25f, 1f, "s");
+        duration = AddOption("DurationV2", "Dauer|Duration", 10f, 5f, 25f, 1f, "s"); // neuer Schlüssel -> Standard 10 greift
+        sightRadius = AddOption("Sight", "Sichtradius bei Übernahme (Raum+Gänge)|Sight radius (room+halls)", 4.5f, 1f, 10f, 0.5f);
+        allowSelfKill = AddToggle("AllowSelfKill", "Kann den eigenen Körper töten|Can kill your own body", true);
 
-        AddButton(new RoleButton
+        takeoverButton = AddButton(new RoleButton
         {
             Label = "Übernehmen|Take over",
             Icon = "curse",
             NeedsTarget = false,
             Cooldown = () => cooldown.Value,
             StartCooldown = 10f,
-            CoolsDownAlways = true,                 // Cooldown läuft auch WÄHREND der Übernahme (Knopf bleibt sichtbar, nur ausgegraut)
+            // Cooldown läuft NICHT während der Übernahme - er startet erst wieder, wenn man zurück im eigenen Körper ist.
             Hotkey = KeyCode.F,
             CanUse = () => myTarget == byte.MaxValue, // während einer Übernahme nicht erneut nutzbar
             OnClick = _ => OpenMenu(),
         });
 
-        AddButton(new RoleButton
+        killButton = AddButton(new RoleButton
         {
             Label = "Töten|Kill",
             Icon = "stake",
-            NeedsTarget = false,
-            SharesKillCooldown = true, // teilt sich die Abklingzeit mit dem normalen Impostor-Kill
+            NeedsTarget = false, // Opfer wird selbst bestimmt (in der Nähe des Übernommenen), nicht am eigenen Körper
             Visible = () => myTarget != byte.MaxValue && Time.time < myUntil,
             Cooldown = () => GameManager.Instance ? GameManager.Instance.LogicOptions.GetKillCooldown() : 20f,
             StartCooldown = 0f,
@@ -73,7 +78,7 @@ public sealed class VoodooDoll : CustomRole
             OnClick = _ =>
             {
                 var v = VictimNearTarget();
-                if (v) { SendToHost(ActionKill, myTarget, v.PlayerId); Sfx.Play(Sfx.Kill); }
+                if (v) { SendToHost(ActionKill, myTarget, v.PlayerId); Sfx.Play(Sfx.Kill); killButton.Timer = killButton.Cooldown(); }
             },
         });
     }
@@ -99,8 +104,10 @@ public sealed class VoodooDoll : CustomRole
         }
         else if (action == ActionKill && AmHost && data.Length >= 2)
         {
+            var killer = FindPlayer(data[0]); // der übernommene Körper
             var victim = FindPlayer(data[1]);
-            if (IsAlive(victim)) KillSystem.ForceKill(victim, victim); // nur das Opfer stirbt, kein Teleport
+            // Mit dem übernommenen Körper killen: normale Kill-Animation inkl. Teleport des Körpers zum Opfer.
+            if (killer && IsAlive(victim)) KillSystem.TryKill(killer, victim);
         }
     }
 
@@ -121,8 +128,56 @@ public sealed class VoodooDoll : CustomRole
             cam.Target = target;
             cam.SnapToTarget();
         }
+        if (killButton != null) killButton.Timer = 0f; // jede neue Übernahme: Kill sofort verfügbar
+        // Volle Sicht (Dunkelheit aus), dann mit einer runden Maske am Ziel auf einen Sichtradius begrenzen (man sieht über Wände).
+        SetShadows(false);
+        CreateMask();
         LocalPossessing = true;
         Sfx.Play(Sfx.Shapeshift);
+    }
+
+    /// <summary>Dunkelheit/Sichtbegrenzung an/aus (damit man beim Steuern etwas sieht).</summary>
+    private static void SetShadows(bool on)
+    {
+        try { if (HudManager.InstanceExists && HudManager.Instance.ShadowQuad) HudManager.Instance.ShadowQuad.gameObject.SetActive(on); }
+        catch { }
+    }
+
+    /// <summary>Runde Sicht-Maske: schwarzer Schleier mit transparentem Loch - begrenzt die (volle) Sicht auf einen Radius ums Ziel.</summary>
+    private void CreateMask()
+    {
+        DestroyMask();
+        try
+        {
+            float r = sightRadius != null ? sightRadius.Value : 4f;
+            visionMask = new GameObject("Spieleabend_VoodooVision");
+            visionMask.transform.localScale = Vector3.one * (2f * r / 0.3f); // Loch-Radius (normiert 0.3) -> Weltradius r
+            var sr = visionMask.AddComponent<SpriteRenderer>();
+            sr.sprite = MaskSprite();
+            sr.color = Color.black;
+            sr.sortingOrder = 32000; // über der Welt, unter dem HUD (ScreenSpace-Overlay)
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"Voodoo-Sichtmaske: {e.Message}"); }
+    }
+
+    private void DestroyMask() { if (visionMask) Object.Destroy(visionMask); visionMask = null; }
+
+    private static Sprite MaskSprite()
+    {
+        if (maskSprite) return maskSprite;
+        const int S = 256; float c = (S - 1) / 2f;
+        var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+        for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++)
+        {
+            float r = new Vector2((x - c) / c, (y - c) / c).magnitude; // 0..~1.41
+            float a = Mathf.Clamp01((r - 0.3f) / 0.12f); // innen (r<0.3) klar, dann weicher Rand -> außen schwarz
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+        }
+        tex.Apply();
+        maskSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), S); // 1 Welt-Einheit bei Scale 1
+        maskSprite.hideFlags = HideFlags.HideAndDontSave;
+        return maskSprite;
     }
 
     private void EndPossession()
@@ -136,9 +191,17 @@ public sealed class VoodooDoll : CustomRole
         }
         camBack = null;
         if (local && local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
+        // Auch den übernommenen Körper anhalten, sonst läuft er mit dem letzten Befehl weiter.
+        var possessed = FindPlayer(myTarget);
+        if (possessed && possessed.MyPhysics && possessed.MyPhysics.body) possessed.MyPhysics.body.velocity = Vector2.zero;
+        bool wasPossessing = myTarget != byte.MaxValue;
         myTarget = byte.MaxValue;
         myUntil = 0f;
         LocalPossessing = false;
+        SetShadows(true);  // Dunkelheit wieder normal
+        DestroyMask();
+        // Übernahme-Cooldown startet JETZT (zurück im eigenen Körper), nicht schon während der Übernahme.
+        if (wasPossessing && takeoverButton != null) takeoverButton.Timer = cooldown.Value;
         RestoreNames();
 
         // normalen Kill- und Vent-Knopf wieder einblenden
@@ -172,22 +235,21 @@ public sealed class VoodooDoll : CustomRole
         var target = FindPlayer(myTarget);
         if (!local || !target || !IsAlive(target)) return;
 
-        // Das Ziel steuern (zuverlässig nur Dummys/als Host)
+        // Das Ziel steuern (zuverlässig nur Dummys/als Host). Über die Physik bewegen, damit es NICHT durch Wände läuft.
         if (target.isDummy || AmHost)
         {
             var move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-            if (move.sqrMagnitude > 0.01f)
-            {
-                float speed = 2.5f;
-                Vector3 np = target.transform.position + (Vector3)(move.normalized * speed * Time.deltaTime);
-                target.transform.position = new Vector3(np.x, np.y, target.transform.position.z);
-                if (target.MyPhysics && target.MyPhysics.body) target.MyPhysics.body.velocity = Vector2.zero;
-            }
+            float speed = 2.5f;
+            if (target.MyPhysics && target.MyPhysics.body)
+                target.MyPhysics.body.velocity = move.sqrMagnitude > 0.01f ? move.normalized * speed : Vector2.zero;
         }
 
-        // Dein Körper bleibt stehen (sichtbar + angreifbar); nur die Kamera sitzt auf dem Ziel.
+        // Dein Körper bleibt sichtbar an seinem Platz stehen (angreifbar); nur die Kamera sitzt auf dem Ziel.
         if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
         if (cam && cam.Target != target) { cam.Target = target; cam.SnapToTarget(); }
+
+        // Sicht-Maske am Ziel nachführen (nur im Nicht-Wand-Modus vorhanden).
+        if (visionMask) visionMask.transform.position = new Vector3(target.GetTruePosition().x, target.GetTruePosition().y, -40f);
 
         // Während der Übernahme nur den Töten-Knopf: normalen Kill + Vent ausblenden (der Klon hat sein Bild schon)
         var hud = HudManager.InstanceExists ? HudManager.Instance : null;
@@ -222,12 +284,14 @@ public sealed class VoodooDoll : CustomRole
         if (myTarget == byte.MaxValue) return null;
         var target = FindPlayer(myTarget);
         if (!IsAlive(target)) return null;
-        const float range = 1.0f; // enge Reichweite
+        float range = 1.0f;
+        try { range = GameManager.Instance.LogicOptions.GetKillDistance(); } catch { } // normale Kill-Reichweite
         Vector2 at = target.GetTruePosition();
         var local = PlayerControl.LocalPlayer;
-        // jeder in der Nähe des Übernommenen kann sterben - aber NICHT das Ziel und NICHT dein (mitreisender) Körper
+        // jeder in der Nähe des Übernommenen kann sterben - nicht das Ziel; den eigenen Körper nur, wenn "selbst töten" an ist.
+        bool self = allowSelfKill != null && allowSelfKill.Bool;
         return PlayerControl.AllPlayerControls.ToArray()
-            .Where(p => p && p != target && p != local && IsAlive(p) && Vector2.Distance(at, p.GetTruePosition()) <= range)
+            .Where(p => p && p != target && (self || p != local) && IsAlive(p) && Vector2.Distance(at, p.GetTruePosition()) <= range)
             .OrderBy(p => Vector2.Distance(at, p.GetTruePosition()))
             .FirstOrDefault();
     }

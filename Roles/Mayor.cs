@@ -8,7 +8,7 @@ namespace Spieleabend.Roles;
 /// <summary>
 /// Crew (Mayor): Startet mit 1 Stimme. Nutzt er seine Stimme in einem Meeting NICHT (Skip oder gar nicht wählen),
 /// bekommt er im nächsten Meeting +1 Stimme - setzt er seine geballte Stimme ein (wählt einen Spieler), zählt sie
-/// entsprechend mehrfach und fällt danach wieder auf 1 zurück. Nach oben begrenzt durch die Max-Stimmen-Option.
+/// entsprechend mehrfach und fällt danach wieder auf 1 zurück. Keine Obergrenze.
 /// </summary>
 public sealed class Mayor : CustomRole
 {
@@ -26,22 +26,39 @@ public sealed class Mayor : CustomRole
 
     internal static Mayor Instance { get; private set; }
 
-    /// <summary>Obergrenze der angesammelten Stimmen.</summary>
-    internal RoleOption Votes { get; private set; }
+    private const byte ActionPower = 0;
 
-    // Host-autoritativ: aktuelle Stimmkraft je Mayor-Spieler (Standard 1).
+    // Host-autoritativ: aktuelle Stimmkraft je Mayor-Spieler (Standard 1). Keine Obergrenze.
     private readonly Dictionary<byte, int> power = new();
+    // Auf allen Clients gespiegelt (für die Anzeige oben links).
+    private readonly Dictionary<byte, int> shown = new();
 
     protected override void Setup()
     {
         Instance = this;
-        Votes = AddOption("Votes", "Max-Stimmen|Max votes", 5f, 2f, 10f, 1f);
     }
 
-    public override void ResetState() => power.Clear();
+    public override void ResetState() { power.Clear(); shown.Clear(); }
 
     internal int GetPower(byte id) => power.TryGetValue(id, out var v) ? Mathf.Max(1, v) : 1;
-    internal void SetPower(byte id, int v) => power[id] = Mathf.Clamp(v, 1, Votes.Int);
+    internal void SetPower(byte id, int v)
+    {
+        power[id] = Mathf.Max(1, v); // keine Maximal-Stimmen
+        shown[id] = Mathf.Min(255, power[id]); // lokal sofort aktualisieren (Anzeige, auch im Freeplay ohne Netzwerk)
+        SendToAll(ActionPower, id, (byte)Mathf.Min(255, power[id])); // an den Mayor (und alle) für die Anzeige
+    }
+
+    public override void OnAction(PlayerControl sender, byte action, byte[] data)
+    {
+        if (action == ActionPower && data.Length >= 2) shown[data[0]] = data[1];
+    }
+
+    public override string GetTaskNote(PlayerControl local)
+    {
+        if (!RoleRegistry.Has(local, this)) return null;
+        int v = shown.TryGetValue(local.PlayerId, out var s) ? Mathf.Max(1, s) : 1;
+        return Lang.T($"<color={ColorHex}>Stimmen: {v}</color>", $"<color={ColorHex}>Votes: {v}</color>");
+    }
 }
 
 /// <summary>

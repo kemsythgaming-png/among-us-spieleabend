@@ -83,6 +83,9 @@ public abstract class CustomRole
     /// <summary>Zaehlen die Aufgaben dieser Rolle fuer den Crew-Aufgabensieg? Standard: nicht bei Neutralen.</summary>
     public virtual bool TasksCount => Team != RoleTeam.Neutral;
 
+    /// <summary>Behaelt diese (neutrale) Rolle ihre Crew-Aufgaben? Standard: nein (Neutrale bekommen keine Aufgaben).</summary>
+    public virtual bool KeepsTasks => false;
+
     public bool IsModifier => Team == RoleTeam.Modifier;
 
     /// <summary>
@@ -129,6 +132,12 @@ public abstract class CustomRole
 
     /// <summary>Hat der lokale Spieler diese Rolle (oder diesen Modifier)?</summary>
     public bool IsLocalRole => RoleRegistry.Has(PlayerControl.LocalPlayer, this);
+
+    /// <summary>
+    /// Sollen die Knoepfe dieser Rolle fuer den lokalen Spieler angezeigt werden? Standard: nur wenn er die Rolle hat.
+    /// Der Joker ueberschreibt das, damit sein Dauer-Knopf auch nach dem Rollentausch sichtbar bleibt.
+    /// </summary>
+    public virtual bool OwnsButtonsFor(PlayerControl local) => RoleRegistry.Has(local, this);
 
     private ConfigFile config;
 

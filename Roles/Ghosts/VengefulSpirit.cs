@@ -70,15 +70,27 @@ public sealed class VengefulSpirit : CustomRole
     {
         if (action != ActionZone || data.Length < 8 || !RoleRegistry.Has(sender, this)) return;
         var pos = new Vector2(BitConverter.ToSingle(data, 0), BitConverter.ToSingle(data, 4));
+        SpawnZone(pos, sender == PlayerControl.LocalPlayer);
+    }
 
+    private void SpawnZone(Vector2 pos, bool sound)
+    {
         var go = new GameObject("Spieleabend_FrostZone");
         if (ShipStatus.Instance) go.transform.SetParent(ShipStatus.Instance.transform, true);
         go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f + 0.02f);
         go.transform.localScale = Vector3.one * (Radius * 2f);
         go.AddComponent<SpriteRenderer>().sprite = ZoneSprite();
         zones.Add(new Zone { Pos = pos, Until = Time.time + duration.Value, Obj = go });
+        if (sound) Sfx.Play(Sfx.Creepy);
+    }
 
-        if (sender == PlayerControl.LocalPlayer) Sfx.Play(Sfx.Creepy);
+    /// <summary>Freeplay-Test: ein Dummy (Geist) legt die Frost-Zone an seiner Position ab.</summary>
+    public override bool FreeplayAbility(PlayerControl attacker, PlayerControl target)
+    {
+        var p = attacker ? attacker : PlayerControl.LocalPlayer;
+        if (!p) return false;
+        SpawnZone(p.GetTruePosition(), true);
+        return true;
     }
 
     public override void Update()

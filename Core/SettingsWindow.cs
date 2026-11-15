@@ -41,7 +41,9 @@ public class SettingsWindow : MonoBehaviour
 
         // Laeuft immer (auch waehrend der Rollen-Enthuellung, wenn der HUD noch nicht da ist):
         // im Intro die echte Mod-Rolle schreiben statt "Crewmate/Impostor"
-        if (IntroCutscene.Instance) RoleUI.ApplyIntroOverride(IntroCutscene.Instance);
+        var ic = IntroCutscene.Instance;
+        if (!ic) ic = UnityEngine.Object.FindObjectOfType<IntroCutscene>(); // Instance wird nicht immer gesetzt
+        if (ic) RoleUI.ApplyIntroOverride(ic);
     }
 
     private void OnGUI()
@@ -63,6 +65,8 @@ public class SettingsWindow : MonoBehaviour
         // Jedes Fenster einzeln absichern: ein Fehler in einem darf die anderen nicht mitnehmen
         Safe("Kameras", SurveillanceFeeds.Draw); // Pfeile der Überwachung (für jeden Zuschauer)
         Safe("BOO-Kleckse", Spieleabend.Roles.BooOverlay.Draw); // zuerst - liegt hinter den Fenstern
+        Safe("Schneesturm", Spieleabend.Roles.BlizzardOverlay.Draw);
+        Safe("Draft", DraftMode.Draw);
         Safe("Hinweise", Notifier.Draw);
         Safe("Sieg", CustomWin.DrawWinBanner);
         Safe("Rollen-Info", RoleGuide.Draw);

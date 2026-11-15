@@ -16,11 +16,18 @@ namespace Spieleabend.Core;
 internal static class FreeplayTest
 {
     private static ConfigEntry<string> testRole;
+    private static ConfigEntry<string> testModifier;
     private static ConfigEntry<string> dummyRole;
     private static ConfigEntry<int> dummyImpostors;
     private static ConfigEntry<bool> dummiesFollowVote;
     private static ConfigEntry<bool> dummiesAttack;
     private static ConfigEntry<bool> buttonsWhenDead;
+    private static ConfigEntry<bool> dummiesWalk;
+
+    // Laufende Dummys: Richtung + nächster Richtungswechsel + letzte Position (Wand-Erkennung).
+    private static readonly Dictionary<byte, Vector2> walkDir = new();
+    private static readonly Dictionary<byte, float> walkTurnAt = new();
+    private static readonly Dictionary<byte, Vector2> walkLast = new();
 
     /// <summary>Angriffs-Abklingzeit je Dummy (bei Nähe-Angriff).</summary>
     private static readonly Dictionary<byte, float> nextAttack = new();
@@ -39,6 +46,11 @@ internal static class FreeplayTest
         RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == testRole.Value || r.Name == testRole.Value)?.Name ?? testRole.Value;
     public static int DummyImpostors => dummyImpostors.Value;
 
+    /// <summary>Zusätzliche Anpassung/Geisterrolle, die du neben deiner Hauptrolle bekommst (leer = keine).</summary>
+    public static string TestModifierName => testModifier != null ? testModifier.Value : "";
+    public static string TestModifierDisplay =>
+        RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == TestModifierName || r.Name == TestModifierName)?.Name ?? TestModifierName;
+
     public static string DummyRoleName => dummyRole.Value;
     public static string DummyRoleDisplay =>
         RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == dummyRole.Value || r.Name == dummyRole.Value)?.Name ?? dummyRole.Value;
@@ -49,15 +61,27 @@ internal static class FreeplayTest
     /// <summary>Freeplay: Rollen-Knöpfe auch benutzen, wenn man tot ist (zum Testen).</summary>
     public static bool ButtonsWhenDead => IsFreeplay && buttonsWhenDead != null && buttonsWhenDead.Value;
     public static void ToggleButtonsWhenDead() { if (buttonsWhenDead != null) buttonsWhenDead.Value = !buttonsWhenDead.Value; }
+    /// <summary>Freeplay: Dummys laufen umher (zum Testen von Verlangsamungen o. ä.).</summary>
+    public static bool DummiesWalk => IsFreeplay && dummiesWalk != null && dummiesWalk.Value;
+    public static void ToggleDummiesWalk()
+    {
+        if (dummiesWalk == null) return;
+        dummiesWalk.Value = !dummiesWalk.Value;
+        if (!dummiesWalk.Value) // beim Ausschalten sofort anhalten
+            foreach (var d in PlayerControl.AllPlayerControls)
+                if (d && d.isDummy && d.MyPhysics && d.MyPhysics.body) d.MyPhysics.body.velocity = Vector2.zero;
+    }
 
     public static void BindConfig(ConfigFile config)
     {
         testRole = config.Bind("Freeplay-Test", "Rolle", "Sheriff", "Rolle, die du im Freeplay bekommst (Name der Rolle, leer = keine).");
+        testModifier = config.Bind("Freeplay-Test", "Anpassung", "", "Zusätzliche Anpassung/Geisterrolle neben deiner Hauptrolle (leer = keine).");
         dummyRole = config.Bind("Freeplay-Test", "DummyRolle", "Jester", "Rolle, die ein Dummy per Knopf bekommt.");
         dummyImpostors = config.Bind("Freeplay-Test", "DummyImpostors", 0, "So viele Dummies gelten im Freeplay als Impostor (rot). Standard 0 = normale Namen.");
         dummiesFollowVote = config.Bind("Freeplay-Test", "DummiesFollowVote", true, "Dummies stimmen im Meeting so ab wie du (zum Testen von Rausvote-Rollen).");
         dummiesAttack = config.Bind("Freeplay-Test", "DummiesAttack", false, "Impostor-Dummies greifen dich an, wenn du ihnen zu nahe kommst (zum Testen von Schilden).");
         buttonsWhenDead = config.Bind("Freeplay-Test", "ButtonsWhenDead", false, "Rollen-Knöpfe auch als Toter benutzbar (nur Freeplay, zum Testen).");
+        dummiesWalk = config.Bind("Freeplay-Test", "DummiesWalk", false, "Dummys laufen umher (zum Testen von Verlangsamungen).");
     }
 
     // ---------- Sabotage + Dummy-Angriff (Freeplay-Testhilfen) ----------
@@ -102,26 +126,43 @@ internal static class FreeplayTest
     /// Dummy übt seine Fähigkeit/seinen Kill auf den lokalen Spieler aus. Fähigkeiten (BOO, Vampir-Biss ...) immer;
     /// ein reiner Kill nur, wenn der Spieler in Reichweite steht - sonst würde der Dummy zum Kill zu dir teleportieren.
     /// </summary>
-    private static void DummyAttack(PlayerControl dummy, PlayerControl local, bool requireRange)
+    private static void DummyAttack(PlayerControl dummy, PlayerControl victim, bool requireRange)
     {
-        if (!dummy || !local || !CustomRole.IsAlive(dummy) || !CustomRole.IsAlive(local)) return;
+        if (!dummy || !victim || !CustomRole.IsAlive(dummy) || !CustomRole.IsAlive(victim)) return;
         var role = DummyRole(dummy.PlayerId);
-        if (role != null && role.FreeplayAbility(dummy, local)) return; // Fähigkeit selbst erledigt (z. B. BOO, Vampir-Biss)
+        if (role != null && role.FreeplayAbility(dummy, victim)) return; // Fähigkeit selbst erledigt (z. B. BOO, Vampir-Biss)
 
-        if (requireRange && !InKillRange(dummy, local))
+        if (requireRange && !InKillRange(dummy, victim))
         {
-            Notifier.Show(Lang.T("Dummy ist zu weit weg - stell dich näher dran.", "Dummy is too far - step closer."), 2f);
+            Notifier.Show(Lang.T("Opfer ist zu weit weg - stell dich/den Dummy näher dran.", "Victim is too far - get closer."), 2f);
             return;
         }
-        KillSystem.TryKill(dummy, local); // beachtet Medic/Bodyguard/Süßigkeitenkind/Erster-Tod ...
+        KillSystem.TryKill(dummy, victim); // beachtet Medic/Bodyguard/Süßigkeitenkind/Erster-Tod ...
     }
 
-    /// <summary>Knopf: dieser Dummy greift an - Fähigkeit immer, reiner Kill nur in Nähe.</summary>
+    /// <summary>Nächstes tötbares Opfer eines Angreifer-Dummys in Kill-Reichweite (anderer Dummy ODER der lokale Spieler, keine Impostor).</summary>
+    private static PlayerControl NearestVictim(PlayerControl attacker)
+    {
+        float range = 1f;
+        try { range = GameManager.Instance.LogicOptions.GetKillDistance(); } catch { }
+        PlayerControl best = null; float bestD = float.MaxValue;
+        Vector2 at = attacker.GetTruePosition();
+        foreach (var p in PlayerControl.AllPlayerControls)
+        {
+            if (!p || p == attacker || !CustomRole.IsAlive(p) || p.inVent || CustomRole.IsImpostor(p)) continue;
+            float d = Vector2.Distance(at, p.GetTruePosition());
+            if (d <= range && d < bestD) { bestD = d; best = p; }
+        }
+        return best;
+    }
+
+    /// <summary>Knopf: dieser Dummy greift den nächsten in der Nähe an (anderer Dummy oder du) - Fähigkeit immer, reiner Kill nur in Nähe.</summary>
     public static void DummyAttackNow(byte dummyId)
     {
         var d = CustomRole.FindPlayer(dummyId);
-        var local = PlayerControl.LocalPlayer;
-        if (d && local) DummyAttack(d, local, true);
+        if (!d) return;
+        var victim = NearestVictim(d) ?? PlayerControl.LocalPlayer; // niemand in der Nähe -> auf dich (mit Reichweiten-Hinweis)
+        if (victim) DummyAttack(d, victim, true);
     }
 
     /// <summary>Knopf: dieser Dummy benutzt seine Rollen-Fähigkeit (auf dich bzw. auf sich/den Boden), ohne Kill-Fallback.</summary>
@@ -136,20 +177,20 @@ internal static class FreeplayTest
             ChatNote.Message(Lang.T($"Fähigkeit von {role.Name} ist im Test noch nicht nachgebaut.", $"{role.Name}'s ability isn't wired for test yet."));
     }
 
-    /// <summary>Jedes Frame: Angreifer-Dummies killen den lokalen Spieler, wenn er in Kill-Reichweite ist.</summary>
+    /// <summary>Jedes Frame: Angreifer-Dummies killen den nächsten in Reichweite - den lokalen Spieler ODER andere Dummys (so können Dummys sich beim Umherlaufen gegenseitig töten).</summary>
     private static void DoAttacks()
     {
-        var local = PlayerControl.LocalPlayer;
-        if (!local || !CustomRole.IsAlive(local) || CustomRole.InMeeting) return;
+        if (CustomRole.InMeeting) return;
 
         foreach (var d in PlayerControl.AllPlayerControls)
         {
             if (!d || !d.isDummy || !CustomRole.IsAlive(d) || !IsAttacker(d)) continue;
-            if (!InKillRange(d, local)) continue;
+            var victim = NearestVictim(d);
+            if (!victim) continue;
             nextAttack.TryGetValue(d.PlayerId, out float t);
             if (Time.time < t) continue;
             nextAttack[d.PlayerId] = Time.time + 3f;
-            DummyAttack(d, local, false); // Reichweite schon geprüft
+            DummyAttack(d, victim, false); // Reichweite schon geprüft (NearestVictim)
         }
     }
 
@@ -162,10 +203,39 @@ internal static class FreeplayTest
         dummyRole.Value = names[(index + direction + names.Count) % names.Count];
     }
 
-    /// <summary>Deine Testrolle direkt setzen (aus der Liste gewaehlt).</summary>
+    /// <summary>
+    /// Deine Testrolle direkt setzen (aus der Liste gewaehlt). Ist die gewaehlte Rolle eine Anpassung ODER eine
+    /// Geisterrolle, wird sie als ZUSATZ (neben der Hauptrolle) gesetzt - so kannst du Rolle + Anpassung zugleich testen.
+    /// </summary>
     public static void SetTestRole(string section)
     {
-        testRole.Value = section ?? "";
+        var role = RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == section || r.Name == section);
+        if (role != null && role.IsModifier)
+        {
+            // Anpassung = Zusatz NEBEN der Hauptrolle (stapelt)
+            testModifier.Value = role.ConfigSection;
+        }
+        else if (role != null && role.IsGhostRole)
+        {
+            // Geisterrolle ERSETZT die Hauptrolle (zum Testen stirbt man) - keine alten Fähigkeiten mehr
+            testModifier.Value = role.ConfigSection;
+            testRole.Value = "";
+        }
+        else
+        {
+            // normale Hauptrolle (leer = keine); eine evtl. gesetzte GEISTER-Zusatzrolle dabei entfernen,
+            // damit man nicht dauerhaft als Geist (z. B. Türgeist) angezeigt bleibt. Anpassungen bleiben.
+            testRole.Value = section ?? "";
+            var cur = RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == TestModifierName || r.Name == TestModifierName);
+            if (cur != null && cur.IsGhostRole) testModifier.Value = "";
+        }
+        if (IsFreeplay && ShipStatus.Instance) Apply();
+    }
+
+    /// <summary>Die zusätzliche Anpassung/Geisterrolle wieder entfernen.</summary>
+    public static void ClearTestModifier()
+    {
+        if (testModifier != null) testModifier.Value = "";
         if (IsFreeplay && ShipStatus.Instance) Apply();
     }
 
@@ -186,14 +256,23 @@ internal static class FreeplayTest
     public static void SetDummyRole(byte dummyId, string section)
     {
         if (!IsFreeplay || !ShipStatus.Instance) return;
+        CustomRole assigned = null;
         if (string.IsNullOrEmpty(section)) dummyRoles.Remove(dummyId);
         else
         {
             var role = RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == section || r.Name == section);
             if (role == null) return;
             dummyRoles[dummyId] = role.Id;
+            assigned = role;
         }
         Apply();
+
+        // Geisterrolle an einem Dummy = der Dummy soll ein Geist sein -> ihn töten (Selbst-Kill, kein Teleport).
+        if (assigned != null && assigned.IsGhostRole)
+        {
+            var d = CustomRole.FindPlayer(dummyId);
+            if (d && d.isDummy && CustomRole.IsAlive(d)) KillSystem.ForceKill(d, d);
+        }
     }
 
     /// <summary>Zugewiesene Rolle eines Dummys (oder null).</summary>
@@ -300,20 +379,51 @@ internal static class FreeplayTest
         }
         catch { }
 
-        // Ein Toter kann kein Meeting auslösen -> einen lebenden Spieler als Melder nehmen.
+        // Ein Toter kann kein Meeting auslösen -> einen lebenden Spieler (notfalls Dummy) als Melder nehmen.
         PlayerControl caller = CustomRole.IsAlive(local) ? local : null;
         if (!caller)
             foreach (var p in PlayerControl.AllPlayerControls)
                 if (CustomRole.IsAlive(p)) { caller = p; break; }
-        if (!caller) caller = local; // notfalls selbst (RpcStartMeeting umgeht die Lebend-Prüfung von CmdReportDeadBody)
-        try { caller.RpcStartMeeting(null); }
-        catch (System.Exception e) { Plugin.Logger.LogWarning($"Meeting starten: {e.Message}"); }
+        if (!caller)
+        {
+            Notifier.Show(Lang.T("Kein lebender Spieler da, der ein Meeting rufen kann.", "No living player to call a meeting."), 3f);
+            return;
+        }
+        // CmdReportDeadBody(null) = Notfall-Meeting auf dem richtigen Vanilla-Pfad (richtet den Meeting-Tisch korrekt ein;
+        // RpcStartMeeting ließ die Spielerzahl auf negative Werte laufen).
+        try { caller.CmdReportDeadBody(null); }
+        catch (System.Exception e)
+        {
+            Plugin.Logger.LogWarning($"Meeting starten: {e.Message}");
+            try { caller.RpcStartMeeting(null); } catch { }
+        }
     }
 
     /// <summary>Den „Schutz für die ersten Toten" an sich selbst zum Testen geben.</summary>
     public static void GiveSelfFirstDeathShield()
     {
         if (IsFreeplay) FirstDeathShield.GiveLocalForTest();
+    }
+
+    /// <summary>Freeplay: die Rollen-Enthüllungs-Animation abspielen (wie beim Online-Spielstart). Der Rollentext wird von RoleUI überschrieben.</summary>
+    public static void PlayIntro()
+    {
+        if (!IsFreeplay || !HudManager.InstanceExists || !ShipStatus.Instance) return;
+        var hud = HudManager.Instance;
+        var local = PlayerControl.LocalPlayer;
+        if (!local || local.Data == null) return;
+        if (IntroCutscene.Instance) return; // läuft schon
+        try
+        {
+            var prefab = hud.IntroPrefab;
+            if (!prefab) { Plugin.Logger.LogWarning("Intro: kein IntroPrefab"); return; }
+            // Prefab direkt instanziieren (setzt IntroCutscene.Instance -> unser Rollen-/Text-Override greift).
+            var intro = Object.Instantiate(prefab, hud.transform);
+            intro.gameObject.SetActive(true);
+            hud.StartCoroutine(intro.CoBegin());
+            Plugin.Logger.LogInfo("Intro (Prefab) instanziiert");
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"Freeplay-Intro: {e.Message}"); }
     }
 
     /// <summary>Jedes Frame im Meeting: Hast du schon abgestimmt, stimmen alle Dummies sofort genauso ab (und das Meeting endet).</summary>
@@ -334,11 +444,15 @@ internal static class FreeplayTest
         {
             if (!s || s.DidVote) continue;
             var p = CustomRole.FindPlayer((byte)s.PlayerId);
-            if (p && p.isDummy && CustomRole.IsAlive(p))
+            if (!p || !p.isDummy || !CustomRole.IsAlive(p)) continue;
+
+            try { meeting.CastVote((byte)s.PlayerId, target); } catch { }
+            // Fallback (Freeplay ohne echten Host): Stimme direkt in die Abstimmungsfläche schreiben, damit sie zählt.
+            if (!s.DidVote)
             {
-                try { meeting.CastVote((byte)s.PlayerId, target); any = true; }
-                catch { }
+                try { s.VotedForId = target; s.DidVote = true; } catch { }
             }
+            any = true;
         }
         if (any) { try { meeting.CheckForEndVoting(); } catch { } }
     }
@@ -358,9 +472,59 @@ internal static class FreeplayTest
         dummyRoles.Clear();
     }
 
+    /// <summary>Dummys laufen umher; dabei greifen alle positionsabhängigen Tempo-Faktoren (z. B. Frost-Zonen).</summary>
+    private static void WalkDummies()
+    {
+        // Während einer Voodoo-Übernahme laufen die Dummys NICHT (sonst stört das Umherlaufen die Übernahme/den Kill).
+        if (Spieleabend.Roles.VoodooDoll.LocalPossessing) return;
+        float now = Time.time;
+        foreach (var d in PlayerControl.AllPlayerControls)
+        {
+            if (!d || !d.isDummy || !CustomRole.IsAlive(d) || d.inVent || !d.MyPhysics || !d.MyPhysics.body) continue;
+
+            if (!walkDir.TryGetValue(d.PlayerId, out var dir) || now >= walkTurnAt.GetValueOrDefault(d.PlayerId))
+            {
+                dir = RandomDir();
+                walkDir[d.PlayerId] = dir;
+                walkTurnAt[d.PlayerId] = now + UnityEngine.Random.Range(2.5f, 5f);
+                walkLast[d.PlayerId] = d.GetTruePosition();
+            }
+
+            // Alle positionsabhängigen Tempo-Faktoren der Rollen auf den Dummy anwenden (z. B. Frost-Zone verlangsamt)
+            float factor = 1f;
+            foreach (var role in RoleRegistry.Roles)
+            {
+                try { factor *= role.SpeedMultiplier(d); } catch { }
+            }
+            factor = Mathf.Clamp(factor, 0f, 2f);
+
+            // Wand-Erkennung NUR bei normalem Tempo: ein verlangsamter Dummy (z. B. in einer Frost-Zone) bewegt sich
+            // ohnehin kaum und würde sonst jeden Frame die Richtung wechseln -> Links/Rechts-Gezappel.
+            var pos = d.GetTruePosition();
+            if (factor > 0.6f && walkLast.TryGetValue(d.PlayerId, out var last) && (pos - last).sqrMagnitude < 0.00025f)
+            {
+                dir = RandomDir();
+                walkDir[d.PlayerId] = dir;
+            }
+            walkLast[d.PlayerId] = pos;
+
+            d.MyPhysics.body.velocity = dir * (2.5f * factor);
+        }
+    }
+
+    private static Vector2 RandomDir()
+    {
+        float a = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+        return new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+    }
+
     public static void Update()
     {
+        if (DummiesWalk && ShipStatus.Instance && !CustomRole.InMeeting) WalkDummies();
+
         if (IsFreeplay && ShipStatus.Instance && dummiesAttack.Value) DoAttacks();
+
+        // (Kein Auto-Intro mehr - die Rollen-Enthüllung kommt nur noch über den Knopf "Rollen-Intro abspielen".)
 
         if (!IsFreeplay || !ShipStatus.Instance || appliedFor == ShipStatus.Instance) return;
         var local = PlayerControl.LocalPlayer;
@@ -388,7 +552,11 @@ internal static class FreeplayTest
     {
         appliedFor = ShipStatus.Instance;
         var local = PlayerControl.LocalPlayer;
-        var role = RoleRegistry.Roles.FirstOrDefault(r => r.ConfigSection == testRole.Value || r.Name == testRole.Value);
+        // Hauptrolle (keine Anpassung/Geist) + optionale Zusatz-Anpassung/Geisterrolle
+        var role = RoleRegistry.Roles.FirstOrDefault(r => (r.ConfigSection == testRole.Value || r.Name == testRole.Value) && !r.IsExtra);
+        var extra = testModifier != null
+            ? RoleRegistry.Roles.FirstOrDefault(r => (r.ConfigSection == testModifier.Value || r.Name == testModifier.Value) && r.IsExtra)
+            : null;
 
         // Vanilla-Grundrolle passend zum Team der Testrolle setzen
         if (role == null)
@@ -405,8 +573,8 @@ internal static class FreeplayTest
                 // Impostor haben keine echten Aufgaben - die alten Crew-Aufgaben aus dem Practice entfernen
                 if (wantImpostor) local.ClearTasks();
             }
-            // Neutrale Rollen haben keine Aufgaben
-            if (role.Team == RoleTeam.Neutral) local.ClearTasks();
+            // Neutrale Rollen haben keine Aufgaben (außer sie behalten sie ausdrücklich)
+            if (role.Team == RoleTeam.Neutral && !role.KeepsTasks) local.ClearTasks();
         }
 
         fakeImpostors.Clear(); // keine Fake-Impostor mehr - Dummys töten nur mit zugewiesener Impostor-Rolle
@@ -426,6 +594,10 @@ internal static class FreeplayTest
             }
         }
 
+        // Zusätzliche Anpassung/Geisterrolle für dich (neben der Hauptrolle)
+        if (extra != null && pairs.All(x => x.Item1 != local.PlayerId || x.Item2 != extra.Id))
+            pairs.Add((local.PlayerId, extra.Id));
+
         // Dummy-Rollen mit aufnehmen und die passende Vanilla-Grundrolle setzen
         foreach (var kv in dummyRoles.ToArray())
         {
@@ -440,7 +612,7 @@ internal static class FreeplayTest
             }
             if (pairs.All(x => x.Item1 != d.PlayerId)) pairs.Add((d.PlayerId, dRole.Id));
         }
-        RoleRegistry.SetAssignments(pairs);
+        RoleRegistry.SetAssignments(pairs, resetRoles: false); // abgelegte Dinge (z. B. Spinnennetze) beim Wechsel behalten
         ButtonManager.OnRolesAssigned(); // Knopf-Timer neu (im Freeplay 3s)
 
         Plugin.Logger.LogInfo($"Freeplay-Test: Rolle '{testRole.Value}', {fakeImpostors.Count} Dummy-Impostor(s)");

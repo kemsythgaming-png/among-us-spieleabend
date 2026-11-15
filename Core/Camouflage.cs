@@ -30,9 +30,11 @@ public static class Camouflage
         {
             foreach (var p in PlayerControl.AllPlayerControls)
             {
-                if (!p || p.Data == null || p.Data.IsDead || camouflaged.ContainsKey(p.PlayerId)) continue;
-                camouflaged[p.PlayerId] = p.CurrentOutfitType;
-                p.RawSetOutfit(GrayOutfit(), PlayerOutfitType.MushroomMixup);
+                if (!p || p.Data == null || p.Data.IsDead) continue;
+                if (!camouflaged.ContainsKey(p.PlayerId)) camouflaged[p.PlayerId] = p.CurrentOutfitType; // Original nur einmal merken
+                // Grau JEDEN Frame neu auftragen, falls das Spiel das Outfit zwischendurch zurücksetzt (lange Tarnung, z. B. Survivor).
+                if (p.CurrentOutfitType != PlayerOutfitType.MushroomMixup)
+                    p.RawSetOutfit(GrayOutfit(), PlayerOutfitType.MushroomMixup);
             }
         }
         else if (camouflaged.Count > 0)

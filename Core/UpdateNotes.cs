@@ -23,6 +23,26 @@ internal static class UpdateNotes
     // Neueste Version zuerst.
     private static readonly Entry[] History =
     {
+        new Entry("4.9.19",
+            new[]
+            {
+                Lang.T("<b>Neuer Modus: Draft</b>\nJeder wählt zu Beginn aus 3 zufälligen Rollen seines Teams.",
+                       "<b>New mode: Draft</b>\nEveryone picks from 3 random roles of their team at the start."),
+                Lang.T("<b>Neue Rollen (getestet):</b>\nSpinne, Mörser, Deaktivator, Frostbeißer, Chamäleon, Wettkönig, Geheimagent, Spurensucher, Syphilis.",
+                       "<b>New roles (tested):</b>\nSpider, Mortar, Deactivator, Frostbiter, Chameleon, Bet King, Secret Agent, Tracker, Syphilis."),
+            },
+            new[]
+            {
+                Lang.T("<b>Zufall beim Start:</b> im Reiter \"Spiel\" kannst du zufällige Namen (Vulgär/Pronomen/Tiere/Essen), zufällige Farben und zufällige Dekoration vergeben. Nach dem Spiel ist wieder alles normal.",
+                       "<b>Randomize at start:</b> in the \"Game\" tab you can assign random names (vulgar/pronouns/animals/food), random colors and random cosmetics. Everything returns to normal after the game."),
+                Lang.T("<b>Statistik am Spielende:</b> zeigt jetzt die echten Namen und die Kill-Anzahl jedes Spielers.",
+                       "<b>End-game stats:</b> now show each player's real name and kill count."),
+                Lang.T("<b>Freeplay-Test verbessert:</b> das F3-Panel ist scrollbar, es gibt \"Zufalls-Looks testen\", und die Dummys folgen deinem Vote.",
+                       "<b>Freeplay test improved:</b> the F3 panel scrolls, there is \"test random looks\", and dummies follow your vote."),
+                Lang.T("<b>Viele Rollen überarbeitet und Fehler behoben;</b> eine ungetestete Rolle wurde entfernt.",
+                       "<b>Many roles reworked and bugs fixed;</b> one untested role was removed."),
+            }),
+
         new Entry("4.9.18",
             new[]
             {

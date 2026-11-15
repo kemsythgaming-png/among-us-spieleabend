@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Spieleabend.Core;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Spieleabend.Roles;
 
@@ -23,14 +24,17 @@ public sealed class WinterGhost : CustomRole
 
     private const byte ActionMark = 0, ActionFlake = 1;
 
-    private RoleOption cooldown, range, toWin;
+    private RoleOption range, toWin;
     // Host: Geist-Id -> markierte Spieler
     private readonly Dictionary<byte, HashSet<byte>> marks = new();
     private readonly Dictionary<byte, int> flakes = new();
 
+    // lokal (beim Wintergeist selbst)
+    private byte myMark = byte.MaxValue;
+    private int myFlakes;
+
     protected override void Setup()
     {
-        cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 30f, 5f, 90f, 5f, "s");
         range = AddOption("Range", "Reichweite|Range", 2f, 1f, 6f, 0.5f);
         toWin = AddOption("ToWin", "Schneeflocken zum Sieg|Snowflakes to win", 3f, 1f, 6f, 1f);
 
@@ -39,15 +43,38 @@ public sealed class WinterGhost : CustomRole
             Label = "Markieren|Mark",
             Icon = "frost",
             NeedsTarget = false,
-            Cooldown = () => cooldown.Value,
+            Cooldown = () => 35f, // fest 35 s
             StartCooldown = 10f,
             Hotkey = KeyCode.F,
             CanUse = () => !InMeeting && Target() != null,
-            OnClick = _ => { var t = Target(); if (t) SendToHost(ActionMark, t.PlayerId); },
+            OnClick = _ => { var t = Target(); if (t) { myMark = t.PlayerId; SendToHost(ActionMark, t.PlayerId); } },
         });
     }
 
-    public override void ResetState() { marks.Clear(); flakes.Clear(); }
+    public override void ResetState() { marks.Clear(); flakes.Clear(); myMark = byte.MaxValue; myFlakes = 0; }
+
+    /// <summary>Nach dem Meeting: aktuelle Markierung weg (Punkte bleiben), Knopf geht wieder auf Abklingzeit (macht RoleButton selbst).</summary>
+    public override void OnMeetingEnd(PlayerControl exiled)
+    {
+        marks.Clear();
+        myMark = byte.MaxValue;
+    }
+
+    /// <summary>Kleine Schneeflocke als Symbol neben dem Namen des markierten Spielers - nur der Wintergeist sieht sie.</summary>
+    private bool SeesMark(PlayerControl viewer, PlayerControl target) =>
+        myMark != byte.MaxValue && RoleRegistry.Has(viewer, this) && target && target.PlayerId == myMark;
+
+    public override string GetNameIcon(PlayerControl viewer, PlayerControl target) => SeesMark(viewer, target) ? "frost" : null;
+    public override string GetMeetingIcon(PlayerControl viewer, PlayerControl target) => SeesMark(viewer, target) ? "frost" : null;
+
+    public override string GetTaskNote(PlayerControl local)
+    {
+        if (!RoleRegistry.Has(local, this)) return null;
+        int need = Mathf.RoundToInt(toWin.Value);
+        return Lang.T(
+            $"<color={ColorHex}>Schneeflocken: {myFlakes}/{need}</color>\nMarkiere heimlich einen Spieler (F). Stirbt er, gibt es eine Schneeflocke. Pro Runde nur eine Markierung.",
+            $"<color={ColorHex}>Snowflakes: {myFlakes}/{need}</color>\nSecretly mark a player (F). If they die you get a snowflake. Only one mark per round.");
+    }
 
     private PlayerControl Target()
     {
@@ -73,7 +100,11 @@ public sealed class WinterGhost : CustomRole
         {
             if (data[1] == 255) { if (FindPlayer(data[0]) == PlayerControl.LocalPlayer) Sfx.Play(Sfx.TaskUpdate, 0.5f); return; }
             if (FindPlayer(data[0]) == PlayerControl.LocalPlayer)
+            {
+                myFlakes = data[1];
+                myMark = byte.MaxValue; // Markierung wurde eingelöst
                 Notifier.Show($"<color={ColorHex}>{Lang.T("Schneeflocke!", "Snowflake!")} {data[1]}/{Mathf.RoundToInt(toWin.Value)}</color>", 3f);
+            }
         }
     }
 

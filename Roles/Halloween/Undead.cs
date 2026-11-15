@@ -21,12 +21,12 @@ public sealed class Undead : CustomRole
     public override string IntroText => Lang.T("Der Tod ist erst der Anfang", "Death is only the beginning");
     public override string Description => Stage(PlayerControl.LocalPlayer) switch
     {
-        UndeadStage.Risen => Lang.T($"Sammle Seelen: Steh an fremden Leichen.\n({SoulsOf(PlayerControl.LocalPlayer)}/{souls.Int})", $"Collect souls: stand at other bodies.\n({SoulsOf(PlayerControl.LocalPlayer)}/{souls.Int})"),
+        UndeadStage.Risen => Lang.T($"Sauge Leichen aus - sie lösen sich auf.\n({SoulsOf(PlayerControl.LocalPlayer)}/{souls.Int})", $"Drain bodies - they dissolve.\n({SoulsOf(PlayerControl.LocalPlayer)}/{souls.Int})"),
         _ => Lang.T("Lass dich von einem Impostor töten -\nnach dem Meeting stehst du wieder auf.", "Get killed by an impostor -\nyou rise again after the meeting."),
     };
     public override string LongDescription => Lang.T(
-        "Halloween-Neutral. Wirst du getötet, bist du bis zum Ende des nächsten Meetings ein Geist - aber ohne Rollen-Infos. Danach stehst du als Untoter wieder auf.\n\nAls Untoter läufst du sichtbar herum, giltst im Meeting aber als tot (keine Stimme, du schweigst). Steh an fremden Leichen, um Seelen zu sammeln. Hast du genug, gewinnst du allein und das Spiel endet. Sonst verlierst du.\n\nTöten können dich nur Impostor und Neutrale - Crew-Rollen wie der Sheriff nicht. Ein zweiter Tod ist endgültig.",
-        "Halloween neutral. If you are killed, you are a ghost until the end of the next meeting - but without role info. Then you rise again as undead.\n\nAs undead you walk around visibly, but count as dead in meetings (no vote, you stay silent). Stand at other bodies to collect souls. Once you have enough, you win alone and the game ends. Otherwise you lose.\n\nOnly impostors and neutrals can kill you - crew roles like the Sheriff can't. A second death is final.");
+        "Halloween-Neutral. Wirst du getötet, bist du bis zum Ende des nächsten Meetings ein Geist - aber ohne Rollen-Infos. Danach stehst du als Untoter wieder auf.\n\nAls Untoter läufst du sichtbar herum, giltst im Meeting aber als tot (keine Stimme, du schweigst). Steh an einer fremden Leiche, bis du ihre Seele aufgesaugt hast - danach löst sich die Leiche auf. Jede Leiche gibt genau 1 Seele, du musst also verschiedene Leichen finden. Hast du genug (Standard 2), gewinnst du allein und das Spiel endet. Sonst verlierst du.\n\nTöten können dich nur Impostor und Neutrale - Crew-Rollen wie der Sheriff nicht. Ein zweiter Tod ist endgültig.",
+        "Halloween neutral. If you are killed, you are a ghost until the end of the next meeting - but without role info. Then you rise again as undead.\n\nAs undead you walk around visibly, but count as dead in meetings (no vote, you stay silent). Stand at another player's body until you drain its soul - then the body dissolves. Each body gives exactly 1 soul, so you must find different bodies. Once you have enough (default 2), you win alone and the game ends. Otherwise you lose.\n\nOnly impostors and neutrals can kill you - crew roles like the Sheriff can't. A second death is final.");
 
     private const byte ActionRise = 0, ActionSoul = 1, ActionRestore = 2;
 
@@ -38,9 +38,15 @@ public sealed class Undead : CustomRole
     private readonly Dictionary<byte, UndeadStage> stages = new();
     private readonly Dictionary<byte, int> collected = new();
 
-    // lokal beim Untoten: Leiche -> Zeit an ihr; schon gesammelte Leichen
+    // lokal beim Untoten: Leiche -> Zeit an ihr; schon ausgesaugte Leichen; Seelen-Animationen
     private readonly Dictionary<byte, float> standing = new();
-    private readonly HashSet<byte> harvested = new();
+    private readonly HashSet<byte> harvested = new(); // jede Leiche nur einmal (löst sich danach auf)
+    private readonly Dictionary<byte, GameObject> soulOrbs = new();
+    private static Sprite soulSprite;
+
+    // auf allen Clients: Leichen, die sich gerade auflösen (aufsteigende Seelen-Kugel)
+    private sealed class RiseOrb { public GameObject Go; public float Start; }
+    private static readonly List<RiseOrb> rising = new();
 
     /// <summary>Namen der Untoten, die gerade NICHT gewinnen duerfen (fuer die Siegerliste am Spielende).</summary>
     internal static readonly HashSet<string> LosingNames = new();
@@ -48,8 +54,8 @@ public sealed class Undead : CustomRole
     protected override void Setup()
     {
         Instance = this;
-        souls = AddOption("Souls", "Benötigte Seelen|Souls needed", 20f, 1f, 40f, 1f);
-        soulTime = AddOption("SoulTime", "Zeit je Seele an der Leiche|Time per soul at a body", 5f, 1f, 15f, 1f, "s");
+        souls = AddOption("SoulsV2", "Benötigte Leichen|Bodies needed", 2f, 1f, 10f, 1f);
+        soulTime = AddOption("SoulTime", "Zeit je Leiche|Time per body", 12f, 1f, 30f, 1f, "s");
     }
 
     public override void ResetState()
@@ -58,7 +64,16 @@ public sealed class Undead : CustomRole
         collected.Clear();
         standing.Clear();
         harvested.Clear();
+        ClearOrbs();
         // LosingNames bleibt bis zum Ende-Bildschirm stehen (wird dort benutzt und geleert)
+    }
+
+    public override void OnMeetingStart() => ClearOrbs();
+
+    private void ClearOrbs()
+    {
+        foreach (var o in soulOrbs.Values) if (o) Object.Destroy(o);
+        soulOrbs.Clear();
     }
 
     internal UndeadStage Stage(PlayerControl p) =>
@@ -120,6 +135,13 @@ public sealed class Undead : CustomRole
             case ActionSoul:
                 if (Stage(p) != UndeadStage.Risen) return;
                 collected[p.PlayerId] = SoulsOf(p) + 1;
+                DissolveBody(data.Length > 1 ? data[1] : byte.MaxValue); // Leiche auf allen Clients auflösen
+                if (p == PlayerControl.LocalPlayer && SoulsOf(p) < souls.Int)
+                {
+                    Sfx.Play(Sfx.TaskUpdate);
+                    Notifier.Show($"<color={ColorHex}>{Lang.T("Seele", "Soul")} {SoulsOf(p)}/{souls.Int} - {Lang.T("finde die nächste Leiche", "find the next body")}</color>", 2.5f);
+                }
+                if (AmHost && SoulsOf(p) >= souls.Int) SendToAll(ActionRestore, p.PlayerId); // genug -> Sieg (host-autoritativ)
                 break;
 
             case ActionRestore:
@@ -136,36 +158,128 @@ public sealed class Undead : CustomRole
     public override void Update()
     {
         var local = PlayerControl.LocalPlayer;
-        if (!IsLocalRole || Stage(local) != UndeadStage.Risen || !IsAlive(local) || InMeeting) return;
+        if (!IsLocalRole || Stage(local) != UndeadStage.Risen || !IsAlive(local) || InMeeting)
+        {
+            if (soulOrbs.Count > 0) ClearOrbs();
+            return;
+        }
 
         Vector2 me = local.GetTruePosition();
-        var near = new HashSet<byte>();
+        var near = new Dictionary<byte, Vector2>();
         foreach (var body in Object.FindObjectsOfType<DeadBody>())
         {
             if (!body || body.ParentId == local.PlayerId) continue;
             if (Vector2.Distance(me, body.TruePosition) > 1.2f) continue;
-            near.Add(body.ParentId);
+            near[body.ParentId] = body.TruePosition;
         }
 
         foreach (var id in standing.Keys.ToList())
-            if (!near.Contains(id)) standing.Remove(id); // weggegangen -> von vorn
+            if (!near.ContainsKey(id)) standing.Remove(id); // weggegangen -> von vorn
+        foreach (var id in soulOrbs.Keys.ToList())
+            if (!near.ContainsKey(id)) { if (soulOrbs[id]) Object.Destroy(soulOrbs[id]); soulOrbs.Remove(id); }
 
-        foreach (var id in near)
+        foreach (var kv in near)
         {
+            byte id = kv.Key;
+            if (harvested.Contains(id)) continue; // schon ausgesaugt (Leiche verschwindet gleich)
             standing.TryGetValue(id, out float t);
             t += Time.deltaTime;
+
+            AnimateOrb(id, kv.Value, Mathf.Clamp01(t / soulTime.Value), false);
+
             if (t < soulTime.Value) { standing[id] = t; continue; }
 
-            // Seele geerntet - am selben Körper geht es weiter (alle soulTime Sekunden +1)
-            standing[id] = t - soulTime.Value;
-            SendToAll(ActionSoul, local.PlayerId);
-            if (SoulsOf(local) >= souls.Int) SendToAll(ActionRestore, local.PlayerId);
-            else
-            {
-                Sfx.Play(Sfx.TaskUpdate);
-                Notifier.Show($"<color={ColorHex}>{Lang.T("Seele", "Soul")} {SoulsOf(local)}/{souls.Int}</color>", 2f);
-            }
+            // Leiche ausgesaugt: 1 Seele, Leiche löst sich auf (auf allen Clients). Du brauchst also verschiedene Leichen.
+            harvested.Add(id);
+            standing.Remove(id);
+            if (soulOrbs.TryGetValue(id, out var orb)) { if (orb) Object.Destroy(orb); soulOrbs.Remove(id); }
+            SendToAll(ActionSoul, local.PlayerId, id);
         }
+    }
+
+    /// <summary>Löst die Leiche mit dieser ParentId auf (aufsteigende, verblassende Seele) - auf jedem Client.</summary>
+    private void DissolveBody(byte bodyId)
+    {
+        if (bodyId == byte.MaxValue) return;
+        foreach (var body in Object.FindObjectsOfType<DeadBody>())
+        {
+            if (!body || body.ParentId != bodyId) continue;
+            SpawnRiseOrb(body.TruePosition);
+            Object.Destroy(body.gameObject);
+            break;
+        }
+    }
+
+    private void SpawnRiseOrb(Vector2 pos)
+    {
+        var go = new GameObject("Spieleabend_SoulRise");
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = SoulSprite();
+        sr.sortingOrder = 61;
+        var c = Color; c.a = 0.9f; sr.color = c;
+        go.transform.position = new Vector3(pos.x, pos.y + 0.4f, -3f);
+        go.transform.localScale = Vector3.one * 0.55f;
+        rising.Add(new RiseOrb { Go = go, Start = Time.time });
+    }
+
+    /// <summary>Jeden Frame (alle Clients): aufsteigende Seelen-Kugeln animieren. Von Patches aufgerufen.</summary>
+    internal static void TickEffects()
+    {
+        const float life = 0.9f;
+        for (int i = rising.Count - 1; i >= 0; i--)
+        {
+            var r = rising[i];
+            float age = Time.time - r.Start;
+            if (!r.Go || age >= life) { if (r.Go) Object.Destroy(r.Go); rising.RemoveAt(i); continue; }
+            float k = age / life;
+            r.Go.transform.position += new Vector3(0f, Time.deltaTime * 1.3f, 0f);
+            float s = 0.55f * (1f + k * 0.6f);
+            r.Go.transform.localScale = new Vector3(s, s, 1f);
+            var sr = r.Go.GetComponent<SpriteRenderer>();
+            if (sr) { var c = sr.color; c.a = 0.9f * (1f - k); sr.color = c; }
+        }
+    }
+
+    /// <summary>Animierte Seelen-Kugel über der Leiche: schwebt auf und ab, pulsiert und wächst mit dem Fortschritt.</summary>
+    private void AnimateOrb(byte bodyId, Vector2 bodyPos, float progress, bool blocked)
+    {
+        if (!soulOrbs.TryGetValue(bodyId, out var go) || !go)
+        {
+            go = new GameObject("Spieleabend_SoulOrb");
+            var sr0 = go.AddComponent<SpriteRenderer>();
+            sr0.sprite = SoulSprite();
+            sr0.sortingOrder = 60;
+            soulOrbs[bodyId] = go;
+        }
+        float tt = Time.time;
+        float bob = Mathf.Sin(tt * 3.2f) * 0.14f;
+        float pulse = 0.85f + Mathf.Sin(tt * 6f) * 0.15f;
+        float scale = (0.28f + 0.5f * progress) * pulse;
+        go.transform.position = new Vector3(bodyPos.x, bodyPos.y + 0.75f + bob, bodyPos.y / 1000f - 3f);
+        go.transform.localScale = new Vector3(scale, scale, 1f);
+        var sr = go.GetComponent<SpriteRenderer>();
+        // blockiert (gleiche Leiche) -> rötlich blinken, sonst grün der Rolle
+        var baseCol = blocked ? new Color(1f, 0.45f, 0.45f) : Color;
+        baseCol.a = 0.55f + 0.35f * Mathf.Abs(Mathf.Sin(tt * 4f));
+        sr.color = baseCol;
+    }
+
+    private static Sprite SoulSprite()
+    {
+        if (soulSprite) return soulSprite;
+        const int S = 48;
+        var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+        for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++)
+        {
+            float d = Vector2.Distance(new Vector2(x, y), new Vector2(23.5f, 23.5f)) / 23.5f;
+            float a = d >= 1f ? 0f : Mathf.SmoothStep(1f, 0f, d); // weiche Kugel
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+        }
+        tex.Apply();
+        soulSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), S);
+        soulSprite.hideFlags = HideFlags.HideAndDontSave;
+        return soulSprite;
     }
 
     /// <summary>
@@ -242,6 +356,20 @@ internal static class UndeadCastVotePatch
     {
         var undead = Undead.Instance;
         return undead == null || !undead.CountsAsDeadInMeeting(CustomRole.FindPlayer(playerId));
+    }
+}
+
+/// <summary>Auferstandener Untoter: kein Notfallknopf, keine Leiche melden (er gilt als tot).</summary>
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.CmdReportDeadBody))]
+internal static class UndeadNoMeetingPatch
+{
+    public static bool Prefix(PlayerControl __instance)
+    {
+        var undead = Undead.Instance;
+        if (undead == null || !undead.CountsAsDeadInMeeting(__instance)) return true;
+        if (__instance == PlayerControl.LocalPlayer)
+            Notifier.Show($"<color={undead.ColorHex}>{Lang.T("Als Untoter kannst du kein Meeting einberufen.", "As undead you can't call a meeting.")}</color>", 2.5f);
+        return false;
     }
 }
 

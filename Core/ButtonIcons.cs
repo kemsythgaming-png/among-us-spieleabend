@@ -17,6 +17,10 @@ internal static class ButtonIcons
 
     public static Sprite Get(string name, Sprite reference)
     {
+        // "proc:xxx" -> im Code erzeugtes Symbol (z. B. grüner Virus am Namen) statt einer PNG.
+        if (!string.IsNullOrEmpty(name) && name.StartsWith("proc:"))
+            return ProcIcons.ByKey(name.Substring(5));
+
         var tex = Load(name);
         if (!tex) return null;
 

@@ -68,8 +68,8 @@ public sealed class Firefighter : CustomRole
         // Sauerstoff
         Repair(ship, SystemTypes.LifeSupp, 0x40);
         Repair(ship, SystemTypes.LifeSupp, 0x41);
-        // Kommunikation - aber NICHT die Störsender-Störung (die ist keine echte Sabotage)
-        if (!(MapSaboteur.Instance?.JamActive ?? false)) Repair(ship, SystemTypes.Comms, 0);
+        // Kommunikation
+        Repair(ship, SystemTypes.Comms, 0);
         // Licht: alle falsch stehenden Schalter umlegen
         FixLights(ship);
         Sfx.Play(Sfx.TaskComplete, 0.7f);

@@ -30,13 +30,14 @@ internal static class TestStatus
         "Boo", "EvilGuesser", "Wizard", "Werewolf", "Sniper",
         "BodyDragger", "FalseSanta", "GuardianSpirit", "WailingSpirit",
         "Haunting", "Zombie", "Mummy", "Oracle",
-        "VengefulSpirit",
+        "VengefulSpirit", "ChainShifter", "WinterGhost", "DoorSpirit", "PotionBrewer",
+        "Loner", "Instructor", "Tracker2", "Spider", "Mortar", "Syphilis",
+        "Deactivator", "Frostbiter", "BetKing", "Chameleon", "SecretAgent",
     };
 
     /// <summary>Anpassungen, die trotz der Sammelfreigabe noch NICHT getestet sind (z. B. gemeldeter Bug).</summary>
     private static readonly HashSet<string> UntestedModifiers = new()
     {
-        "Lover",
     };
 
     // An/Aus-Schalter: dürfen ungetestete Rollen benutzt/eingestellt werden? Standard: AUS.

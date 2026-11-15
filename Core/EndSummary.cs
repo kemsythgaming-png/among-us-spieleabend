@@ -64,7 +64,9 @@ internal static class EndSummary
         var colors = Palette.PlayerColors;
         int id = info.DefaultOutfit != null ? info.DefaultOutfit.ColorId : 0;
         var c = id >= 0 && id < colors.Length ? (Color)colors[id] : Color.white;
-        return $"<color=#{ColorUtility.ToHtmlStringRGB(c)}>{info.PlayerName}</color>";
+        // echten Namen nehmen, falls er für die Runde zufällig überschrieben war
+        string name = RandomLooks.RealName(info.PlayerId) ?? info.PlayerName;
+        return $"<color=#{ColorUtility.ToHtmlStringRGB(c)}>{name}</color>";
     }
 
     private static bool RoleWasImpostor(NetworkedPlayerInfo info)
@@ -109,7 +111,7 @@ internal static class EndSummary
         foreach (var e in entries)
         {
             string status = e.Alive ? "" : " <color=#AAAAAA>†</color>";
-            string killText = e.Kills > 0 ? $"  <color=#FF6666>{e.Kills} {(e.Kills == 1 ? "Kill" : "Kills")}</color>" : "";
+            string killText = $"  <color=#FF6666>{e.Kills} {(e.Kills == 1 ? "Kill" : "Kills")}</color>";
             lines.Add($"{e.Name}{status}  -  {e.Roles}{killText}");
         }
         tmp.text = string.Join("\n", lines);
@@ -134,7 +136,11 @@ internal static class EndSummary
 [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnGameEnd))]
 internal static class EndSummaryCapturePatch
 {
-    public static void Prefix() => EndSummary.Capture();
+    public static void Prefix()
+    {
+        EndSummary.Capture();      // erst erfassen (nimmt die ECHTEN Namen, solange gemerkt)
+        RandomLooks.RestoreAll();  // dann alles wieder normal: Namen/Farben/Deko zurücksetzen
+    }
 }
 
 [HarmonyPatch(typeof(EndGameManager), nameof(EndGameManager.SetEverythingUp))]

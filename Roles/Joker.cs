@@ -30,16 +30,37 @@ public sealed class Joker : CustomRole
     private bool pendingReroll;   // lokal: nach der Nutzung neu würfeln, sobald der Effekt durch ist
     private float rerollAt;       // frühestens zu diesem Zeitpunkt (damit RPCs/Effekte sauber durchlaufen)
     private CustomRole lastLocalRole;
+    private RoleOption newAbilityCd;
 
     protected override void Setup()
     {
         Instance = this;
+        newAbilityCd = AddOption("NewAbilityCd", "Neue-Fähigkeit-Knopf|New-ability button", 60f, 20f, 180f, 10f, "s");
         if (!hooked)
         {
             RoleButton.Used += role => Instance?.OnUsed(role); // nach jeder Nutzung neu würfeln
             hooked = true;
         }
+
+        // Dauer-Knopf: jederzeit eine neue zufällige Fähigkeit würfeln (bleibt auch nach dem Rollentausch sichtbar).
+        AddButton(new RoleButton
+        {
+            Label = "Neue Fähigkeit|New ability",
+            Icon = "slot",
+            NeedsTarget = false,
+            Cooldown = () => newAbilityCd.Value,
+            StartCooldown = 20f,
+            CanUse = () => !InMeeting && IsAlive(PlayerControl.LocalPlayer) && IsLocalJoker,
+            Visible = () => IsLocalJoker,
+            OnClick = _ => { var l = PlayerControl.LocalPlayer; if (l) SendToHost(ActionReroll, l.PlayerId); },
+        });
     }
+
+    private static bool IsLocalJoker => PlayerControl.LocalPlayer && IsJoker(PlayerControl.LocalPlayer.PlayerId);
+
+    /// <summary>Der Joker-Dauerknopf soll auch dann sichtbar sein, wenn der Spieler gerade eine geliehene Rolle trägt.</summary>
+    public override bool OwnsButtonsFor(PlayerControl local) =>
+        base.OwnsButtonsFor(local) || (local && jokers.Contains(local.PlayerId));
 
     public override void ResetState() => jokers.Clear();
 
@@ -70,8 +91,14 @@ public sealed class Joker : CustomRole
         // Nutzung gemerkt - neu gewürfelt wird erst kurz danach (damit Kill-RPC/Effekt sauber durchlaufen)
         if (usedRole != null && usedRole != this && RoleRegistry.GetRole(local) == usedRole)
         {
-            pendingReroll = true;
-            rerollAt = Time.time + 1.5f;
+            // Rollen mit mehreren Nutzungen (z. B. Falscher Weihnachtsmann, Tatortreiniger) erst neu würfeln,
+            // wenn KEINE Nutzung mehr übrig ist - so funktionieren beide Aktivierungen.
+            bool usesLeft = usedRole.Buttons.Any(b => b.UsesLeft != null && b.UsesLeft() > 0);
+            if (!usesLeft)
+            {
+                pendingReroll = true;
+                rerollAt = Time.time + 1.5f;
+            }
         }
     }
 
@@ -116,6 +143,8 @@ public sealed class Joker : CustomRole
         var current = RoleRegistry.GetRole(player);
         var pool = RoleRegistry.Roles
             .Where(r => r.Team == RoleTeam.Impostor && !r.IsGhostRole && r.Buttons.Count > 0 && r != this && r != current
+                        && r.Count.Int > 0                           // nur EINGESCHALTETE Rollen
+                        && TestStatus.IsTested(r)                     // nur GETESTETE Rollen
                         && r is not VoodooDoll                       // Übernahme funktioniert geliehen nicht sauber
                         && r is not Halloween.Scarecrow              // Menü-Auswahl bricht beim Rollenwechsel ab
                         && r is not Halloween.Poltergeist)           // Durch-Wände klemmt beim Rollenwechsel (Wand/Vent)

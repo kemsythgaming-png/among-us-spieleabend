@@ -18,7 +18,7 @@ internal static class FreeplayPanel
     private static string selected = "";
     private static int filter;
     private static int testFilter; // 0 = Alle, 1 = nur Getestet, 2 = nur Ungetestet
-    private static Vector2 roleScroll, dummyScroll;
+    private static Vector2 roleScroll, dummyScroll, ctrlScroll;
 
     private static readonly (string Label, Func<CustomRole, bool> Match)[] Filters =
     {
@@ -64,10 +64,11 @@ internal static class FreeplayPanel
         if (GUI.Button(new Rect(win.xMax - 76, win.y + 18, 54, 54), new GUIContent("X"), Ui.CloseButton)) { Close(); return; }
 
         string myRole = string.IsNullOrEmpty(FreeplayTest.TestRoleName) ? Lang.T("(keine)", "(none)") : FreeplayTest.TestRoleDisplayName;
+        string myMod = string.IsNullOrEmpty(FreeplayTest.TestModifierName) ? "" : $"  +  <b>{FreeplayTest.TestModifierDisplay}</b>";
         string selName = SelectedName();
         GUI.Label(new Rect(win.x + 36, win.y + 72, W - 72, 30),
-            Lang.T($"Deine Rolle: <b>{myRole}</b>        Gewählt zum Vergeben: <b>{selName}</b>",
-                   $"Your role: <b>{myRole}</b>        Selected to assign: <b>{selName}</b>"), Ui.Text);
+            Lang.T($"Deine Rolle: <b>{myRole}</b>{myMod}        Gewählt: <b>{selName}</b>",
+                   $"Your role: <b>{myRole}</b>{myMod}        Selected: <b>{selName}</b>"), Ui.Text);
 
         float contentY = win.y + 116, contentBottom = win.yMax - 28;
         float leftW = (W - 96) * 0.5f;
@@ -133,9 +134,13 @@ internal static class FreeplayPanel
             ry += rowH;
         }
 
-        // "Fuer dich" - gewaehlte Rolle an den eigenen Spieler
-        if (GUI.Button(new Rect(x, bottom - 56, w, 56), new GUIContent(Lang.T("Für dich", "For you")), Ui.ListButton))
+        // "Fuer dich" - gewaehlte Rolle an den eigenen Spieler (Anpassung/Geist landet automatisch als Zusatz).
+        bool hasMod = !string.IsNullOrEmpty(FreeplayTest.TestModifierName);
+        float forW = hasMod ? w - 226 : w;
+        if (GUI.Button(new Rect(x, bottom - 56, forW, 56), new GUIContent(Lang.T("Für dich", "For you")), Ui.ListButton))
             FreeplayTest.SetTestRole(selected);
+        if (hasMod && GUI.Button(new Rect(x + forW + 6, bottom - 56, 220, 56), new GUIContent(Lang.T("Anpassung aus", "Remove modifier")), Ui.ListButton))
+            FreeplayTest.ClearTestModifier();
     }
 
     // ---------- Rechts: Dummys + Steuerung ----------
@@ -143,7 +148,7 @@ internal static class FreeplayPanel
     {
         GUI.Label(new Rect(x, y, w, 30), Lang.T("Dummy anklicken = Rolle geben. Angriff = Dummy nutzt sie an dir:", "Click a dummy = give role. Attack = dummy uses it on you:"), Ui.Small);
 
-        float listTop = y + 36, listBottom = bottom - 514;
+        float listTop = y + 36, listBottom = listTop + 264;
         var dummies = PlayerControl.AllPlayerControls.ToArray()
             .Where(p => p && p.isDummy && p != PlayerControl.LocalPlayer && p.Data != null).ToList();
 
@@ -174,49 +179,89 @@ internal static class FreeplayPanel
             ry += rowH;
         }
 
-        // Steuerung unten
-        float cy = bottom - 502;
-        GUI.Label(new Rect(x, cy + 10, w - 240, 32), Lang.T("Dummys töten nur mit zugewiesener Impostor-Rolle + „greifen an\" an.", "Dummies only kill with an assigned impostor role + attack on."), Ui.Small);
-        if (GUI.Button(new Rect(x + w - 220, cy, 220, 52), new GUIContent(Lang.T("Rollen leeren", "Clear roles")), Ui.ListButton)) FreeplayTest.ClearDummyRoles();
+        // ---------- Steuerung: scrollbar, weil es viele Knöpfe sind ----------
+        float ctrlTop = listBottom + 12;
+        var ctrlView = new Rect(x, ctrlTop, w, bottom - ctrlTop);
+        GUI.Box(ctrlView, GUIContent.none, Ui.Inner);
+        const float contentH = 800f;
+        float iw = w - 22; // Platz für die Scrollleiste
+        ctrlScroll = GUI.BeginScrollView(ctrlView, ctrlScroll, new Rect(0, 0, iw, contentH));
+
+        float cx = 6, cy = 6;
+        GUI.Label(new Rect(cx, cy + 10, iw - 240, 32), Lang.T("Dummys töten nur mit zugewiesener Impostor-Rolle + „greifen an\" an.", "Dummies only kill with an assigned impostor role + attack on."), Ui.Small);
+        if (GUI.Button(new Rect(cx + iw - 226, cy, 220, 52), new GUIContent(Lang.T("Rollen leeren", "Clear roles")), Ui.ListButton)) FreeplayTest.ClearDummyRoles();
         cy += 62;
 
-        // Reihe: Aufgaben sofort erledigen (fuer task-gebundene Faehigkeiten, z. B. Heiler)
-        if (GUI.Button(new Rect(x, cy, w, 52), new GUIContent(Lang.T("Aufgaben erledigen", "Complete tasks")), Ui.ListButton)) FreeplayTest.CompleteAllTasks();
+        if (GUI.Button(new Rect(cx, cy, iw - 6, 52), new GUIContent(Lang.T("Aufgaben erledigen", "Complete tasks")), Ui.ListButton)) FreeplayTest.CompleteAllTasks();
         cy += 62;
 
-        float t3 = (w - 12) / 3f;
-        // Reihe: Sterben / Beleben / Dummys beleben
-        if (GUI.Button(new Rect(x, cy, t3, 52), new GUIContent(Lang.T("Sterben", "Die")), Ui.ListButton)) FreeplayTest.SelfKill();
-        if (GUI.Button(new Rect(x + t3 + 6, cy, t3, 52), new GUIContent(Lang.T("Beleben", "Revive")), Ui.ListButton)) FreeplayTest.Revive();
-        if (GUI.Button(new Rect(x + (t3 + 6) * 2, cy, t3, 52), new GUIContent(Lang.T("Dummys beleben", "Revive dummies")), Ui.ListButton)) FreeplayTest.ReviveDummies();
+        float t3 = (iw - 18) / 3f;
+        if (GUI.Button(new Rect(cx, cy, t3, 52), new GUIContent(Lang.T("Sterben", "Die")), Ui.ListButton)) FreeplayTest.SelfKill();
+        if (GUI.Button(new Rect(cx + t3 + 6, cy, t3, 52), new GUIContent(Lang.T("Beleben", "Revive")), Ui.ListButton)) FreeplayTest.Revive();
+        if (GUI.Button(new Rect(cx + (t3 + 6) * 2, cy, t3, 52), new GUIContent(Lang.T("Dummys beleben", "Revive dummies")), Ui.ListButton)) FreeplayTest.ReviveDummies();
         cy += 62;
 
-        // Reihe: Knöpfe neu / Meeting / Erst-Tod-Schutz
-        if (GUI.Button(new Rect(x, cy, t3, 52), new GUIContent(Lang.T("Knöpfe neu", "Fresh buttons")), Ui.ListButton)) FreeplayTest.ResetButtonCooldowns();
-        if (GUI.Button(new Rect(x + t3 + 6, cy, t3, 52), new GUIContent(Lang.T("Meeting", "Meeting")), Ui.ListButton)) FreeplayTest.StartMeeting();
-        if (GUI.Button(new Rect(x + (t3 + 6) * 2, cy, t3, 52), new GUIContent(Lang.T("Erst-Tod-Schutz", "First-death shield")), Ui.ListButton)) FreeplayTest.GiveSelfFirstDeathShield();
+        if (GUI.Button(new Rect(cx, cy, t3, 52), new GUIContent(Lang.T("Knöpfe neu", "Fresh buttons")), Ui.ListButton)) FreeplayTest.ResetButtonCooldowns();
+        if (GUI.Button(new Rect(cx + t3 + 6, cy, t3, 52), new GUIContent(Lang.T("Meeting", "Meeting")), Ui.ListButton)) FreeplayTest.StartMeeting();
+        if (GUI.Button(new Rect(cx + (t3 + 6) * 2, cy, t3, 52), new GUIContent(Lang.T("Erst-Tod-Schutz", "First-death shield")), Ui.ListButton)) FreeplayTest.GiveSelfFirstDeathShield();
         cy += 62;
 
-        GUI.Label(new Rect(x, cy + 12, w - 150, 32), Lang.T("Dummies folgen deiner Stimme:", "Dummies follow your vote:"), Ui.Small);
-        if (GUI.Button(new Rect(x + w - 140, cy, 140, 52), new GUIContent(FreeplayTest.DummiesFollowVote ? Lang.T("An", "On") : Lang.T("Aus", "Off")), FreeplayTest.DummiesFollowVote ? Ui.ListSelected : Ui.ListButton))
+        if (GUI.Button(new Rect(cx, cy, iw - 6, 52), new GUIContent(Lang.T("Rollen-Intro abspielen", "Play role intro")), Ui.ListButton)) FreeplayTest.PlayIntro();
+        cy += 62;
+
+        GUI.Label(new Rect(cx, cy + 12, iw - 150, 32), Lang.T("Dummies folgen deiner Stimme:", "Dummies follow your vote:"), Ui.Small);
+        if (GUI.Button(new Rect(cx + iw - 146, cy, 140, 52), new GUIContent(FreeplayTest.DummiesFollowVote ? Lang.T("An", "On") : Lang.T("Aus", "Off")), FreeplayTest.DummiesFollowVote ? Ui.ListSelected : Ui.ListButton))
             FreeplayTest.ToggleDummiesFollowVote();
         cy += 62;
 
-        GUI.Label(new Rect(x, cy + 12, w - 150, 32), Lang.T("Impostor-Dummies greifen bei Nähe an:", "Impostor dummies attack when close:"), Ui.Small);
-        if (GUI.Button(new Rect(x + w - 140, cy, 140, 52), new GUIContent(FreeplayTest.DummiesAttack ? Lang.T("An", "On") : Lang.T("Aus", "Off")), FreeplayTest.DummiesAttack ? Ui.ListSelected : Ui.ListButton))
+        GUI.Label(new Rect(cx, cy + 12, iw - 150, 32), Lang.T("Impostor-Dummies greifen bei Nähe an:", "Impostor dummies attack when close:"), Ui.Small);
+        if (GUI.Button(new Rect(cx + iw - 146, cy, 140, 52), new GUIContent(FreeplayTest.DummiesAttack ? Lang.T("An", "On") : Lang.T("Aus", "Off")), FreeplayTest.DummiesAttack ? Ui.ListSelected : Ui.ListButton))
             FreeplayTest.ToggleDummiesAttack();
         cy += 62;
 
-        GUI.Label(new Rect(x, cy + 12, w - 150, 32), Lang.T("Knöpfe auch als Toter benutzbar:", "Buttons also usable when dead:"), Ui.Small);
-        if (GUI.Button(new Rect(x + w - 140, cy, 140, 52), new GUIContent(FreeplayTest.ButtonsWhenDead ? Lang.T("An", "On") : Lang.T("Aus", "Off")), FreeplayTest.ButtonsWhenDead ? Ui.ListSelected : Ui.ListButton))
+        GUI.Label(new Rect(cx, cy + 12, iw - 150, 32), Lang.T("Knöpfe auch als Toter benutzbar:", "Buttons also usable when dead:"), Ui.Small);
+        if (GUI.Button(new Rect(cx + iw - 146, cy, 140, 52), new GUIContent(FreeplayTest.ButtonsWhenDead ? Lang.T("An", "On") : Lang.T("Aus", "Off")), FreeplayTest.ButtonsWhenDead ? Ui.ListSelected : Ui.ListButton))
             FreeplayTest.ToggleButtonsWhenDead();
         cy += 62;
 
-        // Sabotage (auch als Crew)
-        float sabW = (w - 18) / 4f;
-        if (GUI.Button(new Rect(x, cy, sabW, 52), new GUIContent(Lang.T("Licht", "Lights")), Ui.ListButton)) FreeplayTest.StartSabotage(SystemTypes.Electrical);
-        if (GUI.Button(new Rect(x + sabW + 6, cy, sabW, 52), new GUIContent(Lang.T("Reaktor", "Reactor")), Ui.ListButton)) FreeplayTest.StartSabotage(SystemTypes.Reactor);
-        if (GUI.Button(new Rect(x + (sabW + 6) * 2, cy, sabW, 52), new GUIContent(Lang.T("O2", "O2")), Ui.ListButton)) FreeplayTest.StartSabotage(SystemTypes.LifeSupp);
-        if (GUI.Button(new Rect(x + (sabW + 6) * 3, cy, sabW, 52), new GUIContent(Lang.T("Komm.", "Comms")), Ui.ListButton)) FreeplayTest.StartSabotage(SystemTypes.Comms);
+        GUI.Label(new Rect(cx, cy + 12, iw - 150, 32), Lang.T("Dummys laufen umher (für Slow-Tests):", "Dummies walk around (for slow tests):"), Ui.Small);
+        if (GUI.Button(new Rect(cx + iw - 146, cy, 140, 52), new GUIContent(FreeplayTest.DummiesWalk ? Lang.T("An", "On") : Lang.T("Aus", "Off")), FreeplayTest.DummiesWalk ? Ui.ListSelected : Ui.ListButton))
+            FreeplayTest.ToggleDummiesWalk();
+        cy += 62;
+
+        float sabW = (iw - 24) / 4f;
+        if (GUI.Button(new Rect(cx, cy, sabW, 52), new GUIContent(Lang.T("Licht", "Lights")), Ui.ListButton)) FreeplayTest.StartSabotage(SystemTypes.Electrical);
+        if (GUI.Button(new Rect(cx + sabW + 6, cy, sabW, 52), new GUIContent(Lang.T("Reaktor", "Reactor")), Ui.ListButton)) FreeplayTest.StartSabotage(SystemTypes.Reactor);
+        if (GUI.Button(new Rect(cx + (sabW + 6) * 2, cy, sabW, 52), new GUIContent(Lang.T("O2", "O2")), Ui.ListButton)) FreeplayTest.StartSabotage(SystemTypes.LifeSupp);
+        if (GUI.Button(new Rect(cx + (sabW + 6) * 3, cy, sabW, 52), new GUIContent(Lang.T("Komm.", "Comms")), Ui.ListButton)) FreeplayTest.StartSabotage(SystemTypes.Comms);
+        cy += 62;
+
+        GUI.Label(new Rect(cx, cy + 12, iw - 220, 32), Lang.T("Draft testen (du wählst, Dummys zufällig):", "Test draft (you pick, dummies random):"), Ui.Small);
+        if (GUI.Button(new Rect(cx + iw - 206, cy, 200, 52), new GUIContent(Lang.T("Draft starten", "Start draft")), Ui.ListButton)) DraftMode.StartFreeplay();
+        cy += 62;
+
+        // Zufalls-Looks: direkt testen (unabhängig vom F1-Fenster). Namen-Button schaltet durch die Pools.
+        GUI.Label(new Rect(cx, cy, iw - 6, 28), Lang.T("Zufalls-Looks testen (auf dich + Dummys):", "Test random looks (you + dummies):"), Ui.Small);
+        cy += 32;
+        float q4 = (iw - 24) / 4f;
+        string nameLbl = Lang.T("Namen: ", "Names: ") + RandomNames.PoolLabel(namePool);
+        if (GUI.Button(new Rect(cx, cy, q4, 52), new GUIContent(nameLbl), Ui.ListButton))
+        {
+            RandomLooks.RunNamesFreeplay(namePool);
+            namePool = namePool % RandomNames.PoolCount + 1; // nach dem Anwenden auf den nächsten Pool schalten
+        }
+        if (GUI.Button(new Rect(cx + q4 + 6, cy, q4, 52), new GUIContent(Lang.T("Farben", "Colors")), Ui.ListButton)) RandomLooks.RunColorsFreeplay();
+        if (GUI.Button(new Rect(cx + (q4 + 6) * 2, cy, q4, 52), new GUIContent(Lang.T("Deko", "Cosmetics")), Ui.ListButton)) RandomLooks.RunDecorFreeplay();
+        if (GUI.Button(new Rect(cx + (q4 + 6) * 3, cy, q4, 52), new GUIContent(Lang.T("Alles", "All")), Ui.ListButton))
+        {
+            RandomLooks.RunNamesFreeplay(namePool);
+            RandomLooks.RunColorsFreeplay();
+            RandomLooks.RunDecorFreeplay();
+            namePool = namePool % RandomNames.PoolCount + 1;
+        }
+
+        GUI.EndScrollView();
     }
+
+    private static int namePool = 1; // aktueller Namens-Pool für den Freeplay-Button (1..PoolCount)
 }

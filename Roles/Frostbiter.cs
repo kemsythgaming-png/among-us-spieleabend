@@ -1,4 +1,3 @@
-using System;
 using Spieleabend.Core;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -6,8 +5,9 @@ using Object = UnityEngine.Object;
 namespace Spieleabend.Roles;
 
 /// <summary>
-/// Impostor (Frostbeisser): friert einen Bereich ein. Alle anderen Spieler darin koennen sich 8 Sekunden nicht bewegen
-/// und bekommen Eis ueber den Bildschirm - nur der Frostbeisser selbst (und Immune) bleiben frei. Cooldown 35 s.
+/// Impostor (Frostbeißer): öffnet die Karte, wählt einen Raum - alle Spieler in diesem Raum frieren 15-20 Sekunden
+/// ein (können sich nicht bewegen + Eis über dem Bildschirm). Während die Karte offen ist, steht der Frostbeißer still.
+/// Im Raum liegt solange ein Frost-Symbol auf dem Boden (für alle sichtbar). Nur der Frostbeißer und Immune bleiben frei.
 /// </summary>
 public sealed class Frostbiter : CustomRole
 {
@@ -16,22 +16,27 @@ public sealed class Frostbiter : CustomRole
     public override Color Color => new Color32(120, 210, 255, 255);
     public override RoleTeam Team => RoleTeam.Impostor;
     public override string IntroText => Lang.T("Alles erstarrt", "Everything freezes");
-    public override string Description => Lang.T("Friere den Bereich ein (F) -\nnur du bewegst dich.", "Freeze the area (F) -\nonly you move.");
+    public override string Description => Lang.T("Karte öffnen, Raum wählen (F) -\nalle darin frieren ein.", "Open map, pick a room (F) -\neveryone inside freezes.");
     public override string LongDescription => Lang.T(
-        "Impostor: Mit Taste F frierst du deinen Umkreis ein. Alle anderen Spieler darin können sich 8 Sekunden nicht bewegen und bekommen Eis über den Bildschirm. Nur du selbst (und wer gerade frost-immun ist) bleibst frei. Danach läuft eine Abklingzeit (35 s).",
-        "Impostor: press F to freeze your surroundings. All other players inside can't move for 8 seconds and get ice over their screen. Only you (and anyone currently frost-immune) stay free. Then a cooldown runs (35 s).");
+        "Impostor: Mit Taste F geht die Karte auf - du stehst still und klickst einen Raum an. Alle Spieler in diesem Raum können sich 15-20 Sekunden nicht bewegen und bekommen Eis über den Bildschirm; im Raum liegt solange ein Frost-Symbol auf dem Boden (für alle sichtbar). Nur du selbst und gerade Frost-Immune bleiben frei. Danach läuft eine Abklingzeit.",
+        "Impostor: press F to open the map - you stand still and click a room. All players in that room can't move for 15-20 seconds and get ice over their screen; a frost mark sits on the room floor meanwhile (visible to all). Only you and anyone currently frost-immune stay free. Then a cooldown runs.");
 
     private const byte ActionFreeze = 0;
 
-    private RoleOption cooldown, duration, radius;
-    private float frozenUntil;          // lokal: bis wann ist DER lokale Spieler eingefroren
+    private RoleOption cooldown, duration;
+    private readonly MapPicker picker = new();
+    private bool frozenMove; // Frostbeißer steht beim Zielen still
+    private SystemTypes frozenRoom;
+    private float frozenUntil;
+    private byte casterId = 255;
     private GameObject iceOverlay;
+    private GameObject floorFrost;
+    private float floorUntil;
 
     protected override void Setup()
     {
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 35f, 15f, 90f, 5f, "s");
-        duration = AddOption("Duration", "Frost-Dauer|Freeze time", 8f, 3f, 15f, 1f, "s");
-        radius = AddOption("Radius", "Bereich|Area", 4f, 2f, 10f, 0.5f);
+        duration = AddOption("Duration", "Frost-Dauer|Freeze time", 17f, 15f, 20f, 1f, "s");
 
         AddButton(new RoleButton
         {
@@ -41,47 +46,102 @@ public sealed class Frostbiter : CustomRole
             Cooldown = () => cooldown.Value,
             StartCooldown = 10f,
             Hotkey = KeyCode.F,
-            CanUse = () => !InMeeting && IsAlive(PlayerControl.LocalPlayer),
-            OnClick = _ =>
-            {
-                var local = PlayerControl.LocalPlayer;
-                if (!local) return;
-                var pos = local.GetTruePosition();
-                var data = new byte[8];
-                BitConverter.GetBytes(pos.x).CopyTo(data, 0);
-                BitConverter.GetBytes(pos.y).CopyTo(data, 4);
-                SendToAll(ActionFreeze, data);
-            },
+            CanUse = () => !InMeeting && IsAlive(PlayerControl.LocalPlayer) && !picker.Active,
+            OnClick = _ => { if (picker.Open()) Sfx.Play(Sfx.Investigate, 0.5f); },
         });
     }
 
-    public override void ResetState() { frozenUntil = 0f; RemoveOverlay(); }
-    public override void OnMeetingStart() { frozenUntil = 0f; RemoveOverlay(); }
+    public override void ResetState() { picker.Cancel(); frozenUntil = 0f; RemoveOverlay(); RemoveFloor(); Unfreeze(); }
+    public override void OnMeetingStart() { picker.Cancel(); frozenUntil = 0f; RemoveOverlay(); RemoveFloor(); Unfreeze(); }
 
-    public override float SpeedMultiplier(PlayerControl local) =>
-        IsAlive(local) && frozenUntil > Time.time && !InMeeting ? 0f : 1f;
+    private void Unfreeze() { if (frozenMove && PlayerControl.LocalPlayer) PlayerControl.LocalPlayer.moveable = true; frozenMove = false; }
+
+    // Jeder Spieler (auch Dummys) im eingefrorenen Raum kann sich nicht bewegen - außer der Caster und Immune.
+    private bool IsFrozen(PlayerControl p)
+    {
+        if (Time.time >= frozenUntil || InMeeting || !IsAlive(p) || p.PlayerId == casterId || WinterImmunity.Has(p.PlayerId)) return false;
+        var ro = RoomObj(frozenRoom);
+        return ro && ro.roomArea && ro.roomArea.OverlapPoint(p.GetTruePosition());
+    }
+
+    public override float SpeedMultiplier(PlayerControl local) => IsFrozen(local) ? 0f : 1f;
+
+    private static PlainShipRoom RoomObj(SystemTypes r)
+    {
+        var ship = ShipStatus.Instance;
+        if (ship && ship.AllRooms != null)
+            foreach (var x in ship.AllRooms) if (x && x.RoomId == r) return x;
+        return null;
+    }
+
+    private static SystemTypes RoomAt(Vector2 p)
+    {
+        var ship = ShipStatus.Instance;
+        if (ship && ship.AllRooms != null)
+            foreach (var r in ship.AllRooms)
+                if (r && r.roomArea && r.roomArea.OverlapPoint(p)) return r.RoomId;
+        PlainShipRoom best = null; float bd = float.MaxValue;
+        if (ship && ship.AllRooms != null)
+            foreach (var r in ship.AllRooms)
+            {
+                if (!r || !r.roomArea) continue;
+                float d = ((Vector2)r.roomArea.bounds.center - p).sqrMagnitude;
+                if (d < bd) { bd = d; best = r; }
+            }
+        return best ? best.RoomId : SystemTypes.Hallway;
+    }
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
     {
-        if (action != ActionFreeze || data.Length < 8 || !RoleRegistry.Has(sender, this)) return;
-        var pos = new Vector2(BitConverter.ToSingle(data, 0), BitConverter.ToSingle(data, 4));
+        if (action != ActionFreeze || data.Length < 1 || !RoleRegistry.Has(sender, this)) return;
+        var room = (SystemTypes)data[0];
+        var ro = RoomObj(room);
+        if (ro == null || !ro.roomArea) return;
 
-        var local = PlayerControl.LocalPlayer;
-        if (!IsAlive(local) || local == sender) return;                 // der Frostbeisser bleibt frei
-        if (WinterImmunity.Has(local.PlayerId)) return;                 // Thermo/Kamin schuetzt
-        if (Vector2.Distance(local.GetTruePosition(), pos) > radius.Value) return;
-
+        // Raum einfrieren (gilt für alle Spieler + Dummys darin, über SpeedMultiplier).
+        frozenRoom = room;
+        casterId = sender ? sender.PlayerId : (byte)255;
         frozenUntil = Time.time + duration.Value;
-        ShowOverlay();
+
+        // Frost-Symbol auf den Boden des Raums (bei allen sichtbar).
+        ShowFloor(ro.roomArea.bounds.center, Mathf.Max(ro.roomArea.bounds.size.x, ro.roomArea.bounds.size.y));
         Sfx.Play(Sfx.TaskUpdate, 0.7f);
-        Notifier.Show($"<color={ColorHex}>{Lang.T("Eingefroren!", "Frozen!")}</color>", duration.Value);
     }
 
     public override void Update()
     {
-        if (frozenUntil > 0f && Time.time >= frozenUntil) { frozenUntil = 0f; RemoveOverlay(); }
-        if (iceOverlay && !Camera.main) RemoveOverlay();
+        // Beim Zielen (Karte offen) stehen bleiben, nicht mit dem letzten Input weiterlaufen.
+        var lp = PlayerControl.LocalPlayer;
+        if (picker.Active)
+        {
+            if (lp) { lp.moveable = false; if (lp.MyPhysics && lp.MyPhysics.body) lp.MyPhysics.body.velocity = Vector2.zero; }
+            frozenMove = true;
+        }
+        else if (frozenMove) Unfreeze();
+
+        if (picker.Active && picker.Poll(out var world))
+        {
+            var room = RoomAt(world);
+            if (room != SystemTypes.Hallway) SendToAll(ActionFreeze, (byte)room);
+        }
+
+        // Eis-Overlay zeigen, solange der lokale Spieler eingefroren ist.
+        bool localFrozen = lp && IsFrozen(lp);
+        if (localFrozen && !iceOverlay) ShowOverlay();
+        if ((!localFrozen || !Camera.main) && iceOverlay) RemoveOverlay();
+        if (floorFrost && Time.time >= floorUntil) RemoveFloor();
     }
+
+    private void ShowFloor(Vector2 center, float size)
+    {
+        RemoveFloor();
+        floorFrost = WorldMarker.Spawn("frost", center, Mathf.Clamp(size * 0.9f, 1.5f, 6f), "FrostFloor");
+        var sr = floorFrost ? floorFrost.GetComponent<SpriteRenderer>() : null;
+        if (sr) sr.color = new Color(0.7f, 0.9f, 1f, 0.6f);
+        floorUntil = Time.time + duration.Value;
+    }
+
+    private void RemoveFloor() { if (floorFrost) Object.Destroy(floorFrost); floorFrost = null; }
 
     private void ShowOverlay()
     {

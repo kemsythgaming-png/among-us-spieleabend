@@ -53,6 +53,21 @@ public static class GeneralOptions
     /// <summary>Chance, dass ein normaler Crewmate nach allen Aufgaben zum Sheriff wird (0 = aus).</summary>
     public static RoleOption TaskSheriffChance { get; private set; }
 
+    /// <summary>Draft-Modus: jeder wählt zu Beginn aus 3 zufälligen (getesteten) Rollen seines Teams.</summary>
+    public static RoleOption DraftMode { get; private set; }
+    public static RoleOption DraftImpostors { get; private set; }
+    public static RoleOption DraftNeutrals { get; private set; }
+    public static RoleOption DraftTime { get; private set; }
+
+    /// <summary>Zufällige Namen beim Start: 0 = aus, sonst ein Namens-Filter (siehe RandomNames.Pools).</summary>
+    public static RoleOption RandomNames { get; private set; }
+
+    /// <summary>Zufällige Spielerfarbe beim Start.</summary>
+    public static RoleOption RandomColors { get; private set; }
+
+    /// <summary>Zufällige Dekoration (Hut/Skin/Visier/Pet) beim Start.</summary>
+    public static RoleOption RandomDecor { get; private set; }
+
     internal static void Init(ConfigFile config)
     {
         ModRolesChance = Add(config, "ModRolesChance", "Chance auf Mod-Rollen pro Runde|Chance of mod roles per round", 100, 0, 100, 10, "%");
@@ -80,6 +95,24 @@ public static class GeneralOptions
         GameTab.Add(VentCafeteria);
         VentComms = Add(config, "VentComms", "Extra-Vent: Komm. ↔ Schild/Admin (Skeld)|Extra vent: Comms ↔ Shields/Admin (Skeld)", 0, 0, 1, 1, "", true);
         GameTab.Add(VentComms);
+        DraftMode = Add(config, "DraftMode", "Draft-Modus (Rolle selbst wählen)|Draft mode (pick your role)", 0, 0, 1, 1, "", true);
+        GameTab.Add(DraftMode);
+        DraftImpostors = Add(config, "DraftImpostors", "Draft: Impostor-Anzahl (muss zur AU-Einstellung passen)|Draft: impostor count (match AU setting)", 2, 0, 3, 1);
+        GameTab.Add(DraftImpostors);
+        DraftNeutrals = Add(config, "DraftNeutrals", "Draft: Neutrale-Anzahl (Rest wird Crew)|Draft: neutral count (rest become crew)", 1, 0, 15, 1);
+        GameTab.Add(DraftNeutrals);
+        DraftTime = Add(config, "DraftTime", "Draft: Bedenkzeit|Draft: pick time", 20, 10, 60, 5, "s");
+        GameTab.Add(DraftTime);
+        RandomNames = Add(config, "RandomNames", "Zufällige Namen beim Start|Random names at start", 0, 0, 4, 1);
+        RandomNames.ValueNames = new[]
+        {
+            "Aus|Off", "Vulgär|Vulgar", "Pronomen|Pronouns", "Tiere|Animals", "Essen|Food",
+        };
+        GameTab.Add(RandomNames);
+        RandomColors = Add(config, "RandomColors", "Zufällige Farben beim Start|Random colors at start", 0, 0, 1, 1, "", true);
+        GameTab.Add(RandomColors);
+        RandomDecor = Add(config, "RandomDecor", "Zufällige Dekoration beim Start|Random cosmetics at start", 0, 0, 1, 1, "", true);
+        GameTab.Add(RandomDecor);
     }
 
     public static int MaxFor(RoleTeam team)

@@ -93,6 +93,7 @@ public static class RoleRegistry
         ButtonManager.Reset();
         RoleUI.Reset();
         FreeplayTest.Reset();
+        DraftMode.Reset();
     }
 
     /// <summary>Alle Zuweisungen als (Spieler, Rolle)-Paare (fuer das Netzwerk).</summary>
@@ -104,14 +105,16 @@ public static class RoleRegistry
         return pairs;
     }
 
-    internal static void SetAssignments(List<(byte Player, byte Role)> pairs)
+    internal static void SetAssignments(List<(byte Player, byte Role)> pairs, bool resetRoles = true)
     {
         mainRoles.Clear();
         modifiers.Clear();
         GhostRoles.Reset();
         EndSummary.ResetKills();
         CardSwipeHelpPatch.Reset();
-        foreach (var role in Roles) role.ResetState();
+        // resetRoles = false (nur Freeplay-Rollenwechsel): Rollen-Zustand NICHT zurücksetzen, damit abgelegte Dinge
+        // (z. B. Spinnennetze) beim Rollenwechsel liegen bleiben und man sie testen kann.
+        if (resetRoles) foreach (var role in Roles) role.ResetState();
         ButtonManager.Reset(); // alte Knöpfe sofort ausblenden (sonst bleiben beim Freeplay-Rollenwechsel welche hängen)
 
         foreach (var (playerId, roleId) in pairs) AddInternal(playerId, roleId);

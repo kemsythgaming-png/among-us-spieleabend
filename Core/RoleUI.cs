@@ -47,6 +47,15 @@ internal static class RoleUI
         }
 
         if (!ShipStatus.Instance) return;
+
+        // Survivor (tot, wartet auf Wiederbelebung): sieht KEINE Namen/Rollen/Farben der anderen (alles getarnt).
+        if (Spieleabend.Roles.Modifiers.SecondLife.Instance != null && Spieleabend.Roles.Modifiers.SecondLife.Instance.WillRise(local))
+        {
+            foreach (var lbl in worldLabels.Values.ToList()) if (lbl) Object.Destroy(lbl.gameObject);
+            worldLabels.Clear();
+            return;
+        }
+
         bool localImp = OnImpostorTeam(local);
         foreach (var p in PlayerControl.AllPlayerControls)
         {
@@ -295,8 +304,8 @@ internal static class RoleUI
             string note = r.GetTaskNote(local); // z. B. Kopfgeldjäger-Ziel
             string extra = string.IsNullOrEmpty(note) ? "" : $"\n{note}";
             return joker && !r.IsModifier
-                ? $"<color={Spieleabend.Roles.Joker.Instance.ColorHex}><b>Joker:</b>\n{Spieleabend.Roles.Joker.Instance.Description}</color>"
-                : $"<color={r.ColorHex}><b>{r.Name}:</b>\n{r.Description}{extra}</color>";
+                ? $"<color={Spieleabend.Roles.Joker.Instance.NameHex}><b>Joker:</b>\n{Spieleabend.Roles.Joker.Instance.Description}</color>"
+                : $"<color={r.NameHex}><b>{r.Name}:</b>\n{r.Description}{extra}</color>"; // Impostor rot, Crew türkis, Neutral eigene Farbe
         }));
         if (roleTask && roleTaskText == text && local.myTasks.Contains(roleTask)) return;
         RemoveRoleTask(local);
@@ -320,36 +329,50 @@ internal static class RoleUI
     private static void UpdateIntro(CustomRole main, List<CustomRole> all)
     {
         var intro = IntroCutscene.Instance;
-        if (intro) WriteIntro(intro, main, all);
+        if (intro) WriteIntro(intro, main, all.Where(r => r.IsModifier).ToList());
     }
 
     /// <summary>
-    /// Setzt den Rollen-Text im Rollen-Bildschirm (Intro) auf die Mod-Rolle. Wird auch waehrend der Rollen-Enthuellung
-    /// (IntroCutscene.ShowRole) staendig aufgerufen, damit dort die echte Rolle steht und nicht "Crewmate/Impostor".
+    /// Setzt den Rollen-Text im Rollen-Bildschirm (Intro) auf die Mod-Rolle + Anpassungen und schreibt unten, was die
+    /// Rolle kann/machen muss. Läuft im echten Spiel UND im Freeplay, auch wenn man nur eine Anpassung (z. B. Flash) hat.
     /// </summary>
+    private static int lastIntroId;
     public static void ApplyIntroOverride(IntroCutscene intro)
     {
         var local = PlayerControl.LocalPlayer;
         if (!intro || !local) return;
         var main = RoleRegistry.GetGhostRole(local) ?? RoleRegistry.LocalRole;
-        if (main == null) return; // Rolle noch nicht zugewiesen -> Vanilla-Text stehen lassen
-        WriteIntro(intro, main, RoleRegistry.GetDisplayed(local).ToList());
+        var mods = RoleRegistry.GetModifiers(local).Where(r => r.IsModifier).ToList();
+        if (intro.GetInstanceID() != lastIntroId)
+        {
+            lastIntroId = intro.GetInstanceID();
+            Plugin.Logger.LogInfo($"[Intro] override: main={main?.Name ?? "null"}, mods={mods.Count}, RoleText={(intro.RoleText ? "ok" : "null")}, Blurb={(intro.RoleBlurbText ? "ok" : "null")}");
+        }
+        if (main == null && mods.Count == 0) return; // nichts Eigenes -> Vanilla-Text (Crewmate/Impostor) stehen lassen
+        WriteIntro(intro, main, mods);
     }
 
-    private static void WriteIntro(IntroCutscene intro, CustomRole main, List<CustomRole> all)
+    private static void WriteIntro(IntroCutscene intro, CustomRole main, List<CustomRole> mods)
     {
-        if (intro.YouAreText) intro.YouAreText.color = main.NameColor;
-        if (intro.RoleText)
+        // Große Rollenzeile: Mod-Hauptrolle überschreiben; reine Anpassung (kein Mod-Hauptrolle) lässt
+        // das Vanilla-"Crewmate/Impostor" stehen.
+        if (main != null)
         {
-            intro.RoleText.text = main.Name;
-            intro.RoleText.color = main.NameColor;
+            if (intro.YouAreText) intro.YouAreText.color = main.NameColor;
+            if (intro.RoleText) { intro.RoleText.text = main.Name; intro.RoleText.color = main.NameColor; }
         }
+
         if (!intro.RoleBlurbText) return;
-        // Rollennamen zur Sicherheit auch in den Beschreibungstext schreiben - falls die grosse Rollen-Zeile
-        // ("Your role is ...") vom Spiel noch mit "Crewmate/Impostor" ueberschrieben wird, steht die Rolle trotzdem hier.
-        string blurb = $"<b>{main.Name}</b>\n{main.IntroText}";
-        foreach (var mod in all.Where(r => r.IsModifier)) blurb += $"\n<size=70%>+ {mod.ColoredName}</size>";
-        intro.RoleBlurbText.text = blurb;
-        intro.RoleBlurbText.color = main.NameColor;
+
+        // Unten: Anpassungen anzeigen + was die Rolle kann/machen muss (Beschreibung).
+        string blurb = "";
+        foreach (var mod in mods) blurb += $"<size=80%>+ {mod.ColoredName}</size>\n";
+
+        string desc = main != null ? main.Description : (mods.Count > 0 ? mods[0].Description : null);
+        if (!string.IsNullOrEmpty(desc)) blurb += desc;
+
+        if (string.IsNullOrEmpty(blurb)) return; // nichts zu schreiben -> Vanilla ("Do your tasks") lassen
+        intro.RoleBlurbText.text = blurb.TrimEnd();
+        intro.RoleBlurbText.color = main != null ? main.NameColor : (mods.Count > 0 ? mods[0].Color : intro.RoleBlurbText.color);
     }
 }

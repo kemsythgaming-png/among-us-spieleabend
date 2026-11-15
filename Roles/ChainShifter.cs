@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using AmongUs.GameOptions;
 using Spieleabend.Core;
 using UnityEngine;
 
@@ -35,8 +36,8 @@ public sealed class ChainShifter : CustomRole
             GameIcon = _ => ChainSprite(),
             Icon = "tp",
             NeedsTarget = false,
-            Cooldown = () => 5f,
-            StartCooldown = 5f,
+            Cooldown = () => 40f, // nach dem Markieren 40 s Abklingzeit
+            StartCooldown = 10f,
             Hotkey = KeyCode.F,
             CanUse = () => !InMeeting && Target() != null,
             OnClick = _ => { var t = Target(); if (t) SendToHost(ActionMark, t.PlayerId); },
@@ -106,7 +107,19 @@ public sealed class ChainShifter : CustomRole
             var oldNeighborRole = RoleRegistry.GetRole(neighbor); // kann null sein
             RoleRegistry.ChangeRole(shifter, oldNeighborRole);
             RoleRegistry.ChangeRole(neighbor, this);
+            // Vanilla-Basis mittauschen, sonst bleibt z. B. ein getauschter Impostor rot und behält den Kill-Knopf.
+            FixBase(shifter, oldNeighborRole);
+            FixBase(neighbor, this); // neuer Kettentauscher ist neutral -> Crewmate-Basis (weißer Name)
         }
         marks.Clear();
+    }
+
+    /// <summary>Die Vanilla-Grundrolle an das neue Team anpassen (Impostor-Team = Impostor-Basis, sonst Crewmate).</summary>
+    private static void FixBase(PlayerControl p, CustomRole newRole)
+    {
+        if (!p) return;
+        bool imp = newRole != null && newRole.Team == RoleTeam.Impostor;
+        try { p.RpcSetRole(imp ? RoleTypes.Impostor : RoleTypes.Crewmate, true); }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"Kettentauscher-Basis: {e.Message}"); }
     }
 }

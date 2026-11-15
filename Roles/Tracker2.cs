@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Spieleabend.Core;
 using UnityEngine;
@@ -22,8 +23,15 @@ public sealed class Tracker2 : CustomRole
     private float activeUntil, nextStep;
     private readonly List<(GameObject Go, float Born)> prints = new();
     private readonly Dictionary<byte, Vector2> lastPos = new();
-    private bool leftFoot;
+    private readonly Dictionary<int, Vector2> lastPosFig = new();
     private static Sprite printSprite;
+
+    /// <summary>
+    /// Andere Rollen können hier Figuren anmelden, die sie spawnen (z. B. Dummy-Spawner-Läufer), damit der
+    /// Spurensucher auch von ihnen Fußspuren sieht. Jede Quelle liefert die aktuell lebenden Figuren
+    /// (eindeutige Id, Position, Farbe).
+    /// </summary>
+    public static readonly List<Func<IEnumerable<(int Id, Vector2 Pos, Color Col)>>> FigureSources = new();
 
     protected override void Setup()
     {
@@ -34,6 +42,7 @@ public sealed class Tracker2 : CustomRole
         {
             Label = "Fußspuren|Footprints",
             Icon = "radar",
+            GameIcon = _ => ProcIcons.Footprints(),
             NeedsTarget = false,
             Cooldown = () => cooldown.Value,
             StartCooldown = 15f,
@@ -47,6 +56,7 @@ public sealed class Tracker2 : CustomRole
         foreach (var (go, _) in prints) if (go) Object.Destroy(go);
         prints.Clear();
         lastPos.Clear();
+        lastPosFig.Clear();
         activeUntil = nextStep = 0f;
     }
 
@@ -68,37 +78,54 @@ public sealed class Tracker2 : CustomRole
         if (!IsLocalRole || !IsAlive(local) || InMeeting || t > activeUntil || t < nextStep) return;
         nextStep = t + 0.35f;
 
-        leftFoot = !leftFoot; // links/rechts abwechseln
+        // Alle Spieler - jetzt AUCH der Spurensucher selbst, damit man die eigenen Spuren sieht.
         foreach (var p in PlayerControl.AllPlayerControls)
         {
-            if (!p || p == local || !IsAlive(p) || p.inVent || !p.cosmetics || !p.cosmetics.nameText.gameObject.activeInHierarchy) continue;
+            if (!p || !IsAlive(p) || p.inVent || !p.cosmetics || !p.cosmetics.nameText.gameObject.activeInHierarchy) continue;
             Vector2 pos = p.GetTruePosition();
-
-            // Laufrichtung aus der letzten Position
-            float angle = 90f;
-            bool moved = lastPos.TryGetValue(p.PlayerId, out var prev) && (pos - prev).sqrMagnitude > 0.0004f;
-            if (moved) angle = Mathf.Atan2(pos.y - prev.y, pos.x - prev.x) * Mathf.Rad2Deg;
+            bool has = lastPos.TryGetValue(p.PlayerId, out var prev);
+            TryPrint(pos, prev, has, PlayerColor(p), t);
             lastPos[p.PlayerId] = pos;
-            if (!moved) continue; // nur Stapfen setzen, wenn sich jemand bewegt
-
-            // Fußstapfen leicht seitlich versetzt (links/rechts)
-            Vector2 side = new Vector2(-Mathf.Sin(angle * Mathf.Deg2Rad), Mathf.Cos(angle * Mathf.Deg2Rad)) * (leftFoot ? 0.11f : -0.11f);
-            Vector2 fp = pos + new Vector2(0f, -0.3f) + side;
-            Color col = PlayerColor(p);
-            var go = new GameObject("Spieleabend_Footprint");
-            if (ShipStatus.Instance) go.transform.SetParent(ShipStatus.Instance.transform, true);
-            go.transform.position = new Vector3(fp.x, fp.y, fp.y / 1000f - 0.02f);
-            go.transform.localScale = Vector3.one * 0.22f;
-            go.transform.localRotation = Quaternion.Euler(0f, 0f, angle - 90f);
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = PrintSprite();
-            sr.color = new Color(col.r, col.g, col.b, 0.85f);
-            prints.Add((go, t));
         }
+
+        // Von anderen Rollen gespawnte Figuren (z. B. Dummy-Spawner-Läufer) hinterlassen ebenfalls Spuren.
+        foreach (var src in FigureSources)
+        {
+            IEnumerable<(int Id, Vector2 Pos, Color Col)> figs = null;
+            try { figs = src(); } catch { }
+            if (figs == null) continue;
+            foreach (var f in figs)
+            {
+                int key = 100000 + f.Id;
+                bool has = lastPosFig.TryGetValue(key, out var prev);
+                TryPrint(f.Pos, prev, has, Camouflage.Active ? Gray : f.Col, t);
+                lastPosFig[key] = f.Pos;
+            }
+        }
+    }
+
+    private static readonly Color Gray = new Color(0.55f, 0.55f, 0.6f, 1f);
+
+    /// <summary>Setzt einen Fußabdruck direkt unter die Figur, in Laufrichtung gedreht (nur wenn sie sich bewegt hat).</summary>
+    private void TryPrint(Vector2 pos, Vector2 prev, bool hasPrev, Color col, float t)
+    {
+        if (!hasPrev || (pos - prev).sqrMagnitude <= 0.0004f) return; // nur bei Bewegung
+        float angle = Mathf.Atan2(pos.y - prev.y, pos.x - prev.x) * Mathf.Rad2Deg;
+        Vector2 fp = pos + new Vector2(0f, -0.25f); // direkt unter die Figur (mittig, kein Links/Rechts-Versatz)
+        var go = new GameObject("Spieleabend_Footprint");
+        if (ShipStatus.Instance) go.transform.SetParent(ShipStatus.Instance.transform, true);
+        go.transform.position = new Vector3(fp.x, fp.y, fp.y / 1000f - 0.02f);
+        go.transform.localScale = Vector3.one * 0.22f;
+        go.transform.localRotation = Quaternion.Euler(0f, 0f, angle + 90f);
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = PrintSprite();
+        sr.color = new Color(col.r, col.g, col.b, 0.85f);
+        prints.Add((go, t));
     }
 
     private static Color PlayerColor(PlayerControl p)
     {
+        if (Camouflage.Active) return Gray; // getarnt -> man erkennt die Farbe nicht, Spuren grau
         try
         {
             // AKTUELLE Farbe (ändert sich z. B. durch Verkleidung/Tausch), nicht die Standardfarbe

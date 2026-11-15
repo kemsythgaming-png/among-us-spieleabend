@@ -71,7 +71,8 @@ public sealed class Lover : CustomRole
 
         if (partner == PlayerControl.LocalPlayer)
             Notifier.Show($"<color={ColorHex}>♥ {victim.Data.PlayerName} {Lang.T("ist gestorben - du stirbst an gebrochenem Herzen.", "died - you die of a broken heart.")}</color>");
-        if (AmHost) KillSystem.KillNoBody(partner);
+        // An gebrochenem Herzen sterben: Leiche bleibt an Ort liegen (Selbst-Kill, kein Teleport, mit Leiche).
+        if (AmHost) KillSystem.ForceKill(partner, partner);
     }
 
     public override void Update()

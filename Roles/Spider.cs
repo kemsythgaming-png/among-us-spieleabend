@@ -19,20 +19,20 @@ public sealed class Spider : CustomRole
     public override Color Color => new Color32(130, 100, 170, 255);
     public override RoleTeam Team => RoleTeam.Impostor;
     public override string IntroText => Lang.T("Spinn dein Netz", "Spin your web");
-    public override string Description => Lang.T("Spinnennetze legen + Spinnenbiss.\nDer Biss macht immer langsamer.", "Place webs + spider bite.\nThe bite keeps slowing down.");
+    public override string Description => Lang.T("Spinnennetze legen + Spinnenbiss.", "Place webs + spider bite.");
     public override string LongDescription => Lang.T(
-        "Impostor: Mit dem Netz-Knopf spannst du ein zufällig großes Spinnennetz. Wer hindurchläuft, ist 3 Sekunden langsam; mit kleiner Chance tötet es ihn. Das Netz bleibt 15 Sekunden liegen.\n\nMit dem Spinnenbiss vergiftest du einen Spieler: Er wird über 8 Sekunden immer langsamer, bis er ganz stillsteht - dann stirbt er. Seine Leiche löst sich auf (wie bei der Viper), und an der Stelle bleibt ein Spinnennetz zurück. Auch Leichen der Viper hinterlassen so ein Netz. Du und andere Spinnen sind immun.",
-        "Impostor: the web button places a random-sized web. Whoever walks through is slowed for 3 seconds; with a small chance it kills them. The web stays 15 seconds.\n\nThe spider bite poisons a player: they slow down more and more over 8 seconds until they stand still - then they die. Their body dissolves (like the Viper) and a web is left behind in its place. Viper victims leave such a web too. You and other spiders are immune.");
+        "Impostor: Mit dem Netz-Knopf spannst du ein zufällig großes Spinnennetz. Wer hindurchläuft, ist kurz langsam; mit kleiner Chance tötet es ihn. Das Netz bleibt eine Weile liegen.\n\nMit dem Spinnenbiss vergiftest du einen Spieler: Nach 8 Sekunden stirbt er, seine Leiche löst sich auf (wie bei der Viper), und an der Stelle bleibt ein Spinnennetz zurück - dieses bleibt bis zum nächsten Meeting. Auch Leichen der Viper hinterlassen so ein Netz. Du und andere Spinnen sind immun.",
+        "Impostor: the web button places a random-sized web. Whoever walks through is briefly slowed; with a small chance it kills them. The web stays for a while.\n\nThe spider bite poisons a player: after 8 seconds they die, their body dissolves (like the Viper) and a web is left behind - it stays until the next meeting. Viper victims leave such a web too. You and other spiders are immune.");
 
-    private const byte ActionWeb = 0, ActionTrip = 1, ActionBite = 2;
+    private const byte ActionWeb = 0, ActionTrip = 1, ActionBite = 2, ActionKillSfx = 3;
     private const float SlowFactor = 0.4f;
     private const float BiteTime = 8f;      // fest: Gebissener stirbt nach 8 s (wird bis dahin immer langsamer)
-    private const float DissolveTime = 1.6f; // so lange löst sich die vergiftete Leiche auf, bevor das Netz erscheint
     private static Sprite webSprite;
 
-    private RoleOption cooldown, webLife, slowTime, killChance, biteCooldown;
+    private RoleOption cooldown, webLife, slowTime, killChance, biteCooldown, dissolveOpt;
+    private float DissolveTime => dissolveOpt != null ? dissolveOpt.Value : 3f;
 
-    private sealed class Web { public Vector2 Pos; public float Radius; public float Until; public GameObject Obj; }
+    private sealed class Web { public Vector2 Pos; public float Radius; public float Until; public GameObject Obj; public bool FromCorpse; }
     private readonly List<Web> webs = new();
     private float slowUntil, nextTrip;
     private readonly Dictionary<byte, float> bitten = new(); // Id -> Startzeit des Bisses
@@ -44,10 +44,11 @@ public sealed class Spider : CustomRole
     protected override void Setup()
     {
         cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 30f, 10f, 90f, 2.5f, "s");
-        webLife = AddOption("WebLife", "Netz bleibt|Web lasts", 15f, 5f, 30f, 1f, "s");
-        slowTime = AddOption("SlowTime", "Verlangsamung|Slow", 3f, 1f, 8f, 0.5f, "s");
-        killChance = AddOption("KillChance", "Tödlich-Chance|Deadly chance", 10f, 0f, 100f, 5f, "%");
+        webLife = AddOption("WebLife", "Netz bleibt|Web lasts", 30f, 5f, 30f, 1f, "s");
+        slowTime = AddOption("SlowTime", "Netz-Verlangsamung|Web slow", 3f, 1f, 8f, 0.5f, "s");
+        killChance = AddOption("KillChance", "Tödlich-Chance|Deadly chance", 25f, 0f, 100f, 5f, "%");
         biteCooldown = AddOption("BiteCooldown", "Biss-Abklingzeit|Bite cooldown", 35f, 10f, 90f, 2.5f, "s");
+        dissolveOpt = AddOption("Dissolve", "Leichen-Auflösung|Body dissolve", 10f, 1f, 20f, 1f, "s");
 
         AddButton(new RoleButton
         {
@@ -84,6 +85,16 @@ public sealed class Spider : CustomRole
         });
     }
 
+    /// <summary>Freeplay-Test: ein Dummy legt an seiner Position ein Netz ab und beißt den lokalen Spieler.</summary>
+    public override bool FreeplayAbility(PlayerControl attacker, PlayerControl target)
+    {
+        var p = attacker ? attacker : PlayerControl.LocalPlayer;
+        if (!p) return false;
+        SpawnWeb(p.GetTruePosition(), UnityEngine.Random.Range(9, 20) / 10f);
+        if (target && IsAlive(target) && !RoleRegistry.Has(target, this)) bitten[target.PlayerId] = Time.time;
+        return true;
+    }
+
     public override void ResetState()
     {
         foreach (var w in webs) if (w.Obj) Object.Destroy(w.Obj);
@@ -98,10 +109,8 @@ public sealed class Spider : CustomRole
     public override float SpeedMultiplier(PlayerControl local)
     {
         if (!IsAlive(local) || InMeeting) return 1f;
-        float f = slowUntil > Time.time ? SlowFactor : 1f;
-        if (bitten.TryGetValue(local.PlayerId, out var start))
-            f = Mathf.Min(f, 1f - Mathf.Clamp01((Time.time - start) / BiteTime)); // immer langsamer bis Stillstand
-        return f;
+        // Nur das Netz verlangsamt kurz. Der Biss macht NICHT mehr langsam (tötet nur nach 8 s).
+        return slowUntil > Time.time ? SlowFactor : 1f;
     }
 
     public override void OnAction(PlayerControl sender, byte action, byte[] data)
@@ -119,6 +128,11 @@ public sealed class Spider : CustomRole
             if (!IsAlive(victim) || InMeeting) return;
             if (UnityEngine.Random.Range(0, 100) >= killChance.Int) return;
             KillSystem.ForceKill(victim, victim); // Selbst-Kill: Leiche bleibt an Ort, niemand wird teleportiert
+            SendToAll(ActionKillSfx); // Kill-Geräusch bei allen
+        }
+        else if (action == ActionKillSfx)
+        {
+            Sfx.Play(Sfx.Kill); // Netz hat jemanden getötet
         }
         else if (action == ActionBite && data.Length >= 1)
         {
@@ -127,14 +141,15 @@ public sealed class Spider : CustomRole
             if (local && local.PlayerId == data[0])
             {
                 Sfx.Play(Sfx.Creepy, 0.7f);
-                Notifier.Show($"<color={ColorHex}>{Lang.T("Spinnenbiss! Du wirst immer langsamer ...", "Spider bite! You keep slowing down ...")}</color>", 6f);
+                Notifier.Show($"<color={ColorHex}>{Lang.T("Spinnenbiss! In 8 Sekunden stirbst du ...", "Spider bite! You die in 8 seconds ...")}</color>", 6f);
             }
         }
     }
 
     /// <summary>Legt an einer Stelle ein Spinnennetz an (alle Clients sehen es, da von jedem lokal erzeugt).</summary>
-    private void SpawnWeb(Vector2 pos, float radius)
+    private void SpawnWeb(Vector2 pos, float radius, bool fromCorpse = false)
     {
+        if (!fromCorpse) radius = ClampToWalls(pos, radius); // nur gelegte Netze an Wände anpassen; Leichen-Netze bleiben voll zufällig groß
         var go = new GameObject("Spieleabend_Web");
         if (ShipStatus.Instance) go.transform.SetParent(ShipStatus.Instance.transform, true);
         go.transform.position = new Vector3(pos.x, pos.y, pos.y / 1000f + 0.02f);
@@ -143,7 +158,35 @@ public sealed class Spider : CustomRole
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = WebSprite();
         sr.color = new Color(0.92f, 0.94f, 0.98f, UnityEngine.Random.Range(0.55f, 0.8f));
-        webs.Add(new Web { Pos = pos, Radius = radius, Until = Time.time + webLife.Value, Obj = go });
+        // Leichen-Netze bleiben bis zum nächsten Meeting liegen; gelegte Netze verschwinden nach der Zeit.
+        float until = fromCorpse ? float.MaxValue : Time.time + webLife.Value;
+        webs.Add(new Web { Pos = pos, Radius = radius, Until = until, Obj = go, FromCorpse = fromCorpse });
+    }
+
+    private static int ColorIdOf(PlayerControl p)
+    {
+        try
+        {
+            var t = p.CurrentOutfitType;
+            return p.Data.Outfits != null && p.Data.Outfits.ContainsKey(t) ? p.Data.Outfits[t].ColorId : p.Data.DefaultOutfit.ColorId;
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>Radius so verkleinern, dass das Netz nicht durch Wände reicht (Strahlen in 16 Richtungen gegen die Schiffswände).</summary>
+    private static float ClampToWalls(Vector2 center, float radius)
+    {
+        int mask = LayerMask.GetMask("Ship", "ShortObjects");
+        if (mask == 0) return radius;
+        float best = radius;
+        for (int i = 0; i < 16; i++)
+        {
+            float a = i / 16f * Mathf.PI * 2f;
+            var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            var hit = Physics2D.Raycast(center, dir, radius, mask);
+            if (hit.collider && hit.distance < best) best = Mathf.Max(0.5f, hit.distance - 0.15f);
+        }
+        return best;
     }
 
     /// <summary>Opfer gestorben: vergiftete Leiche löst sich auf und wird zum Netz; Viper-Leichen hinterlassen auch ein Netz.</summary>
@@ -157,17 +200,55 @@ public sealed class Spider : CustomRole
         Vector2 pos = victim.GetTruePosition();
         if (byBite)
         {
-            // eigene Leiche langsam auflösen, danach das Netz legen (wie bei der Viper)
+            Sfx.Play(Sfx.Kill); // Kill-Geräusch, wenn der Biss nach 8 s tötet (bei allen)
+            // Leiche wie bei der Viper auflösen (Säure-Animation), danach das Netz legen.
             DeadBody body = null;
             foreach (var b in Object.FindObjectsOfType<DeadBody>())
                 if (b && b.ParentId == victim.PlayerId) { body = b; pos = b.TruePosition; break; }
-            dissolving.Add(new Dissolving { Body = body, Start = Time.time, Pos = pos });
+            bool realViper = StartViperDissolve(body, victim);
+            dissolving.Add(new Dissolving { Body = realViper ? null : body, Start = Time.time, Pos = pos });
         }
         else
         {
-            // Viper: das Spiel löst die Leiche schon selbst auf - wir legen nur das Netz dazu
-            SpawnWeb(pos, UnityEngine.Random.Range(9, 20) / 10f);
+            // Viper: das Spiel löst die Leiche schon selbst auf - wir legen nur das Netz dazu (zufällig groß)
+            SpawnWeb(pos, UnityEngine.Random.Range(10, 32) / 10f, fromCorpse: true);
         }
+    }
+
+    /// <summary>
+    /// Löst die Leiche mit der echten Viper-Auflösung auf: eine ViperDeadBody (eigene Animation via FixedUpdate) an
+    /// die Stelle setzen und die normale Leiche entfernen. Gibt true zurück, wenn es geklappt hat.
+    /// </summary>
+    private bool StartViperDissolve(DeadBody body, PlayerControl victim)
+    {
+        try
+        {
+            if (!body || !victim) return false;
+            ViperDeadBody prefab = null;
+            foreach (var vb in Resources.FindObjectsOfTypeAll<ViperDeadBody>())
+            {
+                if (!vb) continue;
+                // Prefab (nicht in einer Szene) bevorzugen
+                if (!vb.gameObject.scene.IsValid()) { prefab = vb; break; }
+                prefab ??= vb;
+            }
+            if (!prefab) return false;
+
+            // Welt-Größe/-Position der normalen Leiche merken (als Referenz, damit die Viper-Leiche NICHT größer wird).
+            Vector3 worldScale = body.transform.lossyScale;
+            Vector3 worldPos = body.transform.position;
+
+            var clone = Object.Instantiate(prefab); // NICHT umparenten -> local = world (kein Eltern-Skalierungsfehler)
+            clone.transform.position = worldPos;
+            clone.gameObject.SetActive(true);
+            clone.SetupViperInfo(DissolveTime, victim, victim); // maxTime, killer, owner
+            // Farbe des Opfers auf die Viper-Leiche legen (sonst wäre sie farblos/falsch).
+            try { int cid = ColorIdOf(victim); foreach (var r in clone.bodyRenderers) if (r) PlayerMaterial.SetColors(cid, r); } catch { }
+            clone.transform.localScale = worldScale; // NACH Setup setzen, exakt so groß wie die normale Leiche
+            Object.Destroy(body.gameObject); // die normale Leiche weg, nur die auflösende bleibt
+            return true;
+        }
+        catch (Exception e) { Plugin.Logger.LogWarning($"[Spinne] Viper-Auflösung: {e.Message}"); return false; }
     }
 
     public override void Update()
@@ -175,11 +256,36 @@ public sealed class Spider : CustomRole
         float t = Time.time;
         for (int i = webs.Count - 1; i >= 0; i--)
         {
-            if (t >= webs[i].Until || !webs[i].Obj)
+            // Leichen-Netze bleiben bis zum Meeting (ResetState); nur gelegte Netze laufen ab.
+            if (!webs[i].Obj || (!webs[i].FromCorpse && t >= webs[i].Until))
             {
                 if (webs[i].Obj) Object.Destroy(webs[i].Obj);
                 webs.RemoveAt(i);
             }
+        }
+
+        // Netze nicht durch Wände sehen: Netz nur zeigen, wenn eine freie Sichtlinie zum lokalen Spieler besteht.
+        var viewer = PlayerControl.LocalPlayer;
+        if (viewer && IsAlive(viewer))
+        {
+            int mask = LayerMask.GetMask("Ship"); // nur echte Wände, nicht Tische o. Ä. (sonst sieht man Raum-Netze vom Flur nicht)
+            Vector2 eye = viewer.GetTruePosition();
+            bool prevQ = Physics2D.queriesStartInColliders;
+            try
+            {
+                Physics2D.queriesStartInColliders = false;
+                foreach (var w in webs)
+                {
+                    if (!w.Obj) continue;
+                    var sr = w.Obj.GetComponent<SpriteRenderer>();
+                    if (!sr) continue;
+                    // Sichtbar, wenn nah dran ODER freie Sichtlinie (durch Türen in Räume schauen) - nur echte Wände blocken.
+                    bool visible = Vector2.Distance(eye, w.Pos) <= 2.5f || !(mask != 0 && Physics2D.Linecast(eye, w.Pos, mask).collider);
+                    if (sr.enabled != visible) sr.enabled = visible;
+                }
+            }
+            catch { }
+            finally { Physics2D.queriesStartInColliders = prevQ; }
         }
 
         // vergiftete Leichen auflösen, dann an der Stelle ein Netz legen
@@ -196,7 +302,8 @@ public sealed class Spider : CustomRole
             if (k >= 1f)
             {
                 if (d.Body) Object.Destroy(d.Body.gameObject);
-                SpawnWeb(d.Pos, UnityEngine.Random.Range(9, 20) / 10f);
+                SpawnWeb(d.Pos, UnityEngine.Random.Range(10, 32) / 10f, fromCorpse: true); // zufällig groß (1.0 - 3.1)
+
                 dissolving.RemoveAt(i);
             }
         }

@@ -58,10 +58,9 @@ public sealed class TaskInspector : CustomRole
     public override string IntroText => Lang.T("Wer hat wirklich gearbeitet?", "Who actually worked?");
     public override string Description => Lang.T("Prüf, wie viele Aufgaben jemand\nerledigt hat (F).", "Check how many tasks someone\nhas done (F).");
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Mit dem Knopf prüfst du einen Spieler in der Nähe: Du siehst, wie viele Aufgaben er seit dem letzten Meeting vollständig erledigt hat (ohne Maximalwert, ohne Rollenhinweis). Nach jedem Meeting fängt die Zählung wieder bei 0 an. Mehrteilige Aufgaben zählen erst, wenn sie ganz fertig sind.",
-        "You are crew. The button checks a nearby player: you see how many tasks they have fully completed since the last meeting (no maximum, no role hint). After every meeting the count restarts at 0. Multi-part tasks only count when fully done.");
+        "Du bist Crew. Mit dem Knopf prüfst du einen Spieler in der Nähe: Du siehst, wie viele Aufgaben er seit dem letzten Meeting vollständig erledigt hat (ohne Maximalwert, ohne Rollenhinweis). Du kannst das genau EINMAL bis zum nächsten Meeting - es gibt KEINEN Cooldown und es sammelt sich nichts an. Nach jedem Meeting hast du wieder genau einen Versuch und die Zählung startet bei 0. Mehrteilige Aufgaben zählen erst, wenn sie ganz fertig sind.",
+        "You are crew. The button checks a nearby player: you see how many tasks they have fully completed since the last meeting (no maximum, no role hint). You can do this exactly ONCE until the next meeting - there is NO cooldown and nothing stacks. After every meeting you get exactly one use again and the count restarts at 0. Multi-part tasks only count when fully done.");
 
-    private RoleOption cooldown;
     private int uses = 1;
 
     // Welchen Spieler zeige ich gerade (nur fuer mich, blinkt kurz ueber dem Kopf)?
@@ -71,18 +70,16 @@ public sealed class TaskInspector : CustomRole
 
     protected override void Setup()
     {
-        cooldown = AddOption("Cooldown", "Abklingzeit|Cooldown", 35f, 10f, 90f, 2.5f, "s");
-
         AddButton(new RoleButton
         {
             Label = "Prüfen|Inspect",
-            GameIcon = _ => ClipboardSprite(), // eigenes Klemmbrett-Symbol
+            GameIcon = _ => ProcIcons.Task(), // zuverlässiges Klemmbrett-Symbol
             Icon = "boards",
             NeedsTarget = true,
-            Cooldown = () => cooldown.Value,
-            StartCooldown = 10f,
+            Cooldown = () => 0f,   // kein Cooldown - der eine Versuch pro Runde reicht als Begrenzung
+            StartCooldown = 0f,
             Hotkey = KeyCode.F,
-            UsesLeft = () => uses, // nur einmal pro Runde
+            UsesLeft = () => uses, // genau einmal bis zum nächsten Meeting (kein Ansammeln)
             CanUse = () => uses > 0,
             OnClick = target =>
             {

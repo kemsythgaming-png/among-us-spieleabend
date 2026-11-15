@@ -38,6 +38,24 @@ internal enum RpcId : byte
 
     /// <summary>Host -> alle: einem Spieler eine Zusatzrolle (Geisterrolle) wieder wegnehmen [playerId][roleId]</summary>
     RemoveRole = 220,
+
+    /// <summary>Host -> alle: Draft starten [blob: count + je Spieler playerId,team,opt0,opt1,opt2]</summary>
+    DraftStart = 221,
+
+    /// <summary>Spieler -> Host: gewählte Rolle im Draft [roleId]</summary>
+    DraftPick = 222,
+
+    /// <summary>Host -> alle: ein Spieler hat im Draft gewählt (für die Liste) [playerId]</summary>
+    DraftLock = 223,
+
+    /// <summary>Host -> alle: zufällige Namen vergeben [count][je: playerId, name]</summary>
+    SetNames = 224,
+
+    /// <summary>Host -> alle: zufällige Farben [count][je: playerId, colorId]</summary>
+    SetColors = 225,
+
+    /// <summary>Host -> alle: zufällige Dekoration [count][je: playerId, hat, skin, visor, pet]</summary>
+    SetDecor = 226,
 }
 
 internal static class RoleRpc
@@ -119,6 +137,98 @@ internal static class RoleRpc
             AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
         catch (System.Exception e) { Plugin.Logger.LogWarning($"Emote senden: {e.Message}"); }
+    }
+
+    /// <summary>Host -> alle: Draft starten.</summary>
+    public static void SendDraftStart(byte[] blob)
+    {
+        try
+        {
+            var writer = Start(RpcId.DraftStart, -1);
+            writer.WriteBytesAndSize(blob ?? new byte[0]);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"DraftStart senden: {e.Message}"); }
+    }
+
+    /// <summary>Spieler -> Host: eigene Draft-Wahl schicken (beim Host direkt anwenden).</summary>
+    public static void SendDraftPick(byte roleId)
+    {
+        var client = AmongUsClient.Instance;
+        if (client && client.AmHost) { DraftMode.HostReceivePick(PlayerControl.LocalPlayer.PlayerId, roleId); return; }
+        try
+        {
+            var writer = Start(RpcId.DraftPick, client.HostId);
+            writer.Write(roleId);
+            client.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"DraftPick senden: {e.Message}"); }
+    }
+
+    /// <summary>Host -> alle: ein Spieler hat im Draft gewählt.</summary>
+    public static void SendDraftLock(byte playerId)
+    {
+        try
+        {
+            var writer = Start(RpcId.DraftLock, -1);
+            writer.Write(playerId);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"DraftLock senden: {e.Message}"); }
+    }
+
+    /// <summary>Host -> alle: Liste von (SpielerId, Name) zum Setzen.</summary>
+    public static void SendNames(List<(byte Player, string Name)> pairs)
+    {
+        try
+        {
+            var writer = Start(RpcId.SetNames, -1);
+            writer.Write((byte)pairs.Count);
+            foreach (var (player, name) in pairs)
+            {
+                writer.Write(player);
+                writer.Write(name);
+            }
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"SetNames senden: {e.Message}"); }
+    }
+
+    /// <summary>Host -> alle: Liste von (SpielerId, Farbe) zum Setzen.</summary>
+    public static void SendColors(List<(byte Player, byte Color)> pairs)
+    {
+        try
+        {
+            var writer = Start(RpcId.SetColors, -1);
+            writer.Write((byte)pairs.Count);
+            foreach (var (player, color) in pairs)
+            {
+                writer.Write(player);
+                writer.Write(color);
+            }
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"SetColors senden: {e.Message}"); }
+    }
+
+    /// <summary>Host -> alle: Liste von (SpielerId, Hut, Skin, Visier, Pet) zum Setzen.</summary>
+    public static void SendDecor(List<(byte Player, string Hat, string Skin, string Visor, string Pet)> pairs)
+    {
+        try
+        {
+            var writer = Start(RpcId.SetDecor, -1);
+            writer.Write((byte)pairs.Count);
+            foreach (var (player, hat, skin, visor, pet) in pairs)
+            {
+                writer.Write(player);
+                writer.Write(hat ?? "");
+                writer.Write(skin ?? "");
+                writer.Write(visor ?? "");
+                writer.Write(pet ?? "");
+            }
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (System.Exception e) { Plugin.Logger.LogWarning($"SetDecor senden: {e.Message}"); }
     }
 
     public static void SendKillNoBody(byte playerId, byte killerId)
@@ -209,6 +319,7 @@ internal static class RoleRpc
                 var pairs = new List<(byte, byte)>();
                 for (int i = 0; i < count; i++) pairs.Add((reader.ReadByte(), reader.ReadByte()));
                 RoleRegistry.SetAssignments(pairs);
+                DraftMode.Stop(); // falls gerade ein Draft lief: Fenster schließen
                 break;
             }
             case RpcId.RoleAction:
@@ -246,6 +357,40 @@ internal static class RoleRpc
             case RpcId.RemoveRole:
                 RoleRegistry.ApplyRemoveRole(reader.ReadByte(), reader.ReadByte());
                 break;
+            case RpcId.DraftStart:
+                DraftMode.ApplyStart(reader.ReadBytesAndSize().ToArray());
+                break;
+            case RpcId.DraftPick:
+                DraftMode.HostReceivePick(sender.PlayerId, reader.ReadByte());
+                break;
+            case RpcId.DraftLock:
+                DraftMode.ApplyLock(reader.ReadByte());
+                break;
+            case RpcId.SetNames:
+            {
+                int count = reader.ReadByte();
+                var pairs = new List<(byte, string)>();
+                for (int i = 0; i < count; i++) pairs.Add((reader.ReadByte(), reader.ReadString()));
+                RandomNames.Apply(pairs);
+                break;
+            }
+            case RpcId.SetColors:
+            {
+                int count = reader.ReadByte();
+                var pairs = new List<(byte, byte)>();
+                for (int i = 0; i < count; i++) pairs.Add((reader.ReadByte(), reader.ReadByte()));
+                RandomLooks.ApplyColors(pairs);
+                break;
+            }
+            case RpcId.SetDecor:
+            {
+                int count = reader.ReadByte();
+                var pairs = new List<(byte, string, string, string, string)>();
+                for (int i = 0; i < count; i++)
+                    pairs.Add((reader.ReadByte(), reader.ReadString(), reader.ReadString(), reader.ReadString(), reader.ReadString()));
+                RandomLooks.ApplyDecor(pairs);
+                break;
+            }
         }
     }
 

@@ -20,6 +20,7 @@ internal static class MapExtension
     private static readonly List<GameObject> objects = new();
     private static readonly List<EdgeCollider2D> carvedOriginals = new(); // originale Wand-Linien (deaktiviert, solange die Tuer offen ist)
     private static readonly List<EdgeCollider2D> carvedPieces = new();     // neu erzeugte Teilstuecke mit Luecke
+    private static readonly List<SpriteRenderer> hiddenArt = new();        // Cafeteria-Wand-/Fenster-Grafik an der Tür (versteckt, solange offen)
     private static Vent addedVent;
     private static Vent linkedTo;
     private static bool built;
@@ -37,6 +38,10 @@ internal static class MapExtension
         carvedPieces.Clear();
         foreach (var o in carvedOriginals) if (o) o.enabled = true;
         carvedOriginals.Clear();
+
+        // versteckte Wand-/Fenster-Grafik wieder einblenden
+        foreach (var sr in hiddenArt) if (sr) sr.enabled = true;
+        hiddenArt.Clear();
 
         RemoveAddedVent();
 
@@ -97,51 +102,142 @@ internal static class MapExtension
     /// Baut das Aussichtsdeck noerdlich der Cafeteria aus ECHTEN Skeld-Grafiken: klont den Weapons-Raum
     /// (Boden + Waende, inkl. Fenster ins All) als Optik, legt unsichtbare Kollision an die Kanten und stellt Props rein.
     /// </summary>
+    private static readonly Color FloorCol = new Color(0.27f, 0.31f, 0.37f);
+    private static readonly Color TrimCol = new Color(0.55f, 0.62f, 0.72f);
+
+    /// <summary>
+    /// Baut ein sauberes, begehbares „Aussichtsdeck" direkt nördlich der Cafeteria: eigener Panel-Boden, heller Rahmen,
+    /// Sternen-Fenster oben, eine BREITE Öffnung zur Cafeteria (kein enger Gang mehr) und ein echter Vent.
+    /// </summary>
     private static void BuildRoom()
     {
         var ship = ShipStatus.Instance;
         Vector2 caf = ship.MeetingSpawnCenter;
-        float northY = CafeteriaNorthEdge(ship, caf);
         int wallLayer = FindWallLayer(ship);
 
-        // 1) Echten Raum (Boden+Waende) klonen und so setzen, dass seine Unterkante an der Cafeteria sitzt
-        Vector2 start = new Vector2(caf.x, northY + 4f);
-        var room = CloneRoomVisual("weap_", start, 1.0f);
-        if (room == null) { Plugin.Logger.LogWarning("Map-Erweiterung: Raum-Grafik nicht gefunden - abgebrochen."); return; }
-        Bounds bb = RendererBounds(room);
-        room.transform.position += new Vector3(0f, (northY + 0.6f) - bb.min.y, 0f);
-        bb = RendererBounds(room);
-        roomCenter = bb.center;
-
-        // 2) Unsichtbare Kollision an die Kanten (unten eine DoorW breite Tuerluecke bei caf.x)
+        float cx = caf.x;
+        // ZUERST die Cafeteria-Nordwand auftrennen und die echte Tür-Y als Anker nehmen (sonst schwebt der Raum).
+        float doorY = CarveDoorway(ship, cx);
+        float northY = !float.IsNaN(doorY) ? doorY : CafeteriaNorthEdge(ship, caf);
+        // gemalte Cafeteria-Wand/Fenster an der Tür ausblenden (sonst steht die Scheibe wieder im Durchgang)
+        HideWallArtAtDoor(ship, cx, northY);
+        const float W = 9f, H = 5.2f;
+        float bottom = northY + 0.1f;      // Raumboden knapp über der Cafeteria-Nordkante (praktisch bündig)
+        float top = bottom + H;
+        float left = cx - W / 2f, right = cx + W / 2f;
+        float midY = (bottom + top) / 2f;
         float gap = DoorW / 2f;
-        AddWallInv(new Vector2(bb.center.x, bb.max.y + T / 2f), new Vector2(bb.size.x + T, T), wallLayer); // oben
-        AddWallInv(new Vector2(bb.min.x - T / 2f, bb.center.y), new Vector2(T, bb.size.y), wallLayer);      // links
-        AddWallInv(new Vector2(bb.max.x + T / 2f, bb.center.y), new Vector2(T, bb.size.y), wallLayer);      // rechts
-        float lw = (caf.x - gap) - bb.min.x;
-        if (lw > 0.1f) AddWallInv(new Vector2((bb.min.x + caf.x - gap) / 2f, bb.min.y - T / 2f), new Vector2(lw, T), wallLayer);
-        float rw = bb.max.x - (caf.x + gap);
-        if (rw > 0.1f) AddWallInv(new Vector2((caf.x + gap + bb.max.x) / 2f, bb.min.y - T / 2f), new Vector2(rw, T), wallLayer);
+        roomCenter = new Vector2(cx, midY);
 
-        // 3) Durchgang ("Hals") von der Cafeteria hoch in den Raum
-        float neckTop = bb.min.y + 0.3f;
-        float wallBottom = northY - 2.2f;
-        float wallH = Mathf.Max(0.5f, neckTop - wallBottom);
-        float wallMidY = (wallBottom + neckTop) / 2f;
-        AddWallInv(new Vector2(caf.x - gap, wallMidY), new Vector2(T, wallH), wallLayer);
-        AddWallInv(new Vector2(caf.x + gap, wallMidY), new Vector2(T, wallH), wallLayer);
-        float floorBottom = northY - 2.4f;
-        AddArt(FloorSprite(), new Vector2(caf.x, (floorBottom + neckTop) / 2f), new Vector2(DoorW, neckTop - floorBottom), 0f, new Color(0.33f, 0.37f, 0.44f), 2); // Hals-Boden ueber dem Klon
+        // --- Boden: dunkle Grundfläche + Panel-Kacheln drüber (ordentliche Optik) ---
+        AddArt(FloorSprite(), new Vector2(cx, midY), new Vector2(W, H), 0f, FloorCol, -50);
+        TileFloor(left, bottom, W, H, -49);
 
-        // 4) Cafeteria-Wand auftrennen + gemalte Wand an der Tuer ueberdecken
-        CarveDoorway(ship, caf.x);
-        AddArt(FloorSprite(), new Vector2(caf.x, northY - 0.6f), new Vector2(DoorW, 2.4f), 0f, new Color(0.33f, 0.37f, 0.44f), 3);
+        // kurze, breite Verbindung zur Cafeteria (nur Wanddicke überbrücken - kein langer Gang)
+        float neckBottom = northY - 0.9f;
+        AddArt(FloorSprite(), new Vector2(cx, (neckBottom + bottom) / 2f), new Vector2(DoorW, bottom - neckBottom), 0f, FloorCol, -50);
+        TileFloor(cx - gap, neckBottom, DoorW, bottom - neckBottom, -49);
 
-        // 5) Props (echte Objekte) ins Deck
-        BuildProps(bb.center);
+        // --- Rahmen (heller Trim) rundum ---
+        AddFrame(cx, midY, W, H);
+        // Sternen-Fenster oben an der Wand
+        AddArt(StarfieldSprite(), new Vector2(cx, top - 0.65f), new Vector2(W - 1.4f, 1.1f), 0f, Color.white, -48);
+        AddArt(RingSprite(), new Vector2(cx, top - 0.65f), new Vector2(W - 1.2f, 1.3f), 0f, TrimCol, -47); // Fensterrahmen
+
+        // --- unsichtbare Kollision: oben/links/rechts, unten mit breiter Tür-Lücke ---
+        AddWallInv(new Vector2(cx, top + T / 2f), new Vector2(W + T, T), wallLayer);        // oben
+        AddWallInv(new Vector2(left - T / 2f, midY), new Vector2(T, H), wallLayer);          // links
+        AddWallInv(new Vector2(right + T / 2f, midY), new Vector2(T, H), wallLayer);         // rechts
+        float lw = (cx - gap) - left;
+        if (lw > 0.1f) AddWallInv(new Vector2((left + cx - gap) / 2f, bottom - T / 2f), new Vector2(lw, T), wallLayer);
+        float rw = right - (cx + gap);
+        if (rw > 0.1f) AddWallInv(new Vector2((cx + gap + right) / 2f, bottom - T / 2f), new Vector2(rw, T), wallLayer);
+        // kurze Seitenwände der Öffnung (von der Cafeteria hoch)
+        float neckH = bottom - neckBottom;
+        AddWallInv(new Vector2(cx - gap, (neckBottom + bottom) / 2f), new Vector2(T, neckH), wallLayer);
+        AddWallInv(new Vector2(cx + gap, (neckBottom + bottom) / 2f), new Vector2(T, neckH), wallLayer);
+
+        // --- Cafeteria-Nordwand an der Tür auftrennen + gemalte Wand überdecken ---
+        // (Cafeteria-Wand ist schon oben aufgetrennt.)
+        // Naht/Boden im Durchgang: NEGATIVE Order -> immer HINTER dem Spieler (er wird nicht mehr verdeckt).
+        AddArt(FloorSprite(), new Vector2(cx, northY - 0.5f), new Vector2(DoorW - 0.1f, 2.0f), 0f, FloorCol, -30);
+        TileFloor(cx - gap + 0.05f, northY - 1.5f, DoorW - 0.1f, 2.0f, -29);
+
+        // --- Props + Türschwellen-Trim ---
+        AddArt(RingSprite(), new Vector2(cx, bottom + 0.05f), new Vector2(DoorW + 0.6f, 0.5f), 0f, TrimCol, -46); // Schwelle
+        BuildProps(roomCenter);
+        try { AddRoomTask(new Vector2(cx + 1.6f, midY - 0.3f)); } catch (System.Exception e) { Plugin.Logger.LogWarning($"Map-Erweiterung Aufgabe: {e.Message}"); }
     }
 
-    private const float T = 0.5f, DoorW = 2.2f;
+    /// <summary>Eine ECHTE Skeld-Aufgabe in den Raum setzen: die "Align Engine Output"-Konsole funktionsfähig klonen (zweiter Ort für diese Aufgabe).</summary>
+    private static void AddRoomTask(Vector2 pos)
+    {
+        var ship = ShipStatus.Instance;
+        Console src = null;
+        foreach (var c in ship.GetComponentsInChildren<Console>(true))
+        {
+            if (!c || c.TaskTypes == null) continue;
+            foreach (var tt in c.TaskTypes)
+                if (tt == TaskTypes.AlignEngineOutput) { src = c; break; }
+            if (src) break;
+        }
+        if (!src) { Plugin.Logger.LogWarning("Map-Erweiterung: keine Align-Engine-Konsole gefunden."); return; }
+
+        var go = Object.Instantiate(src.gameObject, ship.transform); // mit Console + Collider + Sprite (funktionsfähig)
+        go.transform.position = new Vector3(pos.x, pos.y, 0f);
+        go.SetActive(true);
+        var con = go.GetComponent<Console>();
+        if (con) con.Room = SystemTypes.Cafeteria; // gehört jetzt zum Cafeteria-Bereich (an den der Raum angebunden ist)
+        objects.Add(go);
+        Plugin.Logger.LogInfo("Map-Erweiterung: Align-Engine-Aufgabe im Raum platziert.");
+    }
+
+    private const float T = 0.5f, DoorW = 4f; // breite Öffnung statt engem Gang
+
+    /// <summary>Panel-Kacheln (1x1) als Boden-Optik über eine Fläche legen - sieht ordentlich aus wie Schiffsboden.</summary>
+    private static void TileFloor(float x0, float y0, float w, float h, int order)
+    {
+        int cols = Mathf.Max(1, Mathf.CeilToInt(w));
+        int rows = Mathf.Max(1, Mathf.CeilToInt(h));
+        float tw = w / cols, th = h / rows;
+        for (int i = 0; i < cols; i++)
+        for (int j = 0; j < rows; j++)
+        {
+            float cxp = x0 + (i + 0.5f) * tw;
+            float cyp = y0 + (j + 0.5f) * th;
+            AddArt(PanelSprite(), new Vector2(cxp, cyp), new Vector2(tw, th), 0f, FloorCol, order);
+        }
+    }
+
+    /// <summary>Heller Rahmen (vier dünne Leisten) um den Raum.</summary>
+    private static void AddFrame(float cx, float cy, float w, float h)
+    {
+        float t = 0.18f;
+        AddArt(FloorSprite(), new Vector2(cx, cy + h / 2f - t / 2f), new Vector2(w, t), 0f, TrimCol, -47); // oben
+        AddArt(FloorSprite(), new Vector2(cx, cy - h / 2f + t / 2f), new Vector2(w, t), 0f, TrimCol, -47); // unten
+        AddArt(FloorSprite(), new Vector2(cx - w / 2f + t / 2f, cy), new Vector2(t, h), 0f, TrimCol, -47); // links
+        AddArt(FloorSprite(), new Vector2(cx + w / 2f - t / 2f, cy), new Vector2(t, h), 0f, TrimCol, -47); // rechts
+    }
+
+    private static Sprite panelSprite;
+    /// <summary>Boden-Panel (1 Einheit): heller Kern, dunkler Rand -> beim Kacheln entstehen saubere Plattenfugen.</summary>
+    private static Sprite PanelSprite()
+    {
+        if (panelSprite) return panelSprite;
+        const int S = 32;
+        var tex = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+        for (int y = 0; y < S; y++)
+        for (int x = 0; x < S; x++)
+        {
+            bool edge = x < 2 || y < 2 || x > S - 3 || y > S - 3;
+            float v = edge ? 0.72f : 1f; // Rand etwas dunkler
+            tex.SetPixel(x, y, new Color(v, v, v, 1f));
+        }
+        tex.Apply();
+        panelSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), S);
+        panelSprite.hideFlags = HideFlags.HideAndDontSave;
+        return panelSprite;
+    }
 
     /// <summary>Klont die Boden+Wand-Grafik eines Raums ('Ground'-Objekt, das ein Kind-Sprite mit childSig enthaelt).</summary>
     private static GameObject CloneRoomVisual(string childSig, Vector2 pos, float scale)
@@ -211,26 +307,31 @@ internal static class MapExtension
     /// 'Room' bei y~7). Beide werden an der Tuerstelle aufgetrennt (oberes Segment -> zwei Teilstuecke mit DoorW-Luecke
     /// bei x=doorWorldX). Der Rest der Waende bleibt stehen.
     /// </summary>
-    private static void CarveDoorway(ShipStatus ship, float doorWorldX)
+    /// <summary>Trennt die Cafeteria-Nordwand an der Tür auf und gibt die (höchste) Tür-Y zurück (NaN = nichts aufgetrennt).</summary>
+    private static float CarveDoorway(ShipStatus ship, float doorWorldX)
     {
         int carved = 0;
+        float bestY = float.NaN;
         foreach (var col in ship.GetComponentsInChildren<Collider2D>(true))
         {
             if (!col || col.isTrigger || !col.enabled) continue;
             if (col.name != "Room" && col.name != "Ground") continue;
             if (!col.transform.parent || col.transform.parent.name != "Cafeteria") continue;
             var edge = col.TryCast<EdgeCollider2D>();
-            if (edge != null && CarveEdge(edge, doorWorldX)) carved++;
+            if (edge == null) continue;
+            float y = CarveEdge(edge, doorWorldX);
+            if (!float.IsNaN(y)) { carved++; if (float.IsNaN(bestY) || y > bestY) bestY = y; }
         }
-        Plugin.Logger.LogInfo($"Map-Erweiterung: {carved} Wand-Linie(n) an der Tuer (x={doorWorldX:0.0}) aufgetrennt.");
+        Plugin.Logger.LogInfo($"Map-Erweiterung: {carved} Wand-Linie(n) an der Tuer (x={doorWorldX:0.0}) aufgetrennt, y={bestY:0.0}.");
+        return bestY;
     }
 
-    /// <summary>Eine Wand-Linie am obersten Segment, das die Tuer-x enthaelt, in zwei Teilstuecke mit Luecke zerlegen.</summary>
-    private static bool CarveEdge(EdgeCollider2D edge, float doorWorldX)
+    /// <summary>Eine Wand-Linie am obersten Segment, das die Tuer-x enthaelt, in zwei Teilstuecke mit Luecke zerlegen. Gibt die Tür-Y zurück (NaN = nicht aufgetrennt).</summary>
+    private static float CarveEdge(EdgeCollider2D edge, float doorWorldX)
     {
         var local = edge.points;
         int n = local.Length;
-        if (n < 2) return false;
+        if (n < 2) return float.NaN;
 
         var world = new Vector2[n];
         for (int i = 0; i < n; i++)
@@ -249,7 +350,7 @@ internal static class MapExtension
             if (world[i].y > maxY - 1.5f && world[i + 1].y > maxY - 1.5f && doorWorldX > lo + 0.2f && doorWorldX < hi - 0.2f && segY > bestY)
             { seg = i; bestY = segY; }
         }
-        if (seg < 0) return false;
+        if (seg < 0) return float.NaN;
 
         Vector2 a = world[seg], b = world[seg + 1];
         float t = (doorWorldX - a.x) / (b.x - a.x);
@@ -278,7 +379,36 @@ internal static class MapExtension
         carvedPieces.Add(pieceA);
         carvedPieces.Add(pieceB);
         Plugin.Logger.LogInfo($"[MapExt] '{edge.name}' aufgetrennt bei y={yDoor:0.0}.");
-        return true;
+        return yDoor;
+    }
+
+    /// <summary>Blendet die gemalten Cafeteria-Wand-/Fenster-Sprites aus, die im Tür-Durchgang liegen (nur schmale Teile, nicht den ganzen Raum-Boden).</summary>
+    private static void HideWallArtAtDoor(ShipStatus ship, float cx, float northY)
+    {
+        float half = DoorW / 2f + 0.4f;
+        int hidden = 0;
+        foreach (var sr in ship.GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            if (!sr || !sr.sprite || !sr.enabled) continue;
+            if (sr.name.StartsWith("Spieleabend")) continue;
+            if (!IsUnderCafeteria(sr.transform)) continue;
+            var b = sr.bounds;
+            if (b.size.x > 6f || b.size.y > 6f) continue;        // große Flächen (Boden/ganze Wand) in Ruhe lassen
+            bool xOverlap = Mathf.Abs(b.center.x - cx) <= half + b.size.x / 2f;
+            bool yNearWall = b.max.y >= northY - 0.4f && b.min.y <= northY + 2.2f;
+            if (!xOverlap || !yNearWall) continue;
+            sr.enabled = false;
+            hiddenArt.Add(sr);
+            hidden++;
+        }
+        Plugin.Logger.LogInfo($"Map-Erweiterung: {hidden} Wand-/Fenster-Sprite(s) im Durchgang ausgeblendet.");
+    }
+
+    private static bool IsUnderCafeteria(Transform t)
+    {
+        for (var p = t; p; p = p.parent)
+            if (p.name == "Cafeteria") return true;
+        return false;
     }
 
     private static Vector2 ToLocal(Component c, Vector2 world)
@@ -444,8 +574,7 @@ internal static class MapExtension
     {
         // Ueberwachungs-Monitore an der oberen Wand = Beobachtungs-/Sternenkarten-Schirme
         CloneProp("SurvConsole", new Vector2(center.x, center.y + 1.9f), 1.2f);
-        // Justier-/Ziel-Geraet = Teleskop in der Mitte
-        CloneProp("AlignEngineConsole", new Vector2(center.x + 0.5f, center.y - 0.2f), 1.6f);
+        // (Die Align-Engine-Konsole kommt als ECHTE Aufgabe separat - siehe AddRoomTask.)
         // Kapitaenssitz als Aussichts-Sessel
         CloneProp("parasite_skeld_navigation_captainsChair", new Vector2(center.x - 1.9f, center.y - 1.1f), 1.0f);
         // Wand-Terminal links

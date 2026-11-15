@@ -137,7 +137,7 @@ public class RoleButton
             ? hud.ReportButton.gameObject.activeSelf
             : hud.KillButton && hud.KillButton.transform.parent && hud.KillButton.transform.parent.gameObject.activeInHierarchy;
         bool show = (alive || UsableWhenDead || FreeplayTest.ButtonsWhenDead) && ShipStatus.Instance && !inMeeting && hudVisible
-                    && (Visible == null || Visible());
+                    && (Visible == null || Visible()) && !LocalBlocked;
 
         if (!show)
         {
@@ -287,7 +287,7 @@ public class RoleButton
         var local = PlayerControl.LocalPlayer;
         if (!local || local.Data == null || (local.Data.IsDead && !UsableWhenDead && !FreeplayTest.ButtonsWhenDead)) return;
         if (!local.CanMove && !(UsableInVent && local.inVent) && !FreeplayTest.ButtonsWhenDead) return;
-        if (Owner == null || !Owner.IsLocalRole || Timer > 0f) return;
+        if (Owner == null || !Owner.OwnsButtonsFor(local) || Timer > 0f || LocalBlocked) return;
         if (NeedsTarget && !CustomRole.IsAlive(Target)) return;
         if (Visible != null && !Visible()) return;
         if (CanUse != null && !CanUse()) return;
@@ -309,6 +309,15 @@ public class RoleButton
         Used?.Invoke(Owner); // z. B. der Joker würfelt danach eine neue Fähigkeit
         if (target != null) UsedOnTarget?.Invoke(Owner, target); // z. B. Bodyguard: Alarm, wenn sein Schützling angepeilt wird
     }
+
+    /// <summary>
+    /// Optional: globale Sperre. Gibt sie fuer einen Spieler true zurueck, sind ALLE Rollen-Knoepfe dieses Spielers
+    /// gesperrt (z. B. Virus: angesteckte Spieler verlieren nach einem Meeting ihre Faehigkeit).
+    /// </summary>
+    public static Func<PlayerControl, bool> AbilityBlocked;
+
+    private static bool LocalBlocked =>
+        AbilityBlocked != null && PlayerControl.LocalPlayer && AbilityBlocked(PlayerControl.LocalPlayer);
 
     /// <summary>Wird ausgelöst, nachdem ein Knopf benutzt wurde (mit der besitzenden Rolle).</summary>
     public static Action<CustomRole> Used;
@@ -379,7 +388,7 @@ internal static class ButtonManager
 
         foreach (var role in RoleRegistry.Roles)
         {
-            bool mine = hasData && role.IsLocalRole; // Hauptrolle oder Anpassung
+            bool mine = hasData && role.OwnsButtonsFor(local); // Hauptrolle, Anpassung - oder Joker-Dauerknopf
             foreach (var button in role.Buttons)
             {
                 if (mine) button.Update(hud, inMeeting);

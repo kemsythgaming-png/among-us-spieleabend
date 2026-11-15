@@ -154,8 +154,13 @@ public sealed class SecondLife : CustomRole
         if (((Vector2)local.transform.position - (Vector2)deathPos).sqrMagnitude > 0.0004f)
             local.transform.position = new Vector3(deathPos.x, deathPos.y, local.transform.position.z);
 
-        // Alle Vorbeilaufenden nur getarnt sehen (nur bei ihm selbst)
+        // Alle Vorbeilaufenden nur getarnt sehen (grau), UND keine Namen/Farben erkennen - bis zur Wiederbelebung.
         Camouflage.Start(0.5f);
+        foreach (var p in PlayerControl.AllPlayerControls)
+        {
+            if (!p || p == local || !p.cosmetics || !p.cosmetics.nameText) continue;
+            var c = p.cosmetics.nameText.color; c.a = 0f; p.cosmetics.nameText.color = c; // Name unsichtbar
+        }
     }
 }
 
