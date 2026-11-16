@@ -23,6 +23,14 @@ internal static class UpdateNotes
     // Neueste Version zuerst.
     private static readonly Entry[] History =
     {
+        new Entry("4.9.21",
+            new string[] { },
+            new[]
+            {
+                Lang.T("<b>Gemeinsame Aufgaben:</b> die Mod erlaubt wieder höchstens 2 gemeinsame Aufgaben (wie im Original) - bei höheren Werten wurden sonst doppelte gemeinsame Aufgaben vergeben.",
+                       "<b>Common tasks:</b> the mod again allows at most 2 common tasks (like vanilla) - higher values caused duplicate common tasks."),
+            }),
+
         new Entry("4.9.20",
             new[]
             {

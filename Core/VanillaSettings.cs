@@ -243,7 +243,7 @@ internal static class VanillaGameSettings
         VanillaSetting.Int(Int32OptionNames.VotingTime, "Abstimmzeit (0 = ewig)|Voting time (0 = endless)", 0, 300, 15, "s"),
         VanillaSetting.Toggle(BoolOptionNames.ConfirmImpostor, "Rauswurf bestätigen|Confirm ejects"),
         VanillaSetting.Toggle(BoolOptionNames.AnonymousVotes, "Anonyme Stimmen|Anonymous votes"),
-        VanillaSetting.Int(Int32OptionNames.NumCommonTasks, "Gemeinsame Aufgaben|Common tasks", 0, 4),
+        VanillaSetting.Int(Int32OptionNames.NumCommonTasks, "Gemeinsame Aufgaben|Common tasks", 0, 2), // max 2 wie im Original - höher erzeugt doppelte gemeinsame Aufgaben
         VanillaSetting.Int(Int32OptionNames.NumShortTasks, "Kurze Aufgaben|Short tasks", 0, 5),
         VanillaSetting.Int(Int32OptionNames.NumLongTasks, "Lange Aufgaben|Long tasks", 0, 3),
         VanillaSetting.Int(Int32OptionNames.TaskBarMode, "Aufgabenbalken|Task bar", 0, 2, 1, "", new[] { "Immer|Always", "Bei Meetings|Meetings", "Nie|Never" }),
