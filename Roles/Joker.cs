@@ -30,30 +30,16 @@ public sealed class Joker : CustomRole
     private bool pendingReroll;   // lokal: nach der Nutzung neu würfeln, sobald der Effekt durch ist
     private float rerollAt;       // frühestens zu diesem Zeitpunkt (damit RPCs/Effekte sauber durchlaufen)
     private CustomRole lastLocalRole;
-    private RoleOption newAbilityCd;
 
     protected override void Setup()
     {
         Instance = this;
-        newAbilityCd = AddOption("NewAbilityCd", "Neue-Fähigkeit-Knopf|New-ability button", 60f, 20f, 180f, 10f, "s");
         if (!hooked)
         {
             RoleButton.Used += role => Instance?.OnUsed(role); // nach jeder Nutzung neu würfeln
             hooked = true;
         }
-
-        // Dauer-Knopf: jederzeit eine neue zufällige Fähigkeit würfeln (bleibt auch nach dem Rollentausch sichtbar).
-        AddButton(new RoleButton
-        {
-            Label = "Neue Fähigkeit|New ability",
-            Icon = "slot",
-            NeedsTarget = false,
-            Cooldown = () => newAbilityCd.Value,
-            StartCooldown = 20f,
-            CanUse = () => !InMeeting && IsAlive(PlayerControl.LocalPlayer) && IsLocalJoker,
-            Visible = () => IsLocalJoker,
-            OnClick = _ => { var l = PlayerControl.LocalPlayer; if (l) SendToHost(ActionReroll, l.PlayerId); },
-        });
+        // Kein "Neue Fähigkeit"-Knopf mehr - die Fähigkeit wechselt automatisch nach jeder Nutzung.
     }
 
     private static bool IsLocalJoker => PlayerControl.LocalPlayer && IsJoker(PlayerControl.LocalPlayer.PlayerId);
@@ -131,7 +117,7 @@ public sealed class Joker : CustomRole
         var cur = RoleRegistry.GetRole(local);
         if (cur == null || cur == this) { pendingReroll = false; return; }
         // Warten, bis die kurze Pause um ist und keine Wirkung mehr läuft (sonst bleibt z. B. der Collider aus)
-        if (Time.time >= rerollAt && cur.Buttons.All(b => !b.EffectActive))
+        if (Time.time >= rerollAt && cur.Buttons.All(b => !b.EffectActive) && !cur.AbilityInProgress())
         {
             pendingReroll = false;
             SendToHost(ActionReroll, local.PlayerId);
@@ -147,7 +133,13 @@ public sealed class Joker : CustomRole
                         && TestStatus.IsTested(r)                     // nur GETESTETE Rollen
                         && r is not VoodooDoll                       // Übernahme funktioniert geliehen nicht sauber
                         && r is not Halloween.Scarecrow              // Menü-Auswahl bricht beim Rollenwechsel ab
-                        && r is not Halloween.Poltergeist)           // Durch-Wände klemmt beim Rollenwechsel (Wand/Vent)
+                        && r is not Halloween.Poltergeist            // Durch-Wände klemmt beim Rollenwechsel (Wand/Vent)
+                        && r is not BountyHunter                     // vom Joker ausgeschlossen (Ziel-Logik passt nicht)
+                        && r is not FastImpostor                     // "Sprinter" - geliehen unsauber
+                        && r is not SuicideBomber                    // geliehen unsauber
+                        && r is not ThorRole                         // geliehen unsauber
+                        && r is not Halloween.BlackCat               // geliehen unsauber
+                        && r is not Ghosts.VengefulSpirit)           // Geisterrolle - gehört nicht in den Pool
             .ToList();
         if (pool.Count == 0) return;
         var pick = pool[Random.Range(0, pool.Count)];

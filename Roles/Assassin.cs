@@ -22,6 +22,7 @@ public sealed class Assassin : CustomRole
     private RoleOption cooldown, setCooldown;
     private Vector2 mark;
     private bool hasMark;
+    private bool awaitingJump; // Punkt gesetzt, aber noch nicht zurückgesprungen (für den Joker-Reroll)
 
     protected override void Setup()
     {
@@ -44,6 +45,7 @@ public sealed class Assassin : CustomRole
                 if (!local) return;
                 mark = local.GetTruePosition();
                 hasMark = true;
+                awaitingJump = true;
                 Notifier.Show($"<color={ColorHex}>{Lang.T("Punkt gesetzt.", "Point set.")}</color>", 2f);
             },
         });
@@ -61,12 +63,15 @@ public sealed class Assassin : CustomRole
             OnClick = _ =>
             {
                 var local = PlayerControl.LocalPlayer;
-                if (local && hasMark && local.NetTransform) { local.NetTransform.SnapTo(mark); Sfx.Play(Sfx.TaskUpdate, 0.6f); }
+                if (local && hasMark && local.NetTransform) { local.NetTransform.SnapTo(mark); awaitingJump = false; Sfx.Play(Sfx.TaskUpdate, 0.6f); }
             },
         });
     }
 
-    public override void ResetState() => hasMark = false;
+    public override void ResetState() { hasMark = false; awaitingJump = false; }
+
+    /// <summary>Joker: nach dem Punktsetzen erst neu würfeln, wenn der Rücksprung genutzt wurde (2. Stufe).</summary>
+    public override bool AbilityInProgress() => awaitingJump;
 
     // ---------- Eigenes Markierungs-Symbol (Fähnchen auf Mast) ----------
     private static Sprite pinSprite;

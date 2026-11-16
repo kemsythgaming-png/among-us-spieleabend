@@ -116,7 +116,8 @@ public static class CustomWin
     /// </summary>
     internal static bool AnyRoleKeepsGameGoing()
     {
-        if (Active || FreeplayTest.IsFreeplay) return false;
+        // Gilt AUCH im Freeplay: sonst käme dort "Crew gewonnen", obwohl das Orakel noch gewinnen kann.
+        if (Active) return false;
         if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !RoleRegistry.HasAssignments) return false;
         foreach (var role in RoleRegistry.Roles)
         {

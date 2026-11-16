@@ -51,9 +51,9 @@ public sealed class Sniper : CustomRole
     public override void ResetState() { EndScope(false); }
     public override void OnMeetingStart() { EndScope(false); }
 
-    /// <summary>Beim Zoomen steht der Sniper still.</summary>
+    /// <summary>Beim Zoomen steht NUR der Sniper selbst still (nicht alle anderen/Dummys).</summary>
     public override float SpeedMultiplier(PlayerControl local) =>
-        IsLocalRole && scoped && !InMeeting ? 0f : 1f;
+        IsLocalRole && scoped && !InMeeting && local == PlayerControl.LocalPlayer ? 0f : 1f;
 
     public override void Update()
     {

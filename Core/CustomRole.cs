@@ -212,6 +212,12 @@ public abstract class CustomRole
     public virtual bool KeepsGameGoing() => false;
 
     /// <summary>
+    /// true = die Rolle ist gerade mitten in einer mehrstufigen Aktion (z. B. Leichenschlepper trägt eine Leiche,
+    /// Assassine hat einen Punkt gesetzt und noch nicht zurückgesprungen). Der Joker würfelt dann NOCH NICHT neu.
+    /// </summary>
+    public virtual bool AbilityInProgress() => false;
+
+    /// <summary>
     /// Markierung am Namen von target, die der lokale Spieler (viewer) sieht - z. B. ein Herz beim Lover.
     /// Wird fuer ALLE Rollen aufgerufen; die Rolle prueft selbst, ob viewer etwas sehen darf. null = nichts.
     /// </summary>

@@ -33,6 +33,7 @@ internal static class TestStatus
         "VengefulSpirit", "ChainShifter", "WinterGhost", "DoorSpirit", "PotionBrewer",
         "Loner", "Instructor", "Tracker2", "Spider", "Mortar", "Syphilis",
         "Deactivator", "Frostbiter", "BetKing", "Chameleon", "SecretAgent",
+        "Tank", "CometSniffer", "SecondLife", "Mayor",
     };
 
     /// <summary>Anpassungen, die trotz der Sammelfreigabe noch NICHT getestet sind (z. B. gemeldeter Bug).</summary>

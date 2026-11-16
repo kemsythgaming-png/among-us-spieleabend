@@ -61,11 +61,12 @@ public sealed class Werewolf : CustomRole
 
     public override void Update()
     {
-        if (!IsLocalRole) return;
         var local = PlayerControl.LocalPlayer;
-        bool on = IsAlive(local) && Rampaging;
+        bool on = IsLocalRole && local && IsAlive(local) && Rampaging;
 
-        // Rausch-Anzeige: pulsierender roter Ring um den Werwolf
+        // Rausch-Anzeige: pulsierender roter Ring um den Werwolf.
+        // WICHTIG: Aura auch ausblenden, wenn die Rolle NICHT mehr lokal ist (z. B. Joker hat gewechselt) -
+        // sonst bleibt der rote Ring für immer hängen.
         if (on)
         {
             if (!aura) aura = CreateAura(local);
@@ -113,6 +114,6 @@ public sealed class Werewolf : CustomRole
     {
         if (action != ActionKill || data.Length < 1 || !AmHost || !RoleRegistry.Has(sender, this) || !IsAlive(sender)) return;
         var target = FindPlayer(data[0]);
-        if (IsAlive(target)) KillSystem.TryKill(sender, target);
+        if (IsAlive(target)) KillSystem.RangedKill(sender, target); // kein Teleport zum Opfer - sonst nur 1 Kill, dann sind die anderen außer Reichweite
     }
 }

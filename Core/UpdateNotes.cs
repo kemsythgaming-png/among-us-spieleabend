@@ -23,6 +23,28 @@ internal static class UpdateNotes
     // Neueste Version zuerst.
     private static readonly Entry[] History =
     {
+        new Entry("4.9.20",
+            new[]
+            {
+                Lang.T("<b>Neu geprüfte Rollen (getestet):</b>\nMayor, Survivor, Tank, Astronaut - jetzt auch bei ausgeschaltetem Schalter \"Ungetestete Rollen\" dabei.",
+                       "<b>Newly verified roles (tested):</b>\nMayor, Survivor, Tank, Astronaut - now available even with the \"Untested roles\" switch off."),
+                Lang.T("<b>Mayor überarbeitet:</b>\nGesparte Stimmen (Skip) setzt du jetzt gezielt per Knopf an einer Spielerkarte ein - sie zählen dann gebündelt und werden als mehrere Köpfe gezeigt.",
+                       "<b>Mayor reworked:</b>\nSaved votes (from skipping) are now spent on purpose via a button on a player card - they count bundled and show as several heads."),
+            },
+            new[]
+            {
+                Lang.T("<b>Tauscher:</b> Der Positionstausch hält jetzt auch online (die Spieler springen nicht mehr an den Start zurück).",
+                       "<b>Swapper:</b> the position swap now holds online (players no longer snap back to the start)."),
+                Lang.T("<b>Orakel:</b> jede Person ist nur noch 1x ratbar, und das Spiel endet nicht, solange das Orakel noch gewinnen kann.",
+                       "<b>Oracle:</b> each person can be guessed only once, and the game does not end while the Oracle can still win."),
+                Lang.T("<b>Sniper & Zauberer:</b> während des Zielens bleiben die anderen Spieler nicht mehr stehen.",
+                       "<b>Sniper & Wizard:</b> other players no longer freeze while they are aiming."),
+                Lang.T("<b>Werwolf:</b> der Rausch tötet wieder alle in Reichweite, und der rote Ring bleibt nicht mehr hängen.",
+                       "<b>Werewolf:</b> the rampage kills everyone in range again, and the red ring no longer gets stuck."),
+                Lang.T("<b>Weitere Fixes:</b> Thor (kein Sofort-Wurf, 1 Kill hin + 1 zurück), Gambler-Schild, Chamäleon (Schutzblase unsichtbar beim Tarnen), Assassine & Leichenschlepper, Meeting-Anzeige aufgeräumt.",
+                       "<b>More fixes:</b> Thor (no instant throw, 1 kill out + 1 back), Gambler shield, Chameleon (shield bubble hidden while cloaked), Assassin & Body Dragger, tidier meeting display."),
+            }),
+
         new Entry("4.9.19",
             new[]
             {

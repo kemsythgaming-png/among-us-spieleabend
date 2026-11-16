@@ -169,7 +169,7 @@ public sealed class Undead : CustomRole
         foreach (var body in Object.FindObjectsOfType<DeadBody>())
         {
             if (!body || body.ParentId == local.PlayerId) continue;
-            if (Vector2.Distance(me, body.TruePosition) > 1.2f) continue;
+            if (Vector2.Distance(me, body.TruePosition) > 0.7f) continue; // näher an der Leiche stehen
             near[body.ParentId] = body.TruePosition;
         }
 
@@ -258,9 +258,9 @@ public sealed class Undead : CustomRole
         go.transform.position = new Vector3(bodyPos.x, bodyPos.y + 0.75f + bob, bodyPos.y / 1000f - 3f);
         go.transform.localScale = new Vector3(scale, scale, 1f);
         var sr = go.GetComponent<SpriteRenderer>();
-        // blockiert (gleiche Leiche) -> rötlich blinken, sonst grün der Rolle
-        var baseCol = blocked ? new Color(1f, 0.45f, 0.45f) : Color;
-        baseCol.a = 0.55f + 0.35f * Mathf.Abs(Mathf.Sin(tt * 4f));
+        // blockiert (gleiche Leiche) -> rötlich blinken, sonst grün der Rolle - deutlich heller.
+        var baseCol = blocked ? new Color(1f, 0.55f, 0.55f) : Color.Lerp(Color, Color.white, 0.45f);
+        baseCol.a = 0.85f + 0.15f * Mathf.Abs(Mathf.Sin(tt * 4f)); // heller, immer gut sichtbar
         sr.color = baseCol;
     }
 

@@ -52,9 +52,9 @@ public sealed class Wizard : CustomRole
         });
     }
 
-    /// <summary>Beim Zielen bleibt der Zauberer stehen.</summary>
+    /// <summary>Beim Zielen bleibt NUR der Zauberer selbst stehen (nicht alle anderen/Dummys).</summary>
     public override float SpeedMultiplier(PlayerControl local) =>
-        IsLocalRole && aiming && IsAlive(local) && !InMeeting ? 0f : 1f;
+        IsLocalRole && aiming && IsAlive(local) && !InMeeting && local == PlayerControl.LocalPlayer ? 0f : 1f;
 
     public override void Update()
     {

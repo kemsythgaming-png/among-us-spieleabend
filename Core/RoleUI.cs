@@ -48,8 +48,8 @@ internal static class RoleUI
 
         if (!ShipStatus.Instance) return;
 
-        // Survivor (tot, wartet auf Wiederbelebung): sieht KEINE Namen/Rollen/Farben der anderen (alles getarnt).
-        if (Spieleabend.Roles.Modifiers.SecondLife.Instance != null && Spieleabend.Roles.Modifiers.SecondLife.Instance.WillRise(local))
+        // Survivor vor seiner ersten Wiederbelebung (1. Leben + Warte-Phase): sieht KEINE Namen/Rollen/Farben der anderen.
+        if (Spieleabend.Roles.Modifiers.SecondLife.Instance != null && Spieleabend.Roles.Modifiers.SecondLife.Instance.SeesBlind(local))
         {
             foreach (var lbl in worldLabels.Values.ToList()) if (lbl) Object.Destroy(lbl.gameObject);
             worldLabels.Clear();
@@ -132,13 +132,13 @@ internal static class RoleUI
                 // Nicht per Transform-Scale verkleinern (das zieht den Text um die Mitte zusammen und
                 // schiebt ihn nach links über den Avatar) - stattdessen nur die Schrift kleiner machen,
                 // sodass die linke Kante bündig unter dem Namen bleibt.
-                label.transform.localPosition = state.NameText.transform.localPosition + new Vector3(0f, -0.28f, 0f);
+                label.transform.localPosition = state.NameText.transform.localPosition + new Vector3(0f, -0.19f, 0f);
                 label.transform.localScale = state.NameText.transform.localScale;
                 label.alignment = state.NameText.alignment;
                 label.enableAutoSizing = false;
                 label.enableWordWrapping = false;
                 label.overflowMode = TextOverflowModes.Overflow;
-                label.fontSize = state.NameText.fontSize * 0.68f;
+                label.fontSize = state.NameText.fontSize * 0.5f; // dezente, kleine Unterzeile
                 label.fontSizeMin = label.fontSize;
                 label.fontSizeMax = label.fontSize;
                 meetingLabels[id] = label;

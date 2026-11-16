@@ -76,11 +76,11 @@ public sealed class SecondLife : CustomRole
     {
         SurvivorStage.Waiting => Lang.T("Du bist tot - nach dem nächsten\nMeeting kommst du zurück.", "You are dead - you come back\nafter the next meeting."),
         SurvivorStage.Back => Lang.T("Zurück! Aber du kannst kein\nMeeting mehr einberufen.", "Back! But you can't call\nmeetings anymore."),
-        _ => Lang.T("Wirst du getötet, kommst du nach\ndem nächsten Meeting zurück.", "If you get killed, you come back\nafter the next meeting."),
+        _ => Lang.T("Im 1. Leben siehst du alle getarnt.\nStirbst du, kommst du zurück.", "1st life: everyone looks the same.\nIf you die, you come back."),
     };
     public override string LongDescription => Lang.T(
-        "Du bist Crew. Wirst du getötet, siehst du nicht, wer es war - der Mörder ist in der Kill-Animation getarnt.\n\nBis zum nächsten Meeting bist du ein Geist, der an der Stelle seines Todes festhängt. Alle, die vorbeilaufen, siehst du nur getarnt (grau, ohne Namen). Nach dem Meeting stehst du wieder auf - kannst aber kein Meeting mehr einberufen (weder Notfallknopf noch Leiche melden). Reden kannst du also nur, wenn jemand anderes ein Meeting startet. Ein zweiter Tod ist endgültig.",
-        "You are crew. If you get killed, you don't see who did it - the killer is camouflaged in the kill animation.\n\nUntil the next meeting you are a ghost stuck at the spot of your death. Everyone walking by looks camouflaged to you (gray, no name). After the meeting you rise again - but you can't call meetings anymore (no emergency button, no reporting). So you can only talk when someone else starts a meeting. A second death is final.");
+        "Du bist Crew. In deinem ERSTEN Leben siehst du alle anderen nur getarnt - grau, ohne Namen und Farben. Du weißt also nicht, wer wer ist.\n\nWirst du getötet, siehst du auch nicht, wer es war (der Mörder ist in der Kill-Animation getarnt). Bis zum nächsten Meeting bist du ein Geist, der an der Stelle seines Todes festhängt. Nach dem Meeting stehst du wieder auf - und siehst ab jetzt (2. Leben) alle NORMAL mit Namen und Farben. Allerdings kannst du dann kein Meeting mehr einberufen (weder Notfallknopf noch Leiche melden). Ein zweiter Tod ist endgültig.",
+        "You are crew. In your FIRST life you see everyone else camouflaged only - gray, no names, no colors. So you don't know who is who.\n\nIf you get killed, you also don't see who did it (the killer is camouflaged in the kill animation). Until the next meeting you are a ghost stuck at the spot of your death. After the meeting you rise again - and from then on (2nd life) you see everyone NORMALLY with names and colors. But you can no longer call meetings (no emergency button, no reporting). A second death is final.");
 
     internal static SecondLife Instance { get; private set; }
 
@@ -101,6 +101,10 @@ public sealed class SecondLife : CustomRole
 
     /// <summary>Toter Survivor, der wieder aufsteht (bekommt keine Geisterrolle und keine Rollen-Infos).</summary>
     internal bool WillRise(PlayerControl p) => RoleRegistry.Has(p, this) && Stage(p) == SurvivorStage.Waiting;
+
+    /// <summary>Survivor vor seiner ersten Wiederbelebung (1. Leben + Warte-Phase): sieht alle nur getarnt (grau, ohne Namen/Farbe).</summary>
+    internal bool SeesBlind(PlayerControl p) =>
+        RoleRegistry.Has(p, this) && (Stage(p) == SurvivorStage.Alive || Stage(p) == SurvivorStage.Waiting);
 
     /// <summary>Zurueckgekehrter Survivor: darf kein Meeting einberufen.</summary>
     internal bool CannotCallMeetings(PlayerControl p) => RoleRegistry.Has(p, this) && Stage(p) == SurvivorStage.Back && IsAlive(p);
@@ -147,19 +151,27 @@ public sealed class SecondLife : CustomRole
     public override void Update()
     {
         var local = PlayerControl.LocalPlayer;
-        if (!IsLocalRole || Stage(local) != SurvivorStage.Waiting || InMeeting) return;
+        if (!IsLocalRole || InMeeting) return;
+        var stage = Stage(local);
 
-        // Als Geist an der Stelle des Todes festhalten
-        if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
-        if (((Vector2)local.transform.position - (Vector2)deathPos).sqrMagnitude > 0.0004f)
-            local.transform.position = new Vector3(deathPos.x, deathPos.y, local.transform.position.z);
-
-        // Alle Vorbeilaufenden nur getarnt sehen (grau), UND keine Namen/Farben erkennen - bis zur Wiederbelebung.
-        Camouflage.Start(0.5f);
-        foreach (var p in PlayerControl.AllPlayerControls)
+        // In der Warte-Phase (tot) als Geist an der Stelle des Todes festhalten.
+        if (stage == SurvivorStage.Waiting)
         {
-            if (!p || p == local || !p.cosmetics || !p.cosmetics.nameText) continue;
-            var c = p.cosmetics.nameText.color; c.a = 0f; p.cosmetics.nameText.color = c; // Name unsichtbar
+            if (local.MyPhysics && local.MyPhysics.body) local.MyPhysics.body.velocity = Vector2.zero;
+            if (((Vector2)local.transform.position - (Vector2)deathPos).sqrMagnitude > 0.0004f)
+                local.transform.position = new Vector3(deathPos.x, deathPos.y, local.transform.position.z);
+        }
+
+        // Bis zur ERSTEN Wiederbelebung (1. Leben + Warte-Phase): alle nur getarnt sehen (grau), keine Namen/Farben.
+        // Nach dem Zurückkommen (2. Leben) siehst du alle wieder normal.
+        if (stage == SurvivorStage.Alive || stage == SurvivorStage.Waiting)
+        {
+            Camouflage.Start(0.5f);
+            foreach (var p in PlayerControl.AllPlayerControls)
+            {
+                if (!p || p == local || !p.cosmetics || !p.cosmetics.nameText) continue;
+                var c = p.cosmetics.nameText.color; c.a = 0f; p.cosmetics.nameText.color = c; // Name unsichtbar
+            }
         }
     }
 }

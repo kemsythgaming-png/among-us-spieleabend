@@ -73,10 +73,9 @@ public sealed class TaskInspector : CustomRole
         AddButton(new RoleButton
         {
             Label = "Prüfen|Inspect",
-            GameIcon = _ => ProcIcons.Task(), // zuverlässiges Klemmbrett-Symbol
-            Icon = "boards",
+            Icon = "boards", // eingebettetes Klemmbrett-PNG
             NeedsTarget = true,
-            Cooldown = () => 0f,   // kein Cooldown - der eine Versuch pro Runde reicht als Begrenzung
+            Cooldown = () => 1f,   // muss > 0 sein, sonst zeigt der Knopf (NaN im Radial) gar kein Symbol; Begrenzung ist der 1 Versuch/Runde
             StartCooldown = 0f,
             Hotkey = KeyCode.F,
             UsesLeft = () => uses, // genau einmal bis zum nächsten Meeting (kein Ansammeln)

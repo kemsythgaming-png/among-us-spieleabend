@@ -75,6 +75,9 @@ public sealed class BodyDragger : CustomRole
     public override float SpeedMultiplier(PlayerControl local) =>
         IsLocalRole && IsAlive(local) && MyBody() != byte.MaxValue && !InMeeting ? 0.8f : 1f;
 
+    /// <summary>Joker: solange eine Leiche getragen wird, NICHT neu würfeln (erst nach dem Ablegen, dem 2. Klick).</summary>
+    public override bool AbilityInProgress() => MyBody() != byte.MaxValue;
+
     private byte MyBody()
     {
         var local = PlayerControl.LocalPlayer;
